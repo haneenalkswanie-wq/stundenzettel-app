@@ -7,6 +7,28 @@ st.set_page_config(
     page_title="Clean & Care - Stundenzettel", page_icon="📋", layout="wide"
 )
 
+# تخصيص تصميم الطباعة لإخفاء الأزرار والقوائم الجانبية وطباعة النموذج فقط
+st.markdown(
+    """
+    <style>
+    @media print {
+        /* إخفاء القائمة الجانبية، الأزرار، وعناصر التحكم عند الطباعة */
+        [data-testid="stSidebar"], .stButton, header, footer {
+            display: none !important;
+        }
+        body {
+            background-color: white !important;
+            color: black !important;
+        }
+        .main {
+            padding: 0px !important;
+        }
+    }
+    </style>
+""",
+    unsafe_allow_html=True,
+)
+
 # القائمة الجانبية للتنقل بين الصفحات
 st.sidebar.title("📌 القائمة الرئيسية")
 page = st.sidebar.radio(
@@ -19,13 +41,12 @@ page = st.sidebar.radio(
 )
 
 # ---------------------------------------------------------
-# صفحة إدارة العمال (مع إضافة وحذف العمال)
+# صفحة إدارة العمال
 # ---------------------------------------------------------
 if page == "👥 إدارة العمال (Mitarbeiter)":
   st.title("👥 Clean & Care GmbH - إدارة العمال والموظفين")
   st.write("إضافة أو حذف أسماء العمال لتظهر تلقائياً في قائمة إدخال الساعات:")
 
-  # تهيئة قائمة العمال الأساسية في الجلسة
   if "employees_list" not in st.session_state:
     st.session_state.employees_list = [
         "Sakleh Alsoudi",
@@ -33,7 +54,6 @@ if page == "👥 إدارة العمال (Mitarbeiter)":
         "موظف جديد",
     ]
 
-  # قسم إضافة موظف جديد
   st.subheader("➕ إضافة موظف جديد")
   new_emp_name = st.text_input("اسم الموظف الجديد:")
   if st.button("إضافة الموظف"):
@@ -46,8 +66,6 @@ if page == "👥 إدارة العمال (Mitarbeiter)":
       st.info("هذا الاسم موجود مسبقاً في القائمة.")
 
   st.markdown("---")
-
-  # قسم حذف موظف
   st.subheader("🗑️ حذف موظف من القائمة")
   if len(st.session_state.employees_list) > 0:
     emp_to_delete = st.selectbox(
@@ -60,8 +78,6 @@ if page == "👥 إدارة العمال (Mitarbeiter)":
         st.rerun()
       else:
         st.warning("لا يمكن حذف جميع العمال، يجب أن يبقى موظف واحد على الأقل.")
-  else:
-    st.info("لا توجد أسماء عمال حالياً.")
 
   st.markdown("---")
   st.subheader("📋 قائمة العمال الحاليين:")
@@ -69,11 +85,26 @@ if page == "👥 إدارة العمال (Mitarbeiter)":
     st.write(f"{idx}. {emp}")
 
 # ---------------------------------------------------------
-# الصفحة الأولى: إدارة ساعات الموظفين (مطابق للنموذج الرسمي)
+# الصفحة الأولى: إدارة ساعات الموظفين (مطابق للنموذج الرسمي تماماً)
 # ---------------------------------------------------------
 elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
-  st.title("📋 Clean & Care GmbH - Stundenzettel")
-  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
+  # رأس الصفحة الرسمي المطابق للنموذج الورقي
+  st.markdown(
+      """
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px;">
+        <div>
+            <h3 style="margin: 0; color: #111;">CLEAN & CARE GmbH</h3>
+            <p style="margin: 2px 0; font-size: 14px; color: #555;">Am Messezentrum 6</p>
+            <p style="margin: 2px 0; font-size: 14px; color: #555;">5020 Salzburg</p>
+        </div>
+        <div style="text-align: left;">
+            <h2 style="margin: 0; color: #222;">CLEAN & CARE</h2>
+            <p style="margin: 2px 0; font-size: 12px; color: #666; letter-spacing: 2px;">WIR KÜMMERN UNS</p>
+        </div>
+    </div>
+    """,
+      unsafe_allow_html=True,
+  )
 
   if "employees_list" not in st.session_state:
     st.session_state.employees_list = [
@@ -98,8 +129,9 @@ elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
     )
     st.session_state.emp_meta["month_str"] = stundenzettel_monat
 
-  st.subheader(f"تسجيل الدوام اليومي للموظف: {selected_employee}")
+  st.markdown("### Stundenzettel")
 
+  # تهيئة جدول الأيام الشهري إذا لم يكن موجوداً
   if "employee_df" not in st.session_state:
     days_data = []
     for day in range(1, 32):
@@ -116,10 +148,14 @@ elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
     st.session_state.employee_df = pd.DataFrame(days_data)
 
   edited_df = st.data_editor(
-      st.session_state.employee_df, num_rows="fixed", use_container_width=True
+      st.session_state.employee_df,
+      num_rows="fixed",
+      use_container_width=True,
+      key="emp_table_editor",
   )
   st.session_state.employee_df = edited_df
 
+  # حساب الساعات وتطبيق الاستراحة تلقائياً أو يدوياً
   total_sum_hours = 0.0
 
   for index, row in edited_df.iterrows():
@@ -161,15 +197,15 @@ elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
   st.markdown("---")
   col_res1, col_res2 = st.columns([2, 1])
   with col_res1:
-    if st.button("🖨️ طباعة نموذج Stundenzettel كـ PDF"):
-      st.success(
-          "تم تجهيز النموذج للطباعة الرسمية! اضغط (Ctrl + P) من لوحة المفاتيح"
-          " واحفظ كـ PDF."
-      )
+    st.info(
+        "🖨️ لطباعة نموذج Stundenzettel نظيف بالشكل الورقي الرسمي بدون قوائم أو"
+        " أزرار، اضغط **Ctrl + P** من لوحة المفاتيح وافظ كـ PDF."
+    )
   with col_res2:
     st.metric(label="Summe (إجمالي الساعات):", value=f"{total_sum_hours:.2f} h")
 
-  st.markdown("---")
+  # حقول التوقيعات الرسمية في الأسفل تماماً كالنموذج
+  st.markdown("<br><br>", unsafe_allow_html=True)
   sig_col1, sig_col2 = st.columns(2)
   with sig_col1:
     st.text("__________________________________")
@@ -181,12 +217,18 @@ elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
     st.text("Datum: ______________")
 
 # ---------------------------------------------------------
-# الصفحة الثالثة: متابعة ساعات المواقع (Objekte)
+# الصفحة الثالثة: متابعة ساعات المواقع (Objekte) بتصميم أنيق ومخصص للطباعة
 # ---------------------------------------------------------
 elif page == "🏢 متابعة ساعات المواقع (Objekte)":
-  st.title("🏢 Clean & Care GmbH - متابعة ساعات المواقع والمنشآت")
-
-  st.write("قم بإدخال اسم الموقع وتوزيع الساعات اليومية خلال الشهر:")
+  st.markdown(
+      """
+    <div style="border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px;">
+        <h2 style="color: #111; margin: 0;">🏢 Clean & Care GmbH - تقرير ساعات المواقع (Objekte)</h2>
+        <p style="color: #555; margin: 5px 0 0 0;">متابعة وتوزيع ساعات العمل الشهرية على الفروع والمواقع المختلفة</p>
+    </div>
+    """,
+      unsafe_allow_html=True,
+  )
 
   col1, col2 = st.columns(2)
   with col1:
@@ -200,6 +242,7 @@ elif page == "🏢 متابعة ساعات المواقع (Objekte)":
 
   days_in_month = pd.Period(f"{loc_year}-{loc_month}").days_in_month
 
+  # حفظ وتثبيت جدول المواقع لضمان عدم حذف البيانات أثناء الإدخال
   if "locations_data" not in st.session_state:
     init_data = {
         "اسم المكان (Objekt)": [
@@ -214,17 +257,21 @@ elif page == "🏢 متابعة ساعات المواقع (Objekte)":
 
   st.subheader("📝 جدول الساعات الشهرية للمواقع")
   edited_locations_df = st.data_editor(
-      st.session_state.locations_data, num_rows="dynamic", use_container_width=True
+      st.session_state.locations_data,
+      num_rows="dynamic",
+      use_container_width=True,
+      key="loc_table_editor",
   )
   st.session_state.locations_data = edited_locations_df
 
+  # حساب المجموع لكل موقع
   day_cols = [c for c in edited_locations_df.columns if c.startswith("يوم")]
   edited_locations_df["المجموع الكلي (Summe)"] = edited_locations_df[
       day_cols
   ].sum(axis=1)
 
   st.markdown("---")
-  st.subheader("📊 إجمالي ساعات المواقع لهذا الشهر")
+  st.subheader("📊 ملخص ساعات المواقع لهذا الشهر")
   summary_df = edited_locations_df[
       ["اسم المكان (Objekt)", "المجموع الكلي (Summe)"]
   ]
@@ -237,5 +284,7 @@ elif page == "🏢 متابعة ساعات المواقع (Objekte)":
   )
 
   st.markdown("---")
-  if st.button("🖨️ طباعة تقرير المواقع (PDF)"):
-    st.success("تم تجهيز التقرير! يمكنك استخدام (Ctrl + P) للطباعة أو الحفظ كـ PDF.")
+  st.info(
+      "🖨️ لطباعة تقرير ومجموع ساعات المواقع بشكل أنيق ومرتب بدون أي قوائم، اضغط"
+      " **Ctrl + P** واحفظ كـ PDF."
+  )
