@@ -1,32 +1,17 @@
 from datetime import datetime
+import io
 import pandas as pd
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 import streamlit as st
 
 # إعدادات الصفحة
 st.set_page_config(
     page_title="Clean & Care - Stundenzettel", page_icon="📋", layout="wide"
-)
-
-# تخصيص تصميم الطباعة لإخفاء الأزرار والقوائم الجانبية وطباعة النموذج فقط
-st.markdown(
-    """
-    <style>
-    @media print {
-        /* إخفاء القائمة الجانبية، الأزرار، وعناصر التحكم عند الطباعة */
-        [data-testid="stSidebar"], .stButton, header, footer {
-            display: none !important;
-        }
-        body {
-            background-color: white !important;
-            color: black !important;
-        }
-        .main {
-            padding: 0px !important;
-        }
-    }
-    </style>
-""",
-    unsafe_allow_html=True,
 )
 
 # القائمة الجانبية للتنقل بين الصفحات
@@ -39,6 +24,129 @@ page = st.sidebar.radio(
         "🏢 متابعة ساعات المواقع (Objekte)",
     ],
 )
+
+# ---------------------------------------------------------
+# دالة توليد PDF لتقرير ساعات الموظف (مطابق للنموذج الورقي)
+# ---------------------------------------------------------
+def generate_employee_pdf(emp_name, month_str, df, total_hours):
+  buffer = io.BytesIO()
+  doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+  elements = []
+  
+  styles = getSampleStyleSheet()
+  title_style = ParagraphStyle(
+      'TitleStyle',
+      parent=styles['Heading1'],
+      fontSize=14,
+      leading=18,
+      alignment=0,
+      textColor=colors.HexColor("#111111")
+  )
+  
+  # رأس الشركة
+  elements.append(Paragraph("<b>CLEAN & CARE GmbH</b>", title_style))
+  elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
+  elements.append(Spacer(1, 15))
+  
+  # معلومات الموظف
+  info_text = f"<b>Name (اسم الموظف):</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Stundenzettel Monat:</b> {month_str}"
+  elements.append(Paragraph(info_text, styles['Normal']))
+  elements.append(Spacer(1, 15))
+  
+  # جدول البيانات
+  table_data = [["Datum", "Ort", "Beginn", "Ende", "Pause", "Arbeitszeit (abzgl. Pause)"]]
+  
+  for index, row in df.iterrows():
+    table_data.append([
+        str(row["Datum"]),
+        str(row["Ort"] if pd.notna(row["Ort"]) else ""),
+        str(row["Beginn"] if pd.notna(row["Beginn"]) else ""),
+        str(row["Ende"] if pd.notna(row["Ende"]) else ""),
+        str(row["Pause"] if pd.notna(row["Pause"]) else ""),
+        str(row["Arbeitszeit (abzgl. Pause)"])
+    ])
+    
+  # صف المجموع
+  table_data.append(["Summe:", "", "", "", "", f"{total_hours:.2f} h"])
+  
+  t = Table(table_data, colWidths=[50, 100, 70, 70, 70, 180])
+  t.setStyle(TableStyle([
+      ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
+      ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+      ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+      ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor("#666666")),
+      ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f0f0f0")),
+      ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+      ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
+  ]))
+  
+  elements.append(t)
+  elements.append(Spacer(1, 30))
+  
+  # التوقيعات في الأسفل
+  sig_data = [
+      ["__________________________________", "__________________________________"],
+      ["Unterschrift Arbeitnehmer (توقيع الموظف)", "Unterschrift Arbeitgeber / GF (توقيع الإدارة)"],
+      ["Datum: ______________", "Datum: ______________"]
+  ]
+  sig_table = Table(sig_data, colWidths=[250, 250])
+  sig_table.setStyle(TableStyle([
+      ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+      ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+  ]))
+  elements.append(sig_table)
+  
+  doc.build(elements)
+  buffer.seek(0)
+  return buffer.getvalue()
+
+
+# ---------------------------------------------------------
+# دالة توليد PDF لتقرير ساعات المواقع (Objekte)
+# ---------------------------------------------------------
+def generate_location_pdf(month_name, year_val, df):
+  buffer = io.BytesIO()
+  doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=20, leftMargin=20, topMargin=30, bottomMargin=30)
+  elements = []
+  
+  styles = getSampleStyleSheet()
+  title_style = ParagraphStyle(
+      'TitleStyle',
+      parent=styles['Heading1'],
+      fontSize=14,
+      leading=18,
+      alignment=0,
+      textColor=colors.HexColor("#111111")
+  )
+  
+  elements.append(Paragraph("<b>CLEAN & CARE GmbH - تقرير ساعات المواقع (Objekte)</b>", title_style))
+  elements.append(Paragraph(f"الشهر: {month_name} / {year_val}", styles['Normal']))
+  elements.append(Spacer(1, 15))
+  
+  # تجهيز أعمدة الجدول للمواقع
+  columns = list(df.columns)
+  table_data = [[str(col) for col in columns]]
+  
+  for index, row in df.iterrows():
+    row_data = [str(row[col]) if pd.notna(row[col]) else "" for col in columns]
+    table_data.append(row_data)
+    
+  t = Table(table_data, repeatRows=1)
+  t.setStyle(TableStyle([
+      ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#d0d0d0")),
+      ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+      ('FONTSIZE', (0, 0), (-1, -1), 8),
+      ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
+      ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#888888")),
+  ]))
+  
+  elements.append(t)
+  doc.build(elements)
+  buffer.seek(0)
+  return buffer.getvalue()
+
 
 # ---------------------------------------------------------
 # صفحة إدارة العمال
@@ -85,26 +193,11 @@ if page == "👥 إدارة العمال (Mitarbeiter)":
     st.write(f"{idx}. {emp}")
 
 # ---------------------------------------------------------
-# الصفحة الأولى: إدارة ساعات الموظفين (مطابق للنموذج الرسمي تماماً)
+# الصفحة الأولى: إدارة ساعات الموظفين (Stundenzettel)
 # ---------------------------------------------------------
 elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
-  # رأس الصفحة الرسمي المطابق للنموذج الورقي
-  st.markdown(
-      """
-    <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px;">
-        <div>
-            <h3 style="margin: 0; color: #111;">CLEAN & CARE GmbH</h3>
-            <p style="margin: 2px 0; font-size: 14px; color: #555;">Am Messezentrum 6</p>
-            <p style="margin: 2px 0; font-size: 14px; color: #555;">5020 Salzburg</p>
-        </div>
-        <div style="text-align: left;">
-            <h2 style="margin: 0; color: #222;">CLEAN & CARE</h2>
-            <p style="margin: 2px 0; font-size: 12px; color: #666; letter-spacing: 2px;">WIR KÜMMERN UNS</p>
-        </div>
-    </div>
-    """,
-      unsafe_allow_html=True,
-  )
+  st.title("📋 Clean & Care GmbH - Stundenzettel")
+  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
   if "employees_list" not in st.session_state:
     st.session_state.employees_list = [
@@ -129,9 +222,8 @@ elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
     )
     st.session_state.emp_meta["month_str"] = stundenzettel_monat
 
-  st.markdown("### Stundenzettel")
+  st.subheader(f"تسجيل الدوام اليومي للموظف: {selected_employee}")
 
-  # تهيئة جدول الأيام الشهري إذا لم يكن موجوداً
   if "employee_df" not in st.session_state:
     days_data = []
     for day in range(1, 32):
@@ -155,7 +247,6 @@ elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
   )
   st.session_state.employee_df = edited_df
 
-  # حساب الساعات وتطبيق الاستراحة تلقائياً أو يدوياً
   total_sum_hours = 0.0
 
   for index, row in edited_df.iterrows():
@@ -197,15 +288,18 @@ elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
   st.markdown("---")
   col_res1, col_res2 = st.columns([2, 1])
   with col_res1:
-    st.info(
-        "🖨️ لطباعة نموذج Stundenzettel نظيف بالشكل الورقي الرسمي بدون قوائم أو"
-        " أزرار، اضغط **Ctrl + P** من لوحة المفاتيح وافظ كـ PDF."
+    # زر تحميل ملف PDF للموظف مباشرة
+    pdf_data = generate_employee_pdf(selected_employee, stundenzettel_monat, edited_df, total_sum_hours)
+    st.download_button(
+        label="📥 تحميل تقرير Stundenzettel (PDF)",
+        data=pdf_data,
+        file_name=f"Stundenzettel_{selected_employee}.pdf",
+        mime="application/pdf",
     )
   with col_res2:
     st.metric(label="Summe (إجمالي الساعات):", value=f"{total_sum_hours:.2f} h")
 
-  # حقول التوقيعات الرسمية في الأسفل تماماً كالنموذج
-  st.markdown("<br><br>", unsafe_allow_html=True)
+  st.markdown("---")
   sig_col1, sig_col2 = st.columns(2)
   with sig_col1:
     st.text("__________________________________")
@@ -217,32 +311,43 @@ elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
     st.text("Datum: ______________")
 
 # ---------------------------------------------------------
-# الصفحة الثالثة: متابعة ساعات المواقع (Objekte) بتصميم أنيق ومخصص للطباعة
+# الصفحة الثالثة: متابعة ساعات المواقع (Objekte)
 # ---------------------------------------------------------
 elif page == "🏢 متابعة ساعات المواقع (Objekte)":
-  st.markdown(
-      """
-    <div style="border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px;">
-        <h2 style="color: #111; margin: 0;">🏢 Clean & Care GmbH - تقرير ساعات المواقع (Objekte)</h2>
-        <p style="color: #555; margin: 5px 0 0 0;">متابعة وتوزيع ساعات العمل الشهرية على الفروع والمواقع المختلفة</p>
-    </div>
-    """,
-      unsafe_allow_html=True,
-  )
+  st.title("🏢 Clean & Care GmbH - متابعة ساعات المواقع والمنشآت")
 
   col1, col2 = st.columns(2)
   with col1:
     loc_month = st.selectbox(
-        "اختر الشهر للمواقع:", list(range(1, 13)), index=datetime.now().month - 1
+        "اختر الشهر للمواقع:",
+        [
+            "يناير",
+            "فبراير",
+            "مارس",
+            "أبريل",
+            "مايو",
+            "يونيو",
+            "يوليو",
+            "أغسطس",
+            "سبتمبر",
+            "أكتوبر",
+            "نوفمبر",
+            "ديسمبر",
+        ],
+        index=9,
     )
   with col2:
-    loc_year = st.number_input(
-        "السنة للمواقع:", min_value=2024, max_value=2030, value=2026
-    )
+    loc_year = st.number_input("السنة للمواقع:", min_value=2024, max_value=2030, value=2026)
 
-  days_in_month = pd.Period(f"{loc_year}-{loc_month}").days_in_month
+  # تحديد عدد الأيام بالشهر بناءً على اسم الشهر
+  month_map = {
+      "يناير": 1, "فبراير": 2, "مارس": 3, "أبريل": 4, "مايو": 5, "يونيو": 6,
+      "يوليو": 7, "أغسطس": 8, "سبتمبر": 9, "أكتوبر": 10, "نوفمبر": 11, "ديسمبر": 12
+  }
+  m_num = month_map[loc_month]
+  days_in_month = pd.Period(f"{loc_year}-{m_num}").days_in_month
 
-  # حفظ وتثبيت جدول المواقع لضمان عدم حذف البيانات أثناء الإدخال
+  # تثبيت بيانات جدول المواقع لعدم الحذف أثناء الكتابة
   if "locations_data" not in st.session_state:
     init_data = {
         "اسم المكان (Objekt)": [
@@ -251,7 +356,7 @@ elif page == "🏢 متابعة ساعات المواقع (Objekte)":
             "IKEA Wals",
         ]
     }
-    for day in range(1, days_in_month + 1):
+    for day in range(1, 32):
       init_data[f"يوم {day}"] = [0.0] * 3
     st.session_state.locations_data = pd.DataFrame(init_data)
 
@@ -264,11 +369,11 @@ elif page == "🏢 متابعة ساعات المواقع (Objekte)":
   )
   st.session_state.locations_data = edited_locations_df
 
-  # حساب المجموع لكل موقع
-  day_cols = [c for c in edited_locations_df.columns if c.startswith("يوم")]
-  edited_locations_df["المجموع الكلي (Summe)"] = edited_locations_df[
-      day_cols
-  ].sum(axis=1)
+  # حساب المجموع لكل موقع للأيام الفعلية للشهر
+  active_day_cols = [f"يوم {d}" for d in range(1, days_in_month + 1)]
+  existing_cols = [c for c in active_day_cols if c in edited_locations_df.columns]
+  
+  edited_locations_df["المجموع الكلي (Summe)"] = edited_locations_df[existing_cols].sum(axis=1)
 
   st.markdown("---")
   st.subheader("📊 ملخص ساعات المواقع لهذا الشهر")
@@ -284,7 +389,11 @@ elif page == "🏢 متابعة ساعات المواقع (Objekte)":
   )
 
   st.markdown("---")
-  st.info(
-      "🖨️ لطباعة تقرير ومجموع ساعات المواقع بشكل أنيق ومرتب بدون أي قوائم، اضغط"
-      " **Ctrl + P** واحفظ كـ PDF."
+  # زر تحميل تقرير المواقع PDF
+  loc_pdf_data = generate_location_pdf(loc_month, loc_year, edited_locations_df)
+  st.download_button(
+      label="📥 تحميل تقرير ساعات المواقع (PDF)",
+      data=loc_pdf_data,
+      file_name=f"Objekte_Report_{loc_month}_{loc_year}.pdf",
+      mime="application/pdf",
   )
