@@ -11,99 +11,106 @@ st.set_page_config(
 st.sidebar.title("📌 القائمة الرئيسية")
 page = st.sidebar.radio(
     "اختر الصفحة:",
-    ["📋 إدارة ساعات الموظفين (Stundenzettel)", "🏢 متابعة ساعات المواقع (Objekte)"],
+    [
+        "📋 إدارة ساعات الموظفين (Stundenzettel)",
+        "👥 إدارة العمال (Mitarbeiter)",
+        "🏢 متابعة ساعات المواقع (Objekte)",
+    ],
 )
 
 # ---------------------------------------------------------
-# الصفحة الأولى: إدارة ساعات الموظفين (مع حفظ البيانات والأسماء)
+# صفحة إدارة العمال (إضافة عمال جدد للمستقبل وحفظهم)
 # ---------------------------------------------------------
-if page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
-  st.title("📋 Clean & Care GmbH - نظام إدارة ساعات العمل")
+if page == "👥 إدارة العمال (Mitarbeiter)":
+  st.title("👥 Clean & Care GmbH - إدارة العمال والموظفين")
+  st.write("أضيفي أسماء العمال الجدد لتظهر تلقائياً في قائمة إدخال الساعات:")
 
-  # تهيئة بيانات المدخلات الأساسية في الجلسة للحفظ والرجوع
+  # تهيئة قائمة العمال الأساسية في الجلسة
+  if "employees_list" not in st.session_state:
+    st.session_state.employees_list = [
+        "Sakleh Alsoudi",
+        "Alaa Edin Ibrahim",
+        "موظف جديد",
+    ]
+
+  # نموذج لإضافة موظف جديد
+  new_emp_name = st.text_input("اسم الموظف الجديد:")
+  if st.button("➕ إضافة الموظف"):
+    if new_emp_name and new_emp_name not in st.session_state.employees_list:
+      st.session_state.employees_list.append(new_emp_name)
+      st.success(f"تمت إضافة الموظف ({new_emp_name}) بنجاح!")
+    elif not new_emp_name:
+      st.warning("الرجاء كتابة اسم الموظف أولاً.")
+    else:
+      st.info("هذا الاسم موجود مسبقاً في القائمة.")
+
+  st.markdown("---")
+  st.subheader("📋 قائمة العمال الحاليين:")
+  for idx, emp in enumerate(st.session_state.employees_list, 1):
+    st.write(f"{idx}. {emp}")
+
+# ---------------------------------------------------------
+# الصفحة الأولى: إدارة ساعات الموظفين (مطابق للنموذج الرسمي)
+# ---------------------------------------------------------
+elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
+  st.title("📋 Clean & Care GmbH - Stundenzettel")
+  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
+
+  # التأكد من وجود قائمة العمال
+  if "employees_list" not in st.session_state:
+    st.session_state.employees_list = [
+        "Sakleh Alsoudi",
+        "Alaa Edin Ibrahim",
+        "موظف جديد",
+    ]
+
   if "emp_meta" not in st.session_state:
-    st.session_state.emp_meta = {
-        "name": "اسم العمالة",
-        "month_idx": 9,
-        "year": 2026,
-    }
+    st.session_state.emp_meta = {"month_str": "Oktober 2026"}
 
-  col1, col2, col3 = st.columns(3)
+  col1, col2 = st.columns(2)
   with col1:
-    employee_name = st.text_input(
-        "اسم الموظف:",
-        value=st.session_state.emp_meta["name"],
-        key="input_emp_name",
+    # اختيار اسم الموظف من القائمة المسجلة (مع إمكانية إضافة أو اختيار)
+    selected_employee = st.selectbox(
+        "Name (اسم الموظف):", st.session_state.employees_list
     )
-    st.session_state.emp_meta["name"] = employee_name
   with col2:
-    selected_month = st.selectbox(
-        "الشهر:",
-        [
-            "يناير",
-            "فبراير",
-            "مارس",
-            "أبريل",
-            "مايو",
-            "يونيو",
-            "يوليو",
-            "أغسطس",
-            "سبتمبر",
-            "أكتوبر",
-            "نوفمبر",
-            "ديسمبر",
-        ],
-        index=st.session_state.emp_meta["month_idx"],
-        key="input_month",
+    stundenzettel_monat = st.text_input(
+        "Stundenzettel Monat (الشهر):",
+        value=st.session_state.emp_meta["month_str"],
+        key="input_month_str",
     )
-    st.session_state.emp_meta["month_idx"] = [
-        "يناير",
-        "فبراير",
-        "مارس",
-        "أبريل",
-        "مايو",
-        "يونيو",
-        "يوليو",
-        "أغسطس",
-        "سبتمبر",
-        "أكتوبر",
-        "نوفمبر",
-        "ديسمبر",
-    ].index(selected_month)
-  with col3:
-    selected_year = st.number_input(
-        "السنة:", value=st.session_state.emp_meta["year"], key="input_year"
-    )
-    st.session_state.emp_meta["year"] = selected_year
+    st.session_state.emp_meta["month_str"] = stundenzettel_monat
 
-  st.subheader(" جدول تسجيل الدوام اليومي والاستراحات")
+  st.subheader(f"تسجيل الدوام اليومي للموظف: {selected_employee}")
 
-  # تهيئة جدول الأيام الشهري في الجلسة للمحافظة على البيانات
+  # تهيئة جدول الأيام الشهري مطابق للنموذج الرسمي
   if "employee_df" not in st.session_state:
     days_data = []
     for day in range(1, 32):
       days_data.append(
           {
-              "التاريخ/اليوم": f"يوم {day}",
+              "Datum": str(day),
+              "Ort": "",
               "Beginn": "",
               "Ende": "",
-              "Arbeitszeit": 0.0,
+              "Pause": "",
+              "Arbeitszeit (abzgl. Pause)": 0.0,
           }
       )
     st.session_state.employee_df = pd.DataFrame(days_data)
 
-  # تعديل الجدول مع بقاء البيانات محفوظة
   edited_df = st.data_editor(
       st.session_state.employee_df, num_rows="fixed", use_container_width=True
   )
   st.session_state.employee_df = edited_df
 
-  # حساب الساعات وتطبيق استراحة الطعام تلقائياً
+  # حساب الساعات وتطبيق استراحة الطعام تلقائياً أو يدوياً
   total_sum_hours = 0.0
 
   for index, row in edited_df.iterrows():
     b_str = str(row["Beginn"]).strip()
     e_str = str(row["Ende"]).strip()
+    p_input = str(row["Pause"]).strip()
 
     hrs = 0.0
     if b_str and e_str and b_str != "nan" and e_str != "nan":
@@ -115,35 +122,52 @@ if page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
           gross_hours = (t2 - t1).total_seconds() / 3600
 
           if gross_hours > 0:
-            # قواعد الاستراحة الجديدة
-            if gross_hours <= 4.5:
-              break_val = 0.0
-            elif 5.0 <= gross_hours <= 8.0:
-              break_val = 0.5
+            if p_input and p_input != "nan" and p_input != "":
+              try:
+                break_val = float(p_input.replace(",", "."))
+              except ValueError:
+                break_val = 0.0
             else:
-              break_val = 1.0
+              if gross_hours <= 4.5:
+                break_val = 0.0
+              elif 5.0 <= gross_hours <= 8.0:
+                break_val = 0.5
+              else:
+                break_val = 1.0
 
             hrs = max(0.0, gross_hours - break_val)
           break
         except ValueError:
           continue
 
-    edited_df.at[index, "Arbeitszeit"] = round(hrs, 2)
+    edited_df.at[index, "Arbeitszeit (abzgl. Pause)"] = round(hrs, 2)
     total_sum_hours += hrs
 
   st.markdown("---")
   col_res1, col_res2 = st.columns([2, 1])
   with col_res1:
-    if st.button("🖨️ طباعة تقرير الموظف (PDF)"):
+    if st.button("🖨️ طباعة نموذج Stundenzettel كـ PDF"):
       st.success(
-          "تم تجهيز التقارير! اضغط على (Ctrl + P) من لوحة المفاتيح للحفظ كـ PDF"
-          " مباشرة."
+          "تم تجهيز النموذج للطباعة الرسمية! اضغط (Ctrl + P) من لوحة المفاتيح"
+          " واحفظ كـ PDF."
       )
   with col_res2:
-    st.metric(label="إجمالي ساعات العمل للشهر:", value=f"{total_sum_hours:.2f} ساعة")
+    st.metric(label="Summe (إجمالي الساعات):", value=f"{total_sum_hours:.2f} h")
+
+  # حقول التوقيعات الرسمية في الأسفل
+  st.markdown("---")
+  sig_col1, sig_col2 = st.columns(2)
+  with sig_col1:
+    st.text("__________________________________")
+    st.text("Unterschrift Arbeitnehmer (توقيع الموظف)")
+    st.text("Datum: ______________")
+  with sig_col2:
+    st.text("__________________________________")
+    st.text("Unterschrift Arbeitgeber / GF (توقيع الإدارة)")
+    st.text("Datum: ______________")
 
 # ---------------------------------------------------------
-# الصفحة الثانية: متابعة ساعات المواقع (مع حفظ الأسماء والبيانات)
+# الصفحة الثالثة: متابعة ساعات المواقع (Objekte)
 # ---------------------------------------------------------
 elif page == "🏢 متابعة ساعات المواقع (Objekte)":
   st.title("🏢 Clean & Care GmbH - متابعة ساعات المواقع والمنشآت")
@@ -162,7 +186,6 @@ elif page == "🏢 متابعة ساعات المواقع (Objekte)":
 
   days_in_month = pd.Period(f"{loc_year}-{loc_month}").days_in_month
 
-  # حفظ جدول وأسماء المواقع في الجلسة لضمان عدم ضياعها عند الرجوع
   if "locations_data" not in st.session_state:
     init_data = {
         "اسم المكان (Objekt)": [
