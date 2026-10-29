@@ -19,11 +19,11 @@ page = st.sidebar.radio(
 )
 
 # ---------------------------------------------------------
-# صفحة إدارة العمال (إضافة عمال جدد للمستقبل وحفظهم)
+# صفحة إدارة العمال (مع إضافة وحذف العمال)
 # ---------------------------------------------------------
 if page == "👥 إدارة العمال (Mitarbeiter)":
   st.title("👥 Clean & Care GmbH - إدارة العمال والموظفين")
-  st.write("أضيفي أسماء العمال الجدد لتظهر تلقائياً في قائمة إدخال الساعات:")
+  st.write("إضافة أو حذف أسماء العمال لتظهر تلقائياً في قائمة إدخال الساعات:")
 
   # تهيئة قائمة العمال الأساسية في الجلسة
   if "employees_list" not in st.session_state:
@@ -33,9 +33,10 @@ if page == "👥 إدارة العمال (Mitarbeiter)":
         "موظف جديد",
     ]
 
-  # نموذج لإضافة موظف جديد
+  # قسم إضافة موظف جديد
+  st.subheader("➕ إضافة موظف جديد")
   new_emp_name = st.text_input("اسم الموظف الجديد:")
-  if st.button("➕ إضافة الموظف"):
+  if st.button("إضافة الموظف"):
     if new_emp_name and new_emp_name not in st.session_state.employees_list:
       st.session_state.employees_list.append(new_emp_name)
       st.success(f"تمت إضافة الموظف ({new_emp_name}) بنجاح!")
@@ -43,6 +44,24 @@ if page == "👥 إدارة العمال (Mitarbeiter)":
       st.warning("الرجاء كتابة اسم الموظف أولاً.")
     else:
       st.info("هذا الاسم موجود مسبقاً في القائمة.")
+
+  st.markdown("---")
+
+  # قسم حذف موظف
+  st.subheader("🗑️ حذف موظف من القائمة")
+  if len(st.session_state.employees_list) > 0:
+    emp_to_delete = st.selectbox(
+        "اختر الموظف المراد حذفه:", st.session_state.employees_list
+    )
+    if st.button("❌ حذف الموظف المحدد"):
+      if len(st.session_state.employees_list) > 1:
+        st.session_state.employees_list.remove(emp_to_delete)
+        st.success(f"تم حذف الموظف ({emp_to_delete}) بنجاح!")
+        st.rerun()
+      else:
+        st.warning("لا يمكن حذف جميع العمال، يجب أن يبقى موظف واحد على الأقل.")
+  else:
+    st.info("لا توجد أسماء عمال حالياً.")
 
   st.markdown("---")
   st.subheader("📋 قائمة العمال الحاليين:")
@@ -56,7 +75,6 @@ elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
   st.title("📋 Clean & Care GmbH - Stundenzettel")
   st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
-  # التأكد من وجود قائمة العمال
   if "employees_list" not in st.session_state:
     st.session_state.employees_list = [
         "Sakleh Alsoudi",
@@ -69,7 +87,6 @@ elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
 
   col1, col2 = st.columns(2)
   with col1:
-    # اختيار اسم الموظف من القائمة المسجلة (مع إمكانية إضافة أو اختيار)
     selected_employee = st.selectbox(
         "Name (اسم الموظف):", st.session_state.employees_list
     )
@@ -83,7 +100,6 @@ elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
 
   st.subheader(f"تسجيل الدوام اليومي للموظف: {selected_employee}")
 
-  # تهيئة جدول الأيام الشهري مطابق للنموذج الرسمي
   if "employee_df" not in st.session_state:
     days_data = []
     for day in range(1, 32):
@@ -104,7 +120,6 @@ elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
   )
   st.session_state.employee_df = edited_df
 
-  # حساب الساعات وتطبيق استراحة الطعام تلقائياً أو يدوياً
   total_sum_hours = 0.0
 
   for index, row in edited_df.iterrows():
@@ -154,7 +169,6 @@ elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
   with col_res2:
     st.metric(label="Summe (إجمالي الساعات):", value=f"{total_sum_hours:.2f} h")
 
-  # حقول التوقيعات الرسمية في الأسفل
   st.markdown("---")
   sig_col1, sig_col2 = st.columns(2)
   with sig_col1:
