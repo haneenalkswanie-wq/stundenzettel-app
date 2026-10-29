@@ -24,7 +24,7 @@ page = st.sidebar.radio(
 )
 
 # ---------------------------------------------------------
-# دالة توليد PDF لتقرير ساعات الموظف (ألماني خالص)
+# دالة توليد PDF لتقرير ساعات الموظف
 # ---------------------------------------------------------
 def generate_employee_pdf(emp_name, month_str, df, total_hours):
   buffer = io.BytesIO()
@@ -96,7 +96,7 @@ def generate_employee_pdf(emp_name, month_str, df, total_hours):
 
 
 # ---------------------------------------------------------
-# دالة توليد PDF لتقرير ساعات المواقع بالعرض (Landscape)
+# دالة توليد PDF لتقرير ساعات المواقع (بدون كلمة Tag، أرقام صافية فقط بالعرض)
 # ---------------------------------------------------------
 def generate_location_pdf(month_name, year_val, df, days_count):
   buffer = io.BytesIO()
@@ -117,19 +117,21 @@ def generate_location_pdf(month_name, year_val, df, days_count):
   elements.append(Paragraph(f"Monat: {month_name} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 10))
   
-  columns = ["Objekt"] + [f"Tag {d}" for d in range(1, days_count + 1)] + ["Summe"]
+  # وضع الأرقام فقط بدون كلمة Tag لتصبح واضحة ونظيفة
+  columns = ["Objekt"] + [str(d) for d in range(1, days_count + 1)] + ["Summe"]
   
   table_data = [[str(col) for col in columns]]
   
   for index, row in df.iterrows():
     row_data = [str(row["Objekt"])]
     for d in range(1, days_count + 1):
-      val = row.get(f"Tag {d}", 0.0)
+      val = row.get(str(d), 0.0)
       row_data.append(str(val) if pd.notna(val) else "0.0")
     row_data.append(str(row["Summe"]))
     table_data.append(row_data)
     
-  col_widths = [110] + [20] * days_count + [60]
+  # أعمدة أصغر ومناسبة لعرض الأرقام فقط بوضوح تام
+  col_widths = [110] + [18] * days_count + [55]
   
   t = Table(table_data, colWidths=col_widths, repeatRows=1)
   t.setStyle(TableStyle([
@@ -313,7 +315,7 @@ elif page == "📋 Mitarbeiter Stundenzettel":
     st.text("Datum: ______________")
 
 # ---------------------------------------------------------
-# الصفحة الثالثة: متابعة ساعات المواقع (Objekt-Stundenübersicht)
+# الصفحة الثالثة: متابعة ساعات المواقع (بدون كلمة Tag في التطبيق والـ PDF)
 # ---------------------------------------------------------
 elif page == "🏢 Objekt-Stundenübersicht":
   st.title("🏢 Clean & Care GmbH - Objekt-Stundenübersicht")
@@ -349,6 +351,7 @@ elif page == "🏢 Objekt-Stundenübersicht":
   m_num = month_map[loc_month]
   days_in_month = pd.Period(f"{loc_year}-{m_num}").days_in_month
 
+  # تهيئة جدول المواقع بحيث تكون الأعمدة أرقاماً صافية (1, 2, 3...)
   if "locations_data" not in st.session_state:
     init_data = {
         "Objekt": [
@@ -358,7 +361,7 @@ elif page == "🏢 Objekt-Stundenübersicht":
         ]
     }
     for day in range(1, 32):
-      init_data[f"Tag {day}"] = [0.0, 0.0, 0.0]
+      init_data[str(day)] = [0.0, 0.0, 0.0]
     st.session_state.locations_data = pd.DataFrame(init_data)
 
   st.subheader("📝 Monatliche Objekt-Stunden")
@@ -371,7 +374,7 @@ elif page == "🏢 Objekt-Stundenübersicht":
   )
   st.session_state.locations_data = edited_locations_df
 
-  active_day_cols = [f"Tag {d}" for d in range(1, days_in_month + 1)]
+  active_day_cols = [str(d) for d in range(1, days_in_month + 1)]
   existing_cols = [c for c in active_day_cols if c in edited_locations_df.columns]
   
   for col in existing_cols:
@@ -392,7 +395,6 @@ elif page == "🏢 Objekt-Stundenübersicht":
       value=f"{total_all_locations:.2f} St.",
   )
 
-  st.markdown---() if False else None  # تصحيح بسيط لتجنب الأخطاء
   st.markdown("---")
   loc_pdf_data = generate_location_pdf(loc_month, loc_year, edited_locations_df, days_in_month)
   st.download_button(
