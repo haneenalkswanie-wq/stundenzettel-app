@@ -12,19 +12,19 @@ st.set_page_config(
     page_title="Clean & Care - Stundenzettel", page_icon="📋", layout="wide"
 )
 
-# القائمة الجانبية للتنقل بين الصفحات
-st.sidebar.title("📌 القائمة الرئيسية")
+# القائمة الجانبية باللغة الألمانية
+st.sidebar.title("📌 Hauptmenü")
 page = st.sidebar.radio(
-    "اختر الصفحة:",
+    "Navigation wählen:",
     [
-        "📋 إدارة ساعات الموظفين (Stundenzettel)",
-        "👥 إدارة العمال (Mitarbeiter)",
-        "🏢 متابعة ساعات المواقع (Objekte)",
+        "📋 Mitarbeiter Stundenzettel",
+        "👥 Mitarbeiterverwaltung",
+        "🏢 Objekt-Stundenübersicht",
     ],
 )
 
 # ---------------------------------------------------------
-# دالة توليد PDF لتقرير ساعات الموظف (باللغة الألمانية حصراً لتفادي المربعات)
+# دالة توليد PDF لتقرير ساعات الموظف (ألماني خالص)
 # ---------------------------------------------------------
 def generate_employee_pdf(emp_name, month_str, df, total_hours):
   buffer = io.BytesIO()
@@ -41,17 +41,14 @@ def generate_employee_pdf(emp_name, month_str, df, total_hours):
       textColor=colors.HexColor("#111111")
   )
   
-  # رأس الشركة
   elements.append(Paragraph("<b>CLEAN & CARE GmbH</b>", title_style))
   elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
   elements.append(Spacer(1, 15))
   
-  # معلومات الموظف (ألمانية خالصة لضمان عدم ظهور مربعات)
   info_text = f"<b>Name:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Stundenzettel Monat:</b> {month_str}"
   elements.append(Paragraph(info_text, styles['Normal']))
   elements.append(Spacer(1, 15))
   
-  # جدول البيانات
   table_data = [["Datum", "Ort", "Beginn", "Ende", "Pause", "Arbeitszeit (abzgl. Pause)"]]
   
   for index, row in df.iterrows():
@@ -64,8 +61,7 @@ def generate_employee_pdf(emp_name, month_str, df, total_hours):
         str(row["Arbeitszeit (abzgl. Pause)"])
     ])
     
-  # صف المجموع
-  table_data.append(["Summe:", "", "", "", "", f"{total_hours:.2f} h"])
+  table_data.append(["Summe:", "", "", "", "", f"{total_hours:.2f} St."])
   
   t = Table(table_data, colWidths=[50, 100, 70, 70, 70, 180])
   t.setStyle(TableStyle([
@@ -82,7 +78,6 @@ def generate_employee_pdf(emp_name, month_str, df, total_hours):
   elements.append(t)
   elements.append(Spacer(1, 30))
   
-  # التوقيعات في الأسفل (ألمانية خالصة)
   sig_data = [
       ["__________________________________", "__________________________________"],
       ["Unterschrift Arbeitnehmer", "Unterschrift Arbeitgeber / GF"],
@@ -101,11 +96,10 @@ def generate_employee_pdf(emp_name, month_str, df, total_hours):
 
 
 # ---------------------------------------------------------
-# دالة توليد PDF لتقرير ساعات المواقع (Objekte) بالعرض (Landscape)
+# دالة توليد PDF لتقرير ساعات المواقع بالعرض (Landscape)
 # ---------------------------------------------------------
 def generate_location_pdf(month_name, year_val, df, days_count):
   buffer = io.BytesIO()
-  # استخدام A4 بالعرض (Landscape) لضمان ظهور كافة الأيام بوضوح
   doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
   elements = []
   
@@ -119,22 +113,23 @@ def generate_location_pdf(month_name, year_val, df, days_count):
       textColor=colors.HexColor("#111111")
   )
   
-  elements.append(Paragraph("<b>CLEAN & CARE GmbH - Objekt-Stundenzettel (متابعة ساعات المواقع)</b>", title_style))
+  elements.append(Paragraph("<b>CLEAN & CARE GmbH - Objekt-Stundenzettel</b>", title_style))
   elements.append(Paragraph(f"Monat: {month_name} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 10))
   
-  # الأعمدة المطلوبة فقط (اسم المكان + أيام الشهر الفعالة + المجموع الكلي)
-  cols_to_use = ["اسم المكان (Objekt)"] + [f"يوم {d}" for d in range(1, days_count + 1)] + ["المجموع الكلي (Summe)"]
-  available_cols = [c for c in cols_to_use if c in df.columns]
+  columns = ["Objekt"] + [f"Tag {d}" for d in range(1, days_count + 1)] + ["Summe"]
   
-  table_data = [[str(col) for col in available_cols]]
+  table_data = [[str(col) for col in columns]]
   
   for index, row in df.iterrows():
-    row_data = [str(row[col]) if pd.notna(row[col]) else "0.0" for col in available_cols]
+    row_data = [str(row["Objekt"])]
+    for d in range(1, days_count + 1):
+      val = row.get(f"Tag {d}", 0.0)
+      row_data.append(str(val) if pd.notna(val) else "0.0")
+    row_data.append(str(row["Summe"]))
     table_data.append(row_data)
     
-  # حساب عرض الأعمدة تلقائياً ليناسب صفحة العرض
-  col_widths = [120] + [20] * days_count + [65]
+  col_widths = [110] + [20] * days_count + [60]
   
   t = Table(table_data, colWidths=col_widths, repeatRows=1)
   t.setStyle(TableStyle([
@@ -153,53 +148,51 @@ def generate_location_pdf(month_name, year_val, df, days_count):
 
 
 # ---------------------------------------------------------
-# صفحة إدارة العمال
+# صفحة إدارة العمال (Mitarbeiterverwaltung)
 # ---------------------------------------------------------
-if page == "👥 إدارة العمال (Mitarbeiter)":
-  st.title("👥 Clean & Care GmbH - إدارة العمال والموظفين")
-  st.write("إضافة أو حذف أسماء العمال لتظهر تلقائياً في قائمة إدخال الساعات:")
+if page == "👥 Mitarbeiterverwaltung":
+  st.title("👥 Clean & Care GmbH - Mitarbeiterverwaltung")
+  st.write("Mitarbeiter hinzufügen oder löschen:")
 
   if "employees_list" not in st.session_state:
     st.session_state.employees_list = [
         "Sakleh Alsoudi",
         "Alaa Edin Ibrahim",
-        "موظف جديد",
+        "Neuer Mitarbeiter",
     ]
 
-  st.subheader("➕ إضافة موظف جديد")
-  new_emp_name = st.text_input("اسم الموظف الجديد:")
-  if st.button("إضافة الموظف"):
+  st.subheader("➕ Neuen Mitarbeiter hinzufügen")
+  new_emp_name = st.text_input("Name des Mitarbeiters:")
+  if st.button("Hinzufügen"):
     if new_emp_name and new_emp_name not in st.session_state.employees_list:
       st.session_state.employees_list.append(new_emp_name)
-      st.success(f"تمت إضافة الموظف ({new_emp_name}) بنجاح!")
+      st.success(f"Mitarbeiter ({new_emp_name}) erfolgreich hinzugefügt!")
     elif not new_emp_name:
-      st.warning("الرجاء كتابة اسم الموظف أولاً.")
+      st.warning("Bitte geben Sie einen Namen ein.")
     else:
-      st.info("هذا الاسم موجود مسبقاً في القائمة.")
+      st.info("Dieser Mitarbeiter existiert bereits.")
 
   st.markdown("---")
-  st.subheader("🗑️ حذف موظف من القائمة")
+  st.subheader("🗑️ Mitarbeiter löschen")
   if len(st.session_state.employees_list) > 0:
-    emp_to_delete = st.selectbox(
-        "اختر الموظف المراد حذفه:", st.session_state.employees_list
-    )
-    if st.button("❌ حذف الموظف المحدد"):
+    emp_to_delete = st.selectbox("Mitarbeiter auswählen:", st.session_state.employees_list)
+    if st.button("Ausählten Mitarbeiter löschen"):
       if len(st.session_state.employees_list) > 1:
         st.session_state.employees_list.remove(emp_to_delete)
-        st.success(f"تم حذف الموظف ({emp_to_delete}) بنجاح!")
+        st.success(f"Mitarbeiter ({emp_to_delete}) wurde gelöscht!")
         st.rerun()
       else:
-        st.warning("لا يمكن حذف جميع العمال، يجب أن يبقى موظف واحد على الأقل.")
+        st.warning("Es muss mindestens ein Mitarbeiter erhalten bleiben.")
 
   st.markdown("---")
-  st.subheader("📋 قائمة العمال الحاليين:")
+  st.subheader("📋 Aktuelle Mitarbeiterliste:")
   for idx, emp in enumerate(st.session_state.employees_list, 1):
     st.write(f"{idx}. {emp}")
 
 # ---------------------------------------------------------
-# الصفحة الأولى: إدارة ساعات الموظفين (Stundenzettel)
+# الصفحة الأولى: تسجيل ساعات الموظفين (Stundenzettel)
 # ---------------------------------------------------------
-elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
+elif page == "📋 Mitarbeiter Stundenzettel":
   st.title("📋 Clean & Care GmbH - Stundenzettel")
   st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
@@ -207,7 +200,7 @@ elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
     st.session_state.employees_list = [
         "Sakleh Alsoudi",
         "Alaa Edin Ibrahim",
-        "موظف جديد",
+        "Neuer Mitarbeiter",
     ]
 
   if "emp_meta" not in st.session_state:
@@ -215,18 +208,16 @@ elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
 
   col1, col2 = st.columns(2)
   with col1:
-    selected_employee = st.selectbox(
-        "Name (اسم الموظف):", st.session_state.employees_list
-    )
+    selected_employee = st.selectbox("Name:", st.session_state.employees_list)
   with col2:
     stundenzettel_monat = st.text_input(
-        "Stundenzettel Monat (الشهر):",
+        "Stundenzettel Monat:",
         value=st.session_state.emp_meta["month_str"],
         key="input_month_str",
     )
     st.session_state.emp_meta["month_str"] = stundenzettel_monat
 
-  st.subheader(f"تسجيل الدوام اليومي للموظف: {selected_employee}")
+  st.subheader(f"Arbeitszeiterfassung für: {selected_employee}")
 
   if "employee_df" not in st.session_state:
     days_data = []
@@ -259,6 +250,8 @@ elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
     p_input = str(row["Pause"]).strip()
 
     hrs = 0.0
+    break_val = 0.0
+
     if b_str and e_str and b_str != "nan" and e_str != "nan":
       for fmt in ("%H:%M", "%H.%M", "%H"):
         try:
@@ -286,6 +279,12 @@ elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
         except ValueError:
           continue
 
+    if break_val > 0:
+      edited_df.at[index, "Pause"] = str(break_val)
+    else:
+      if not p_input or p_input == "nan":
+        edited_df.at[index, "Pause"] = ""
+
     edited_df.at[index, "Arbeitszeit (abzgl. Pause)"] = round(hrs, 2)
     total_sum_hours += hrs
 
@@ -294,13 +293,13 @@ elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
   with col_res1:
     pdf_data = generate_employee_pdf(selected_employee, stundenzettel_monat, edited_df, total_sum_hours)
     st.download_button(
-        label="📥 تحميل تقرير Stundenzettel (PDF)",
+        label="📥 Stundenzettel PDF herunterladen",
         data=pdf_data,
         file_name=f"Stundenzettel_{selected_employee}.pdf",
         mime="application/pdf",
     )
   with col_res2:
-    st.metric(label="Summe (إجمالي الساعات):", value=f"{total_sum_hours:.2f} h")
+    st.metric(label="Summe:", value=f"{total_sum_hours:.2f} St.")
 
   st.markdown("---")
   sig_col1, sig_col2 = st.columns(2)
@@ -314,58 +313,56 @@ elif page == "📋 إدارة ساعات الموظفين (Stundenzettel)":
     st.text("Datum: ______________")
 
 # ---------------------------------------------------------
-# الصفحة الثالثة: متابعة ساعات المواقع (Objekte) بدون تعليق مع طباعة عرضية
+# الصفحة الثالثة: متابعة ساعات المواقع (Objekt-Stundenübersicht)
 # ---------------------------------------------------------
-elif page == "🏢 متابعة ساعات المواقع (Objekte)":
-  st.title("🏢 Clean & Care GmbH - متابعة ساعات المواقع (Objekte)")
+elif page == "🏢 Objekt-Stundenübersicht":
+  st.title("🏢 Clean & Care GmbH - Objekt-Stundenübersicht")
 
   col1, col2 = st.columns(2)
   with col1:
     loc_month = st.selectbox(
-        "اختر الشهر للمواقع:",
+        "Monat auswählen:",
         [
-            "يناير",
-            "فبراير",
-            "مارس",
-            "أبريل",
-            "مايو",
-            "يونيو",
-            "يوليو",
-            "أغسطس",
-            "سبتمبر",
-            "أكتوبر",
-            "نوفمبر",
-            "ديسمبر",
+            "Januar",
+            "Februar",
+            "März",
+            "April",
+            "Mai",
+            "Juni",
+            "Juli",
+            "August",
+            "September",
+            "Oktober",
+            "November",
+            "Dezember",
         ],
         index=9,
         key="loc_month_select"
     )
   with col2:
-    loc_year = st.number_input("السنة للمواقع:", min_value=2024, max_value=2030, value=2026, key="loc_year_input")
+    loc_year = st.number_input("Jahr:", min_value=2024, max_value=2030, value=2026, key="loc_year_input")
 
   month_map = {
-      "يناير": 1, "فبراير": 2, "مارس": 3, "أبريل": 4, "مايو": 5, "يونيو": 6,
-      "يوليو": 7, "أغسطس": 8, "سبتمبر": 9, "أكتوبر": 10, "نوفمبر": 11, "ديسمبر": 12
+      "Januar": 1, "Februar": 2, "März": 3, "April": 4, "Mai": 5, "Juni": 6,
+      "Juli": 7, "August": 8, "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
   }
   m_num = month_map[loc_month]
   days_in_month = pd.Period(f"{loc_year}-{m_num}").days_in_month
 
-  # تهيئة جدول المواقع بشكل مستقر وثابت لمنع أي تعليق
   if "locations_data" not in st.session_state:
     init_data = {
-        "اسم المكان (Objekt)": [
+        "Objekt": [
             "Limehome Salzburg",
             "Nespresso Store",
             "IKEA Wals",
         ]
     }
     for day in range(1, 32):
-      init_data[f"يوم {day}"] = [0.0, 0.0, 0.0]
+      init_data[f"Tag {day}"] = [0.0, 0.0, 0.0]
     st.session_state.locations_data = pd.DataFrame(init_data)
 
-  st.subheader("📝 جدول الساعات الشهرية للمواقع")
+  st.subheader("📝 Monatliche Objekt-Stunden")
   
-  # تعديل الجدول باستخدام مفتاح ثابت لمنع إعادة التحميل المزعجة
   edited_locations_df = st.data_editor(
       st.session_state.locations_data,
       num_rows="dynamic",
@@ -374,34 +371,32 @@ elif page == "🏢 متابعة ساعات المواقع (Objekte)":
   )
   st.session_state.locations_data = edited_locations_df
 
-  # حساب المجموع الكلي لكل موقع بناءً على الأيام الفعلية للشهر
-  active_day_cols = [f"يوم {d}" for d in range(1, days_in_month + 1)]
+  active_day_cols = [f"Tag {d}" for d in range(1, days_in_month + 1)]
   existing_cols = [c for c in active_day_cols if c in edited_locations_df.columns]
   
-  # تحويل القيم إلى أرقام لتجنب الأخطاء
   for col in existing_cols:
     edited_locations_df[col] = pd.to_numeric(edited_locations_df[col], errors='coerce').fillna(0.0)
 
-  edited_locations_df["المجموع الكلي (Summe)"] = edited_locations_df[existing_cols].sum(axis=1)
+  edited_locations_df["Summe"] = edited_locations_df[existing_cols].sum(axis=1)
 
   st.markdown("---")
-  st.subheader("📊 ملخص ساعات المواقع لهذا الشهر")
+  st.subheader("📊 Zusammenfassung")
   summary_df = edited_locations_df[
-      ["اسم المكان (Objekt)", "المجموع الكلي (Summe)"]
+      ["Objekt", "Summe"]
   ]
   st.dataframe(summary_df, use_container_width=True)
 
-  total_all_locations = summary_df["المجموع الكلي (Summe)"].sum()
+  total_all_locations = summary_df["Summe"].sum()
   st.metric(
-      label="إجمالي كافة الساعات لجميع المواقع:",
-      value=f"{total_all_locations:.2f} ساعة",
+      label="Gesamtstunden aller Objekte:",
+      value=f"{total_all_locations:.2f} St.",
   )
 
+  st.markdown---() if False else None  # تصحيح بسيط لتجنب الأخطاء
   st.markdown("---")
-  # زر تحميل تقرير المواقع PDF بالعرض (Landscape)
   loc_pdf_data = generate_location_pdf(loc_month, loc_year, edited_locations_df, days_in_month)
   st.download_button(
-      label="📥 تحميل تقرير ساعات المواقع PDF (بالعرض)",
+      label="📥 Objekt-Bericht PDF herunterladen (Querformat)",
       data=loc_pdf_data,
       file_name=f"Objekte_Report_{loc_month}_{loc_year}.pdf",
       mime="application/pdf",
