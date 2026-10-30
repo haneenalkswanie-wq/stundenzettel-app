@@ -38,7 +38,7 @@ def save_json_file(filename, data):
 
 def load_employees():
   emp_list = load_json_file(EMPLOYEES_FILE, ["Sakleh Alsoudi", "Alaa Edin Ibrahim", "Neuer Mitarbeiter"])
-  return sorted(emp_list)  # ترتيب تصاعدي دائم للأسماء
+  return sorted(emp_list)
 
 
 def save_employees(emp_list):
@@ -91,14 +91,15 @@ def save_employee_month_hours(emp_name, month_str, year_val, df):
   save_json_file(filename, df.to_dict(orient="list"))
 
 
-# دوال الساعات اليومية المستقلة (الصفحة الثانية - مع عمود اسم العامل وقائمة منسدلة)
-def get_daily_hours_file(month_str, year_val):
+# دوال الساعات اليومية للعامل المحدد
+def get_daily_emp_file(emp_name, month_str, year_val):
+  safe_emp = "".join(c for c in emp_name if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
   safe_month = "".join(c for c in month_str if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
-  return f"daily_hours_{safe_month}_{year_val}.json"
+  return f"daily_emp_{safe_emp}_{safe_month}_{year_val}.json"
 
 
-def load_daily_hours(month_str, year_val):
-  filename = get_daily_hours_file(month_str, year_val)
+def load_daily_emp_hours(emp_name, month_str, year_val):
+  filename = get_daily_emp_file(emp_name, month_str, year_val)
   if os.path.exists(filename):
     try:
       with open(filename, "r", encoding="utf-8") as f:
@@ -112,7 +113,6 @@ def load_daily_hours(month_str, year_val):
     days_data.append(
         {
             "Datum": str(day),
-            "Mitarbeiter": "",
             "Ort": "",
             "Beginn": "",
             "Ende": "",
@@ -123,12 +123,12 @@ def load_daily_hours(month_str, year_val):
   return pd.DataFrame(days_data)
 
 
-def save_daily_hours(month_str, year_val, df):
-  filename = get_daily_hours_file(month_str, year_val)
+def save_daily_emp_hours(emp_name, month_str, year_val, df):
+  filename = get_daily_emp_file(emp_name, month_str, year_val)
   save_json_file(filename, df.to_dict(orient="list"))
 
 
-# دوال ساعات الأماكن المربوطة بالعمال (الصفحة الثالثة)
+# دوال ساعات الأماكن
 def load_locations():
   if os.path.exists(LOCATIONS_FILE):
     try:
@@ -155,7 +155,7 @@ def save_locations(df):
     json.dump(data, f, ensure_ascii=False, indent=4)
 
 
-# دوال ساعات الأماكن المخصصة (الصفحة الرابعة - اختيار العمال المطلوبين فقط)
+# دوال ساعات الأماكن الفردية
 def get_place_hours_file(place_name, month_str, year_val):
   safe_place = "".join(c for c in place_name if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
   safe_month = "".join(c for c in month_str if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
@@ -187,7 +187,7 @@ def save_place_hours(place_name, month_str, year_val, df):
   save_json_file(filename, df.to_dict(orient="list"))
 
 
-# القوائم الثابتة للأشهر والسنوات
+# القوائم الثابتة
 months_list_de = [
     "Januar", "Februar", "März", "April", "Mai", "Juni",
     "Juli", "August", "September", "Oktober", "November", "Dezember"
@@ -268,7 +268,7 @@ page = st.sidebar.radio(
 
 
 # ---------------------------------------------------------
-# دوال طباعة PDF المخصصة
+# دوال طباعة PDF الجميلة
 # ---------------------------------------------------------
 
 def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
@@ -319,50 +319,6 @@ def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
   sig_table.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'LEFT'), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
   elements.append(sig_table)
   
-  doc.build(elements)
-  buffer.seek(0)
-  return buffer.getvalue()
-
-
-def generate_daily_pdf(month_str, year_val, df, total_hours):
-  buffer = io.BytesIO()
-  doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
-  elements = []
-  styles = getSampleStyleSheet()
-  title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
-  
-  elements.append(Paragraph("<b>CLEAN & CARE GmbH - Tägliche Stunden</b>", title_style))
-  elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
-  elements.append(Spacer(1, 15))
-  elements.append(Paragraph(f"<b>Monat:</b> {month_str} {year_val}", styles['Normal']))
-  elements.append(Spacer(1, 15))
-  
-  table_data = [["Datum", "Mitarbeiter", "Ort", "Beginn", "Ende", "Pause", "Arbeitszeit"]]
-  for index, row in df.iterrows():
-    table_data.append([
-        str(row["Datum"]),
-        str(row["Mitarbeiter"] if pd.notna(row["Mitarbeiter"]) else ""),
-        str(row["Ort"] if pd.notna(row["Ort"]) else ""),
-        str(row["Beginn"] if pd.notna(row["Beginn"]) else ""),
-        str(row["Ende"] if pd.notna(row["Ende"]) else ""),
-        str(row["Pause"] if pd.notna(row["Pause"]) else ""),
-        str(row["Arbeitszeit (abzgl. Pause)"])
-    ])
-  table_data.append(["Summe:", "", "", "", "", "", f"{total_hours:.2f} St."])
-  
-  t_pdf = Table(table_data, colWidths=[40, 90, 80, 50, 50, 50, 140])
-  t_pdf.setStyle(TableStyle([
-      ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
-      ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-      ('FONTSIZE', (0, 0), (-1, -1), 8),
-      ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-      ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor("#666666")),
-      ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f0f0f0")),
-      ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-      ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
-  ]))
-  elements.append(t_pdf)
   doc.build(elements)
   buffer.seek(0)
   return buffer.getvalue()
@@ -564,7 +520,7 @@ if page == t["p1"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الثانية: الساعات اليومية (مع عمود اسم العامل المنسدل والترتيب)
+# الصفحة الثانية: الساعات اليومية (مع قائمة منسدلة لاختيار العامل وطباعة ورقته الخاصة)
 # ---------------------------------------------------------
 elif page == t["p2"]:
   st.title("📝 Clean & Care GmbH - Tägliche Stunden")
@@ -572,22 +528,23 @@ elif page == t["p2"]:
 
   employees_list = load_employees()
 
-  col1, col2 = st.columns(2)
+  col1, col2, col3 = st.columns(3)
   with col1:
-    daily_month = st.selectbox(t["month_label"], months_list_de if not is_arabic else months_list_ar, index=9, key="daily_month_select")
+    daily_emp = st.selectbox(t["emp_label"], employees_list, key="daily_emp_select")
   with col2:
+    daily_month = st.selectbox(t["month_label"], months_list_de if not is_arabic else months_list_ar, index=9, key="daily_month_select")
+  with col3:
     daily_year = st.selectbox(t["year_label"], years_list, index=2, key="daily_year_select")
 
-  daily_df = load_daily_hours(daily_month, daily_year)
+  st.subheader(f"Tägliche Stunden für: {daily_emp} ({daily_month} {daily_year})")
+
+  daily_df = load_daily_emp_hours(daily_emp, daily_month, daily_year)
 
   edited_daily_df = st.data_editor(
       daily_df,
       num_rows="fixed",
       use_container_width=True,
-      key=f"daily_table_{daily_month}_{daily_year}",
-      column_config={
-          "Mitarbeiter": st.column_config.SelectboxColumn("Mitarbeiter", options=employees_list),
-      }
+      key=f"daily_table_{daily_emp}_{daily_month}_{daily_year}",
   )
 
   total_daily_sum = 0.0
@@ -628,11 +585,11 @@ elif page == t["p2"]:
   st.markdown("---")
   col_d1, col_d2, col_d3 = st.columns([2, 1, 1])
   with col_d1:
-    pdf_daily_data = generate_daily_pdf(daily_month, daily_year, edited_daily_df, total_daily_sum)
-    st.download_button(t["pdf_btn"], pdf_daily_data, f"Tägliche_Stunden_{daily_month}_{daily_year}.pdf", "application/pdf", key="p2_pdf")
+    pdf_daily_data = generate_employee_pdf(daily_emp, daily_month, daily_year, edited_daily_df, total_daily_sum)
+    st.download_button(t["pdf_btn"], pdf_daily_data, f"Tägliche_Stunden_{daily_emp}_{daily_month}_{daily_year}.pdf", "application/pdf", key="p2_pdf")
   with col_d2:
     if st.button(t["save_btn"], key="p2_save"):
-      save_daily_hours(daily_month, daily_year, edited_daily_df)
+      save_daily_emp_hours(daily_emp, daily_month, daily_year, edited_daily_df)
       st.success(t["success_msg"])
   with col_d3:
     st.metric(t["sum_label"], f"{total_daily_sum:.2f} St.")
@@ -648,7 +605,7 @@ elif page == t["p3"]:
   with col1:
     loc_month = st.selectbox(t["month_label"], months_list_de if not is_arabic else months_list_ar, index=9, key="loc_month_select")
   with col2:
-    loc_year = st.selectbox(t["year_label"], years_list, index=2, key="loc_year_select")
+    loc_year = st.selectbox(t["year_label"], years_list, index=2, key="loc_year_input")
 
   month_map = {
       "Januar": 1, "Februar": 2, "März": 3, "April": 4, "Mai": 5, "Juni": 6,
@@ -695,7 +652,7 @@ elif page == t["p3"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الرابعة: الأماكن وساعات العمال (اختيار العمال المطلوبين فقط)
+# الصفحة الرابعة: الأماكن وساعات العمال (مع تصميم شيك وأنيق لاختيار العمال)
 # ---------------------------------------------------------
 elif page == t["p4"]:
   st.title("🏢 Clean & Care GmbH - Orte & Mitarbeiter-Stunden")
@@ -713,12 +670,14 @@ elif page == t["p4"]:
 
   st.subheader(f"Mitarbeiter-Stunden für Ort: {selected_place} ({place_month} {place_year})")
 
-  # خيار لاختيار الأسماء المحددة فقط لهذا المكان
-  selected_emps_for_place = st.multiselect(
-      "Mitarbeiter für diesen Ort auswählen (اختر العمال لهذا المكان فقط):",
-      employees_list,
-      default=employees_list  # افتراضياً يختار الكل ويمكنك التعديل
-  )
+  # اختيار العمال بطريقة أجمل باستخدام Expander و Checkboxes منسقة
+  with st.expander("⚙️ Mitarbeiter für diesen Ort auswählen / اختيار العمال لهذا المكان", expanded=False):
+    selected_emps_for_place = []
+    cols_chk = st.columns(3)
+    for idx, emp in enumerate(employees_list):
+      with cols_chk[idx % 3]:
+        if st.checkbox(emp, value=True, key=f"chk_emp_{selected_place}_{emp}"):
+          selected_emps_for_place.append(emp)
 
   place_df = load_place_hours(selected_place, place_month, place_year, selected_emps_for_place)
 
