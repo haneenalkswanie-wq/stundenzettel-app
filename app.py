@@ -155,38 +155,6 @@ def save_locations(df):
     json.dump(data, f, ensure_ascii=False, indent=4)
 
 
-# دوال ساعات الأماكن الفردية
-def get_place_hours_file(place_name, month_str, year_val):
-  safe_place = "".join(c for c in place_name if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
-  safe_month = "".join(c for c in month_str if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
-  return f"place_{safe_place}_{safe_month}_{year_val}.json"
-
-
-def load_place_hours(place_name, month_str, year_val, selected_employees):
-  filename = get_place_hours_file(place_name, month_str, year_val)
-  existing_data = {}
-  if os.path.exists(filename):
-    try:
-      with open(filename, "r", encoding="utf-8") as f:
-        data = json.load(f)
-        df_old = pd.DataFrame(data)
-        for _, row in df_old.iterrows():
-          existing_data[row["Mitarbeiter"]] = row["Stunden"]
-    except:
-      pass
-  
-  df_data = []
-  for emp in selected_employees:
-    hrs = existing_data.get(emp, 0.0)
-    df_data.append({"Mitarbeiter": emp, "Stunden": hrs})
-  return pd.DataFrame(df_data)
-
-
-def save_place_hours(place_name, month_str, year_val, df):
-  filename = get_place_hours_file(place_name, month_str, year_val)
-  save_json_file(filename, df.to_dict(orient="list"))
-
-
 # القوائم الثابتة
 months_list_de = [
     "Januar", "Februar", "März", "April", "Mai", "Juni",
@@ -520,7 +488,7 @@ if page == t["p1"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الثانية: الساعات اليومية (مع قائمة منسدلة لاختيار العامل وطباعة ورقته الخاصة)
+# الصفحة الثانية: الساعات اليومية
 # ---------------------------------------------------------
 elif page == t["p2"]:
   st.title("📝 Clean & Care GmbH - Tägliche Stunden")
@@ -652,7 +620,7 @@ elif page == t["p3"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الرابعة: الأماكن وساعات العمال (مع تصميم شيك وأنيق لاختيار العمال)
+# الصفحة الرابعة: الأماكن وساعات العمال (مرتبطة تلقائياً بالساعات اليومية)
 # ---------------------------------------------------------
 elif page == t["p4"]:
   st.title("🏢 Clean & Care GmbH - Orte & Mitarbeiter-Stunden")
@@ -662,49 +630,52 @@ elif page == t["p4"]:
 
   col1, col2, col3 = st.columns(3)
   with col1:
-    selected_place = st.selectbox(t["place_label"], places_list)
+    selected_place = st.selectbox(t["place_label"], places_list, key="p4_place_select")
   with col2:
     place_month = st.selectbox(t["month_label"], months_list_de if not is_arabic else months_list_ar, index=9, key="place_month_select")
   with col3:
     place_year = st.selectbox(t["year_label"], years_list, index=2, key="place_year_select")
 
-  st.subheader(f"Mitarbeiter-Stunden für Ort: {selected_place} ({place_month} {place_year})")
+  st.subheader(f"Mitarbeiter-Stunden für Ort: {selected_place} ({place_month} {place_year}) - [Automatisch aus Täglichen Stunden]")
 
-  # اختيار العمال بطريقة أجمل باستخدام Expander و Checkboxes منسقة
-  with st.expander("⚙️ Mitarbeiter für diesen Ort auswählen / اختيار العمال لهذا المكان", expanded=False):
-    selected_emps_for_place = []
-    cols_chk = st.columns(3)
-    for idx, emp in enumerate(employees_list):
-      with cols_chk[idx % 3]:
-        if st.checkbox(emp, value=True, key=f"chk_emp_{selected_place}_{emp}"):
-          selected_emps_for_place.append(emp)
+  # حساب الساعات تلقائياً لكل موظف من بيانات الساعات اليومية المسجلة
+  place_data_rows = []
+  for emp in employees_list:
+    emp_daily_df = load_daily_emp_hours(emp, place_month, place_year)
+    # تصفية الساعات التي تطابق اسم المكان المحدد
+    emp_place_hours = 0.0
+    for _, row in emp_daily_df.iterrows():
+      row_place = str(row["Ort"]).strip()
+      if row_place.lower() == selected_place.lower():
+        try:
+          emp_place_hours += float(row["Arbeitszeit (abzgl. Pause)"])
+        except:
+          pass
+    
+    if emp_place_hours > 0:
+      place_data_rows.append({"Mitarbeiter": emp, "Stunden": round(emp_place_hours, 2)})
 
-  place_df = load_place_hours(selected_place, place_month, place_year, selected_emps_for_place)
+  if not place_data_rows:
+    # إذا لم توجد ساعات مسجلة بعد لهذا المكان، نعرض قائمة فارغة أو بصفر
+    place_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Stunden": 0.0}])
+  else:
+    place_df = pd.DataFrame(place_data_rows)
 
-  edited_place_df = st.data_editor(
-      place_df,
-      num_rows="fixed",
-      use_container_width=True,
-      key=f"place_editor_{selected_place}_{place_month}_{place_year}",
-  )
+  st.dataframe(place_df, use_container_width=True)
 
-  total_place_hours = edited_place_df["Stunden"].astype(float).sum()
+  total_place_hours = place_df["Stunden"].astype(float).sum() if not place_df.empty else 0.0
 
   st.markdown("---")
-  col_p1, col_p2, col_p3 = st.columns([2, 1, 1])
+  col_p1, col_p2 = st.columns([2, 1])
   with col_p1:
-    pdf_place_data = generate_place_pdf(selected_place, place_month, place_year, edited_place_df, total_place_hours)
+    pdf_place_data = generate_place_pdf(selected_place, place_month, place_year, place_df, total_place_hours)
     st.download_button(t["pdf_btn"], pdf_place_data, f"Ort_Report_{selected_place}_{place_month}_{place_year}.pdf", "application/pdf", key="p4_pdf")
   with col_p2:
-    if st.button(t["save_btn"], key="p4_save"):
-      save_place_hours(selected_place, place_month, place_year, edited_place_df)
-      st.success(t["success_msg"])
-  with col_p3:
     st.metric(t["sum_label"], f"{total_place_hours:.2f} St.")
 
   st.markdown("---")
   st.subheader(t["add_place"])
-  new_place_name = st.text_input("Name des neuen Ortes:")
+  new_place_name = st.text_input("Name des neues Ortes:")
   if st.button(t["add_btn"], key="add_place_btn"):
     if new_place_name and new_place_name not in places_list:
       places_list.append(new_place_name)
