@@ -17,6 +17,7 @@ st.set_page_config(
 # ملفات الحفظ المحلي
 EMPLOYEES_FILE = "employees_data.json"
 PLACES_FILE = "places_list.json"
+LOCATIONS_FILE = "locations_data.json"
 
 
 # دوال التحميل والحفظ العامة
@@ -124,7 +125,34 @@ def save_daily_hours(month_str, year_val, df):
   save_json_file(filename, df.to_dict(orient="list"))
 
 
-# دوال ساعات الأماكن (ربط الأماكن بالعمال)
+# دوال ساعات الأماكن المربطوطة بالعمال (الصفحة الثالثة القديمة)
+def load_locations():
+  if os.path.exists(LOCATIONS_FILE):
+    try:
+      with open(LOCATIONS_FILE, "r", encoding="utf-8") as f:
+        data = json.load(f)
+        return pd.DataFrame(data)
+    except:
+      pass
+  init_data = {
+      "Objekt": [
+          "Limehome Salzburg",
+          "Nespresso Store",
+          "IKEA Wals",
+      ]
+  }
+  for day in range(1, 32):
+    init_data[str(day)] = [0.0, 0.0, 0.0]
+  return pd.DataFrame(init_data)
+
+
+def save_locations(df):
+  data = df.to_dict(orient="list")
+  with open(LOCATIONS_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=4)
+
+
+# دوال ساعات الأماكن الفردية (الصفحة الرابعة)
 def get_place_hours_file(place_name, month_str, year_val):
   safe_place = "".join(c for c in place_name if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
   safe_month = "".join(c for c in month_str if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
@@ -177,9 +205,10 @@ if not is_arabic:
         "menu": "📌 Hauptmenü",
         "p1": "📋 Mitarbeiter Stundenzettel",
         "p2": "📝 Tägliche Stunden",
-        "p3": "🏢 Orte & Stunden",
-        "p4": "👥 Mitarbeiterverwaltung",
-        "p5": "📅 Monatsübersicht",
+        "p3": "🏢 Objekt-Stundenübersicht",
+        "p4": "🏢 Orte & Mitarbeiter-Stunden",
+        "p5": "👥 Mitarbeiterverwaltung",
+        "p6": "📅 Monatsübersicht",
         "emp_label": "Mitarbeiter wählen:",
         "month_label": "Monat auswählen:",
         "year_label": "Jahr auswählen:",
@@ -199,9 +228,10 @@ else:
         "menu": "📌 القائمة الرئيسية",
         "p1": "📋 استمارة ساعات العمال",
         "p2": "📝 الساعات اليومية",
-        "p3": "🏢 الأماكن وساعات العمال",
-        "p4": "👥 إدارة العمال",
-        "p5": "📅 ملخص الأشهر",
+        "p3": "🏢 ملخص ساعات المواقع (عرض)",
+        "p4": "🏢 الأماكن وساعات العمال",
+        "p5": "👥 إدارة العمال",
+        "p6": "📅 ملخص الأشهر",
         "emp_label": "اختر اسم الموظف:",
         "month_label": "اختر الشهر:",
         "year_label": "اختر السنة:",
@@ -225,6 +255,7 @@ page = st.sidebar.radio(
         t["p3"],
         t["p4"],
         t["p5"],
+        t["p6"],
     ],
 )
 
@@ -333,10 +364,51 @@ def generate_daily_pdf(month_str, year_val, df, total_hours):
   return buffer.getvalue()
 
 
-# 3. طباعة تقرير الأماكن (عريض - Landscape)
+# 3. طباعة جدول المواقع الشهري (عريض - Landscape)
+def generate_location_pdf(month_name, year_val, df, days_count):
+  buffer = io.BytesIO()
+  doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
+  elements = []
+  
+  styles = getSampleStyleSheet()
+  title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
+  
+  elements.append(Paragraph("<b>CLEAN & CARE GmbH - Objekt-Stundenzettel</b>", title_style))
+  elements.append(Paragraph(f"Monat: {month_name} {year_val}", styles['Normal']))
+  elements.append(Spacer(1, 10))
+  
+  columns = ["Objekt"] + [str(d) for d in range(1, days_count + 1)] + ["Summe"]
+  table_data = [[str(col) for col in columns]]
+  
+  for index, row in df.iterrows():
+    row_data = [str(row["Objekt"])]
+    for d in range(1, days_count + 1):
+      val = row.get(str(d), 0.0)
+      row_data.append(str(val) if pd.notna(val) else "0.0")
+    row_data.append(str(row["Summe"]))
+    table_data.append(row_data)
+    
+  col_widths = [110] + [18] * days_count + [55]
+  t_pdf = Table(table_data, colWidths=col_widths, repeatRows=1)
+  t_pdf.setStyle(TableStyle([
+      ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#d0d0d0")),
+      ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+      ('FONTSIZE', (0, 0), (-1, -1), 7),
+      ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+      ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#888888")),
+  ]))
+  elements.append(t_pdf)
+  
+  doc.build(elements)
+  buffer.seek(0)
+  return buffer.getvalue()
+
+
+# 4. طباعة تقرير الأماكن الفردية (طولي - Portrait)
 def generate_place_pdf(place_name, month_str, year_val, df, total_hours):
   buffer = io.BytesIO()
-  doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+  doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
   elements = []
   
   styles = getSampleStyleSheet()
@@ -353,7 +425,7 @@ def generate_place_pdf(place_name, month_str, year_val, df, total_hours):
     table_data.append([str(row["Mitarbeiter"]), str(row["Stunden"])])
   table_data.append(["Gesamtsumme:", f"{total_hours:.2f} St."])
   
-  t_pdf = Table(table_data, colWidths=[300, 200])
+  t_pdf = Table(table_data, colWidths=[250, 200])
   t_pdf.setStyle(TableStyle([
       ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
       ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -371,7 +443,7 @@ def generate_place_pdf(place_name, month_str, year_val, df, total_hours):
   return buffer.getvalue()
 
 
-# 4. طباعة ملخص الأشهر (طولي - Portrait)
+# 5. طباعة ملخص الأشهر (طولي - Portrait)
 def generate_summary_pdf(month_str, year_val, df, total_hours):
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
@@ -567,9 +639,65 @@ elif page == t["p2"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الثالثة: الأماكن وساعات العمال
+# الصفحة الثالثة: ملخص ساعات المواقع (عرض - Landscape)
 # ---------------------------------------------------------
 elif page == t["p3"]:
+  st.title("🏢 Clean & Care GmbH - Objekt-Stundenübersicht")
+
+  col1, col2 = st.columns(2)
+  with col1:
+    loc_month = st.selectbox(t["month_label"], months_list_de if not is_arabic else months_list_ar, index=9, key="loc_month_select")
+  with col2:
+    loc_year = st.selectbox(t["year_label"], years_list, index=2, key="loc_year_select")
+
+  month_map = {
+      "Januar": 1, "Februar": 2, "März": 3, "April": 4, "Mai": 5, "Juni": 6,
+      "Juli": 7, "August": 8, "September": 9, "Oktober": 10, "November": 11, "Dezember": 12,
+      "يناير": 1, "فبراير": 2, "مارس": 3, "أبريل": 4, "مايو": 5, "يونيو": 6,
+      "يوليو": 7, "أغسطس": 8, "سبتمبر": 9, "أكتوبر": 10, "نوفمبر": 11, "ديسمبر": 12
+  }
+  m_num = month_map.get(loc_month, 10)
+  days_in_month = pd.Period(f"{loc_year}-{m_num}").days_in_month
+
+  if "locations_data" not in st.session_state:
+    st.session_state.locations_data = load_locations()
+
+  st.subheader("📝 Monatliche Objekt-Stunden")
+  
+  edited_locations_df = st.data_editor(
+      st.session_state.locations_data,
+      num_rows="dynamic",
+      use_container_width=True,
+      key="stable_loc_table_editor",
+  )
+  st.session_state.locations_data = edited_locations_df
+
+  active_day_cols = [str(d) for d in range(1, days_in_month + 1)]
+  existing_cols = [c for c in active_day_cols if c in edited_locations_df.columns]
+
+  try:
+      edited_locations_df["Summe"] = edited_locations_df[existing_cols].astype(float).sum(axis=1)
+  except:
+      edited_locations_df["Summe"] = 0.0
+
+  st.markdown("---")
+  col_l1, col_l2, col_l3 = st.columns([2, 1, 1])
+  with col_l1:
+    loc_pdf_data = generate_location_pdf(loc_month, loc_year, edited_locations_df, days_in_month)
+    st.download_button(t["pdf_btn"], loc_pdf_data, f"Objekte_Report_{loc_month}_{loc_year}.pdf", "application/pdf", key="p3_pdf")
+  with col_l2:
+    if st.button(t["save_btn"], key="p3_save"):
+      save_locations(edited_locations_df)
+      st.success(t["success_msg"])
+  with col_l3:
+    total_all_locations = edited_locations_df["Summe"].sum()
+    st.metric(t["sum_label"], f"{total_all_locations:.2f} St.")
+
+
+# ---------------------------------------------------------
+# الصفحة الرابعة: الأماكن وساعات العمال الفردية
+# ---------------------------------------------------------
+elif page == t["p4"]:
   st.title("🏢 Clean & Care GmbH - Orte & Mitarbeiter-Stunden")
 
   places_list = load_places()
@@ -600,9 +728,9 @@ elif page == t["p3"]:
   col_p1, col_p2, col_p3 = st.columns([2, 1, 1])
   with col_p1:
     pdf_place_data = generate_place_pdf(selected_place, place_month, place_year, edited_place_df, total_place_hours)
-    st.download_button(t["pdf_btn"], pdf_place_data, f"Ort_Report_{selected_place}_{place_month}_{place_year}.pdf", "application/pdf", key="p3_pdf")
+    st.download_button(t["pdf_btn"], pdf_place_data, f"Ort_Report_{selected_place}_{place_month}_{place_year}.pdf", "application/pdf", key="p4_pdf")
   with col_p2:
-    if st.button(t["save_btn"], key="p3_save"):
+    if st.button(t["save_btn"], key="p4_save"):
       save_place_hours(selected_place, place_month, place_year, edited_place_df)
       st.success(t["success_msg"])
   with col_p3:
@@ -620,9 +748,9 @@ elif page == t["p3"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الرابعة: إدارة العمال (Mitarbeiterverwaltung)
+# الصفحة الخامسة: إدارة العمال (Mitarbeiterverwaltung)
 # ---------------------------------------------------------
-elif page == t["p4"]:
+elif page == t["p5"]:
   st.title("👥 Clean & Care GmbH - Mitarbeiterverwaltung")
   
   employees_list = load_employees()
@@ -651,9 +779,9 @@ elif page == t["p4"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الخامسة: ملخص الأشهر (Monatsübersicht)
+# الصفحة السادسة: ملخص الأشهر (Monatsübersicht)
 # ---------------------------------------------------------
-elif page == t["p5"]:
+elif page == t["p6"]:
   st.title("📅 Clean & Care GmbH - Monatsübersicht")
   
   col1, col2 = st.columns(2)
@@ -685,6 +813,6 @@ elif page == t["p5"]:
   col_s1, col_s2 = st.columns([2, 1])
   with col_s1:
     pdf_summary_data = generate_summary_pdf(summary_month, summary_year, summary_df, total_company_hours)
-    st.download_button(t["pdf_btn"], pdf_summary_data, f"Monatsübersicht_{summary_month}_{summary_year}.pdf", "application/pdf", key="p5_pdf")
+    st.download_button(t["pdf_btn"], pdf_summary_data, f"Monatsübersicht_{summary_month}_{summary_year}.pdf", "application/pdf", key="p6_pdf")
   with col_s2:
     st.metric("Gesamtsumme:", f"{total_company_hours:.2f} St.")
