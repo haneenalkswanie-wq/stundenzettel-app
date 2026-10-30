@@ -620,7 +620,6 @@ elif page == t["p3"]:
   with col_l3:
     st.metric(t["sum_label"], f"{total_loc_sum:.2f} St.")
 
-  # قسم إدارة الأماكن (إضافة وحذف)
   st.markdown("---")
   add_col, del_col = st.columns(2)
   with add_col:
@@ -647,7 +646,7 @@ elif page == t["p3"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الرابعة: الأماكن وساعات العمال (مع زر حذف موقع أيضاً)
+# الصفحة الرابعة: الأماكن وساعات العمال (مع خيار اختيار العمال الجميل والمرن)
 # ---------------------------------------------------------
 elif page == t["p4"]:
   st.title("🏢 Clean & Care GmbH - Orte & Mitarbeiter-Stunden")
@@ -665,8 +664,17 @@ elif page == t["p4"]:
 
   st.subheader(f"Mitarbeiter-Stunden für Ort: {selected_place} ({place_month} {place_year}) - [Automatisch aus Täglichen Stunden]")
 
+  # إعادة خيار اختيار العمال بطريقة أنيقة ومريحة (Checkboxes ضمن Expander)
+  with st.expander("⚙️ Mitarbeiter für diesen Ort filtern / تصفية واختيار العمال لهذا المكان", expanded=False):
+    selected_emps_for_place = []
+    cols_chk = st.columns(3)
+    for idx, emp in enumerate(employees_list):
+      with cols_chk[idx % 3]:
+        if st.checkbox(emp, value=True, key=f"chk_emp_{selected_place}_{emp}"):
+          selected_emps_for_place.append(emp)
+
   place_data_rows = []
-  for emp in employees_list:
+  for emp in selected_emps_for_place:
     emp_daily_df = load_daily_emp_hours(emp, place_month, place_year)
     emp_place_hours = 0.0
     for _, row in emp_daily_df.iterrows():
