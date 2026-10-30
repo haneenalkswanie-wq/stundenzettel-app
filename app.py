@@ -16,7 +16,6 @@ st.set_page_config(
 
 # ملفات الحفظ المحلي
 EMPLOYEES_FILE = "employees_data.json"
-LOCATIONS_FILE = "locations_data.json"
 PLACES_FILE = "places_list.json"
 
 
@@ -52,7 +51,7 @@ def save_places(places_list):
   save_json_file(PLACES_FILE, places_list)
 
 
-# دوال حفظ وتحميل ساعات الموظفين الشهرية
+# دوال حفظ وتحميل ساعات الموظفين الشهرية (الصفحة الأولى)
 def get_employee_month_file(emp_name, month_str):
   safe_emp = "".join(c for c in emp_name if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
   safe_month = "".join(c for c in month_str if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
@@ -89,7 +88,7 @@ def save_employee_month_hours(emp_name, month_str, df):
   save_json_file(filename, df.to_dict(orient="list"))
 
 
-# دوال الساعات اليومية المستقلة (الصفحة الجديدة الثانية)
+# دوال الساعات اليومية المستقلة (الصفحة الثانية بنفس تصميم الأولى تماماً)
 def get_daily_hours_file(month_str):
   safe_month = "".join(c for c in month_str if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
   return f"daily_hours_{safe_month}.json"
@@ -105,8 +104,19 @@ def load_daily_hours(month_str):
     except:
       pass
   
-  # جدول افتراضي للساعات اليومية
-  return pd.DataFrame(columns=["Datum", "Mitarbeiter", "Ort / Platz", "Stunden"])
+  days_data = []
+  for day in range(1, 32):
+    days_data.append(
+        {
+            "Datum": str(day),
+            "Ort": "",
+            "Beginn": "",
+            "Ende": "",
+            "Pause": "",
+            "Arbeitszeit (abzgl. Pause)": 0.0,
+        }
+    )
+  return pd.DataFrame(days_data)
 
 
 def save_daily_hours(month_str, df):
@@ -131,7 +141,6 @@ def load_place_hours(place_name, month_str, employees):
     except:
       pass
   
-  # إنشاء جدول افتراضي لكل موظف وساعاته في هذا المكان
   df_data = []
   for emp in employees:
     df_data.append({"Mitarbeiter": emp, "Stunden": 0.0})
@@ -144,22 +153,57 @@ def save_place_hours(place_name, month_str, df):
 
 
 # ---------------------------------------------------------
-# نظام لغة الواجهة (عربي / ألماني)
+# نظام لغة الواجهة (فصل كامل بين الألماني والعربي)
 # ---------------------------------------------------------
-st.sidebar.title("⚙️ Einstellungen / الإعدادات")
-lang_choice = st.sidebar.radio("Sprache / اللغة:", ["Deutsch (ألماني)", "العربية (Arabic)"])
+st.sidebar.title("⚙️ Einstellungen")
+lang_choice = st.sidebar.radio("Sprache / اللغة:", ["Deutsch", "العربية"])
 
-is_arabic = "العربية" in lang_choice
+is_arabic = (lang_choice == "العربية")
 
-# نصوص مترجمة ديناميكية
-t = {
-    "menu": "📌 Hauptmenü" if not is_arabic else "📌 القائمة الرئيسية",
-    "p1": "📋 Mitarbeiter Stundenzettel (PDF)" if not is_arabic else "📋 استمارة ساعات العمال (مع طباعة PDF)",
-    "p2": "📝 Tägliche Stunden (ساعات يومية جديدة)" if not is_arabic else "📝 الساعات اليومية (صفحة كتابة جديدة)",
-    "p3": "🏢 Orte & Stunden (ساعات الأماكن)" if not is_arabic else "🏢 الأماكن وساعات العمال",
-    "p4": "👥 Mitarbeiterverwaltung" if not is_arabic else "👥 إدارة العمال",
-    "p5": "📅 Monatsübersicht" if not is_arabic else "📅 ملخص الأشهر",
-}
+if not is_arabic:
+    # القاموس الألماني بالكامل
+    t = {
+        "menu": "📌 Hauptmenü",
+        "p1": "📋 Mitarbeiter Stundenzettel (PDF)",
+        "p2": "📝 Tägliche Stunden (Tabelle)",
+        "p3": "🏢 Orte & Stunden",
+        "p4": "👥 Mitarbeiterverwaltung",
+        "p5": "📅 Monatsübersicht",
+        "emp_label": "Mitarbeiter wählen:",
+        "month_label": "Stundenzettel Monat:",
+        "save_btn": "💾 Speichern",
+        "success_msg": "Erfolgreich gespeichert!",
+        "pdf_btn": "📥 Stundenzettel PDF herunterladen",
+        "sum_label": "Summe:",
+        "add_emp": "Neuen Mitarbeiter hinzufügen",
+        "del_emp": "Mitarbeiter löschen",
+        "add_btn": "Hinzufügen",
+        "del_btn": "Löschen",
+        "place_label": "Ort / Platz auswählen:",
+        "add_place": "Neuen Ort hinzufügen",
+    }
+else:
+    # القاموس العربي بالكامل
+    t = {
+        "menu": "📌 القائمة الرئيسية",
+        "p1": "📋 استمارة ساعات العمال (مع طباعة PDF)",
+        "p2": "📝 الساعات اليومية (جدول مستقل)",
+        "p3": "🏢 الأماكن وساعات العمال",
+        "p4": "👥 إدارة العمال",
+        "p5": "📅 ملخص الأشهر",
+        "emp_label": "اختر اسم الموظف:",
+        "month_label": "شهر الاستمارة:",
+        "save_btn": "💾 حفظ",
+        "success_msg": "تم الحفظ بنجاح!",
+        "pdf_btn": "📥 تحميل ملف PDF",
+        "sum_label": "المجموع:",
+        "add_emp": "إضافة موظف جديد",
+        "del_emp": "حذف موظف",
+        "add_btn": "إضافة",
+        "del_btn": "حذف",
+        "place_label": "اختر اسم المكان:",
+        "add_place": "إضافة مكان جديد",
+    }
 
 page = st.sidebar.radio(
     t["menu"],
@@ -174,7 +218,7 @@ page = st.sidebar.radio(
 
 
 # ---------------------------------------------------------
-# دالة توليد PDF لتقرير ساعات الموظف
+# دالة توليد PDF لتقرير ساعات الموظف مع التوقيعات بالأسفل
 # ---------------------------------------------------------
 def generate_employee_pdf(emp_name, month_str, df, total_hours):
   buffer = io.BytesIO()
@@ -226,6 +270,21 @@ def generate_employee_pdf(emp_name, month_str, df, total_hours):
   ]))
   
   elements.append(t_pdf)
+  elements.append(Spacer(1, 40))
+  
+  # جدول التوقيعات الرسمي في الأسفل
+  sig_data = [
+      ["__________________________________", "__________________________________"],
+      ["Unterschrift Arbeitnehmer", "Unterschrift Arbeitgeber / GF"],
+      ["Datum: ______________", "Datum: ______________"]
+  ]
+  sig_table = Table(sig_data, colWidths=[250, 250])
+  sig_table.setStyle(TableStyle([
+      ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+      ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+  ]))
+  elements.append(sig_table)
+  
   doc.build(elements)
   buffer.seek(0)
   return buffer.getvalue()
@@ -242,9 +301,9 @@ if page == t["p1"]:
   
   col1, col2 = st.columns(2)
   with col1:
-    selected_employee = st.selectbox("Mitarbeiter / اسم الموظف:", employees_list, key="p1_emp")
+    selected_employee = st.selectbox(t["emp_label"], employees_list, key="p1_emp")
   with col2:
-    stundenzettel_monat = st.text_input("Monat / الشهر:", value="Oktober 2026", key="p1_month")
+    stundenzettel_monat = st.text_input(t["month_label"], value="Oktober 2026", key="p1_month")
 
   st.subheader(f"Arbeitszeiterfassung für: {selected_employee} ({stundenzettel_monat})")
 
@@ -278,13 +337,6 @@ if page == t["p1"]:
                 break_val = float(p_input.replace(",", "."))
               except:
                 break_val = 0.0
-            else:
-              if gross_hours <= 4.5:
-                break_val = 0.0
-              elif 5.0 <= gross_hours <= 8.0:
-                break_val = 0.5
-              else:
-                break_val = 1.0
             hrs = max(0.0, gross_hours - break_val)
           break
         except:
@@ -303,68 +355,110 @@ if page == t["p1"]:
   c1, c2, c3 = st.columns([2, 1, 1])
   with c1:
     pdf_data = generate_employee_pdf(selected_employee, stundenzettel_monat, edited_df, total_sum_hours)
-    st.download_button("📥 PDF herunterladen", pdf_data, f"Stundenzettel_{selected_employee}.pdf", "application/pdf")
+    st.download_button(t["pdf_btn"], pdf_data, f"Stundenzettel_{selected_employee}.pdf", "application/pdf")
   with c2:
-    st.metric("Summe:", f"{total_sum_hours:.2f} St.")
+    st.metric(t["sum_label"], f"{total_sum_hours:.2f} St.")
   with c3:
-    if st.button("💾 Speichern"):
+    if st.button(t["save_btn"], key="p1_save"):
       save_employee_month_hours(selected_employee, stundenzettel_monat, edited_df)
-      st.success("Erfolgreich gespeichert!")
+      st.success(t["success_msg"])
+
+  st.markdown("---")
+  sig_col1, sig_col2 = st.columns(2)
+  with sig_col1:
+    st.text("__________________________________")
+    st.text("Unterschrift Arbeitnehmer")
+    st.text("Datum: ______________")
+  with sig_col2:
+    st.text("__________________________________")
+    st.text("Unterschrift Arbeitgeber / GF")
+    st.text("Datum: ______________")
 
 
 # ---------------------------------------------------------
-# الصفحة الثانية: الساعات اليومية الجديدة (بدون PDF، مع زر حفظ)
+# الصفحة الثانية: الساعات اليومية الجديدة (نفس تصميم الأولى وبدون استراحة تلقائية)
 # ---------------------------------------------------------
 elif page == t["p2"]:
-  st.title("📝 Clean & Care GmbH - Tägliche Stunden (ساعات يومية)")
-  
-  employees_list = load_employees()
-  places_list = load_places()
+  st.title("📝 Clean & Care GmbH - Tägliche Stunden")
+  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
   col1, col2 = st.columns(2)
   with col1:
-    daily_month = st.text_input("Monat / الشهر:", value="Oktober 2026", key="daily_month_input")
+    daily_month = st.text_input(t["month_label"], value="Oktober 2026", key="daily_month_input")
   with col2:
     st.write("")
 
   daily_df = load_daily_hours(daily_month)
 
-  st.subheader("Tabelle der täglichen Stunden (جدول الساعات اليومية)")
-  
   edited_daily_df = st.data_editor(
       daily_df,
-      num_rows="dynamic",
+      num_rows="fixed",
       use_container_width=True,
-      key="daily_hours_editor",
-      column_config={
-          "Mitarbeiter": st.column_config.SelectboxColumn("Mitarbeiter", options=employees_list),
-          "Ort / Platz": st.column_config.SelectboxColumn("Ort / Platz", options=places_list),
-      }
+      key=f"daily_table_{daily_month}",
   )
 
-  if st.button("💾 Tägliche Stunden speichern (حفظ الساعات اليومية)"):
-    save_daily_hours(daily_month, edited_daily_df)
-    st.success("Tägliche Stunden erfolgreich gespeichert! (تم حفظ الساعات اليومية بنجاح)")
+  total_daily_sum = 0.0
+  for index, row in edited_daily_df.iterrows():
+    b_str = str(row["Beginn"]).strip()
+    e_str = str(row["Ende"]).strip()
+    p_input = str(row["Pause"]).strip()
+
+    hrs = 0.0
+    break_val = 0.0
+
+    if b_str and e_str and b_str != "nan" and e_str != "nan":
+      for fmt in ("%H:%M", "%H.%M", "%H"):
+        try:
+          t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
+          t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
+          gross_hours = (t2 - t1).total_seconds() / 3600
+          if gross_hours > 0:
+            if p_input and p_input != "nan" and p_input != "":
+              try:
+                break_val = float(p_input.replace(",", "."))
+              except:
+                break_val = 0.0
+            hrs = max(0.0, gross_hours - break_val)
+          break
+        except:
+          continue
+
+    if break_val > 0:
+      edited_daily_df.at[index, "Pause"] = str(break_val)
+    else:
+      if not p_input or p_input == "nan":
+        edited_daily_df.at[index, "Pause"] = ""
+
+    edited_daily_df.at[index, "Arbeitszeit (abzgl. Pause)"] = round(hrs, 2)
+    total_daily_sum += hrs
+
+  st.markdown("---")
+  col_d1, col_d2 = st.columns([3, 1])
+  with col_d1:
+    if st.button(t["save_btn"], key="p2_save"):
+      save_daily_hours(daily_month, edited_daily_df)
+      st.success(t["success_msg"])
+  with col_d2:
+    st.metric(t["sum_label"], f"{total_daily_sum:.2f} St.")
 
 
 # ---------------------------------------------------------
 # الصفحة الثالثة: الأماكن وساعات العمال (قائمة منسدلة بالأماكن)
 # ---------------------------------------------------------
 elif page == t["p3"]:
-  st.title("🏢 Clean & Care GmbH - Orte & Mitarbeiter-Stunden (الأماكن والعمال)")
+  st.title("🏢 Clean & Care GmbH - Orte & Mitarbeiter-Stunden")
 
   places_list = load_places()
   employees_list = load_employees()
 
   col1, col2 = st.columns(2)
   with col1:
-    selected_place = st.selectbox("Ort / Platz auswählen (اختر المكان):", places_list)
+    selected_place = st.selectbox(t["place_label"], places_list)
   with col2:
-    place_month = st.text_input("Monat / الشهر:", value="Oktober 2026", key="place_month_input")
+    place_month = st.text_input(t["month_label"], value="Oktober 2026", key="place_month_input")
 
   st.subheader(f"Mitarbeiter-Stunden für Ort: {selected_place} ({place_month})")
 
-  # تحميل ساعات هذا المكان للعمال
   place_df = load_place_hours(selected_place, place_month, employees_list)
 
   edited_place_df = st.data_editor(
@@ -374,21 +468,21 @@ elif page == t["p3"]:
       key=f"place_editor_{selected_place}_{place_month}",
   )
 
-  if st.button(f"💾 Stunden für {selected_place} speichern (حفظ ساعات المكان)"):
+  if st.button(t["save_btn"], key="p3_save"):
     save_place_hours(selected_place, place_month, edited_place_df)
-    st.success(f"Stunden für {selected_place} erfolgreich gespeichert!")
+    st.success(t["success_msg"])
 
   total_place_hours = edited_place_df["Stunden"].astype(float).sum()
   st.metric(label=f"Gesamtstunden für {selected_place}:", value=f"{total_place_hours:.2f} St.")
 
   st.markdown("---")
-  st.subheader("➕ Neuen Ort hinzufügen (إضافة مكان جديد)")
+  st.subheader(t["add_place"])
   new_place_name = st.text_input("Name des neuen Ortes:")
-  if st.button("Ort hinzufügen"):
+  if st.button(t["add_btn"], key="add_place_btn"):
     if new_place_name and new_place_name not in places_list:
       places_list.append(new_place_name)
       save_places(places_list)
-      st.success(f"Ort ({new_place_name}) erfolgreich hinzugefügt!")
+      st.success(t["success_msg"])
       st.rerun()
 
 
@@ -400,24 +494,24 @@ elif page == t["p4"]:
   
   employees_list = load_employees()
 
-  st.subheader("➕ Neuen Mitarbeiter hinzufügen")
+  st.subheader(t["add_emp"])
   new_emp_name = st.text_input("Name des Mitarbeiters:")
-  if st.button("Hinzufügen"):
+  if st.button(t["add_btn"], key="add_emp_btn"):
     if new_emp_name and new_emp_name not in employees_list:
       employees_list.append(new_emp_name)
       save_employees(employees_list)
-      st.success(f"Mitarbeiter ({new_emp_name}) hinzugefügt!")
+      st.success(t["success_msg"])
       st.rerun()
 
   st.markdown("---")
-  st.subheader("🗑️ Mitarbeiter löschen")
+  st.subheader(t["del_emp"])
   if len(employees_list) > 0:
     emp_to_delete = st.selectbox("Mitarbeiter:", employees_list)
-    if st.button("Löschen"):
+    if st.button(t["del_btn"], key="del_emp_btn"):
       if len(employees_list) > 1:
         employees_list.remove(emp_to_delete)
         save_employees(employees_list)
-        st.success("Mitarbeiter gelöscht!")
+        st.success(t["success_msg"])
         st.rerun()
       else:
         st.warning("Es muss mindestens ein Mitarbeiter bleiben.")
