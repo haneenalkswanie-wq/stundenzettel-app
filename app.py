@@ -128,31 +128,33 @@ def save_daily_emp_hours(emp_name, month_str, year_val, df):
   save_json_file(filename, df.to_dict(orient="list"))
 
 
-# دوال ساعات الأماكن
-def load_locations():
-  if os.path.exists(LOCATIONS_FILE):
+# دوال ساعات المواقع اليومية المخصصة لكل مكان والشهر/السنة
+def get_location_month_file(place_name, month_str, year_val):
+  safe_place = "".join(c for c in place_name if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
+  safe_month = "".join(c for c in month_str if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
+  return f"loc_month_{safe_place}_{safe_month}_{year_val}.json"
+
+
+def load_location_month_hours(place_name, month_str, year_val, days_count):
+  filename = get_location_month_file(place_name, month_str, year_val)
+  if os.path.exists(filename):
     try:
-      with open(LOCATIONS_FILE, "r", encoding="utf-8") as f:
+      with open(filename, "r", encoding="utf-8") as f:
         data = json.load(f)
         return pd.DataFrame(data)
     except:
       pass
-  init_data = {
-      "Objekt": [
-          "Limehome Salzburg",
-          "Nespresso Store",
-          "IKEA Wals",
-      ]
-  }
-  for day in range(1, 32):
-    init_data[str(day)] = [0.0, 0.0, 0.0]
-  return pd.DataFrame(init_data)
+  
+  # جدول افتراضي لأيام الشهر (Tag 1 لغاية آخر الشهر) مع خانة الساعات
+  loc_days = []
+  for d in range(1, days_count + 1):
+    loc_days.append({"Tag": str(d), "Stunden": 0.0})
+  return pd.DataFrame(loc_days)
 
 
-def save_locations(df):
-  data = df.to_dict(orient="list")
-  with open(LOCATIONS_FILE, "w", encoding="utf-8") as f:
-    json.dump(data, f, ensure_ascii=False, indent=4)
+def save_location_month_hours(place_name, month_str, year_val, df):
+  filename = get_location_month_file(place_name, month_str, year_val)
+  save_json_file(filename, df.to_dict(orient="list"))
 
 
 # القوائم الثابتة
@@ -203,7 +205,7 @@ else:
         "menu": "📌 القائمة الرئيسية",
         "p1": "📋 استمارة ساعات العمال",
         "p2": "📝 الساعات اليومية",
-        "p3": "🏢 ملخص ساعات المواقع (عرض)",
+        "p3": "🏢 ملخص ساعات المواقع",
         "p4": "🏢 الأماكن وساعات العمال",
         "p5": "👥 إدارة العمال",
         "p6": "📅 ملخص الأشهر",
@@ -292,37 +294,34 @@ def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
   return buffer.getvalue()
 
 
-def generate_location_pdf(month_name, year_val, df, days_count):
+def generate_single_location_pdf(place_name, month_str, year_val, df, total_hours):
   buffer = io.BytesIO()
-  doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
+  doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
   elements = []
   styles = getSampleStyleSheet()
   title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
   
-  elements.append(Paragraph("<b>CLEAN & CARE GmbH - Objekt-Stundenzettel</b>", title_style))
-  elements.append(Paragraph(f"Monat: {month_name} {year_val}", styles['Normal']))
-  elements.append(Spacer(1, 10))
+  elements.append(Paragraph("<b>CLEAN & CARE GmbH - Objekt-Stundenbericht</b>", title_style))
+  elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
+  elements.append(Spacer(1, 15))
+  elements.append(Paragraph(f"<b>Objekt / Ort:</b> {place_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
+  elements.append(Spacer(1, 15))
   
-  columns = ["Objekt"] + [str(d) for d in range(1, days_count + 1)] + ["Summe"]
-  table_data = [[str(col) for col in columns]]
-  
+  table_data = [["Tag (Datum)", "Stunden"]]
   for index, row in df.iterrows():
-    row_data = [str(row["Objekt"])]
-    for d in range(1, days_count + 1):
-      val = row.get(str(d), 0.0)
-      row_data.append(str(val) if pd.notna(val) else "0.0")
-    row_data.append(str(row["Summe"]))
-    table_data.append(row_data)
-    
-  col_widths = [110] + [18] * days_count + [55]
-  t_pdf = Table(table_data, colWidths=col_widths, repeatRows=1)
+    table_data.append([str(row["Tag"]), str(row["Stunden"])])
+  table_data.append(["Gesamtsumme:", f"{total_hours:.2f} St."])
+  
+  t_pdf = Table(table_data, colWidths=[250, 200])
   t_pdf.setStyle(TableStyle([
-      ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#d0d0d0")),
+      ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
       ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
       ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-      ('FONTSIZE', (0, 0), (-1, -1), 7),
-      ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
-      ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#888888")),
+      ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+      ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor("#666666")),
+      ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f0f0f0")),
+      ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+      ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
   ]))
   elements.append(t_pdf)
   doc.build(elements)
@@ -564,16 +563,21 @@ elif page == t["p2"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الثالثة: ملخص ساعات المواقع (عرض - Landscape)
+# الصفحة الثالثة: ملخص ساعات المواقع (مع اختيار المكان وإدخال الساعات اليومية)
 # ---------------------------------------------------------
 elif page == t["p3"]:
   st.title("🏢 Clean & Care GmbH - Objekt-Stundenübersicht")
+  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
-  col1, col2 = st.columns(2)
+  places_list = load_places()
+
+  col1, col2, col3 = st.columns(3)
   with col1:
-    loc_month = st.selectbox(t["month_label"], months_list_de if not is_arabic else months_list_ar, index=9, key="loc_month_select")
+    selected_loc_place = st.selectbox(t["place_label"], places_list, key="loc_place_select")
   with col2:
-    loc_year = st.selectbox(t["year_label"], years_list, index=2, key="loc_year_input")
+    loc_month = st.selectbox(t["month_label"], months_list_de if not is_arabic else months_list_ar, index=9, key="loc_month_select")
+  with col3:
+    loc_year = st.selectbox(t["year_label"], years_list, index=2, key="loc_year_select")
 
   month_map = {
       "Januar": 1, "Februar": 2, "März": 3, "April": 4, "Mai": 5, "Juni": 6,
@@ -584,43 +588,40 @@ elif page == t["p3"]:
   m_num = month_map.get(loc_month, 10)
   days_in_month = pd.Period(f"{loc_year}-{m_num}").days_in_month
 
-  if "locations_data" not in st.session_state:
-    st.session_state.locations_data = load_locations()
+  st.subheader(f"Objekt: {selected_loc_place} ({loc_month} {loc_year})")
 
-  st.subheader("📝 Monatliche Objekt-Stunden")
-  
-  edited_locations_df = st.data_editor(
-      st.session_state.locations_data,
-      num_rows="dynamic",
+  loc_df = load_location_month_hours(selected_loc_place, loc_month, loc_year, days_in_month)
+
+  edited_loc_df = st.data_editor(
+      loc_df,
+      num_rows="fixed",
       use_container_width=True,
-      key="stable_loc_table_editor",
+      key=f"loc_table_{selected_loc_place}_{loc_month}_{loc_year}",
   )
-  st.session_state.locations_data = edited_locations_df
 
-  active_day_cols = [str(d) for d in range(1, days_in_month + 1)]
-  existing_cols = [c for c in active_day_cols if c in edited_locations_df.columns]
-
-  try:
-      edited_locations_df["Summe"] = edited_locations_df[existing_cols].astype(float).sum(axis=1)
-  except:
-      edited_locations_df["Summe"] = 0.0
+  total_loc_sum = 0.0
+  for index, row in edited_loc_df.iterrows():
+    try:
+      val = float(str(row["Stunden"]).replace(",", "."))
+    except:
+      val = 0.0
+    total_loc_sum += val
 
   st.markdown("---")
   col_l1, col_l2, col_l3 = st.columns([2, 1, 1])
   with col_l1:
-    loc_pdf_data = generate_location_pdf(loc_month, loc_year, edited_locations_df, days_in_month)
-    st.download_button(t["pdf_btn"], loc_pdf_data, f"Objekte_Report_{loc_month}_{loc_year}.pdf", "application/pdf", key="p3_pdf")
+    loc_pdf_data = generate_single_location_pdf(selected_loc_place, loc_month, loc_year, edited_loc_df, total_loc_sum)
+    st.download_button(t["pdf_btn"], loc_pdf_data, f"Objekt_{selected_loc_place}_{loc_month}_{loc_year}.pdf", "application/pdf", key="p3_pdf")
   with col_l2:
     if st.button(t["save_btn"], key="p3_save"):
-      save_locations(edited_locations_df)
+      save_location_month_hours(selected_loc_place, loc_month, loc_year, edited_loc_df)
       st.success(t["success_msg"])
   with col_l3:
-    total_all_locations = edited_locations_df["Summe"].sum()
-    st.metric(t["sum_label"], f"{total_all_locations:.2f} St.")
+    st.metric(t["sum_label"], f"{total_loc_sum:.2f} St.")
 
 
 # ---------------------------------------------------------
-# الصفحة الرابعة: الأماكن وساعات العمال (مرتبطة تلقائياً بالساعات اليومية)
+# الصفحة الرابعة: الأماكن وساعات العمال (المرتبطة بالساعات اليومية)
 # ---------------------------------------------------------
 elif page == t["p4"]:
   st.title("🏢 Clean & Care GmbH - Orte & Mitarbeiter-Stunden")
@@ -638,11 +639,9 @@ elif page == t["p4"]:
 
   st.subheader(f"Mitarbeiter-Stunden für Ort: {selected_place} ({place_month} {place_year}) - [Automatisch aus Täglichen Stunden]")
 
-  # حساب الساعات تلقائياً لكل موظف من بيانات الساعات اليومية المسجلة
   place_data_rows = []
   for emp in employees_list:
     emp_daily_df = load_daily_emp_hours(emp, place_month, place_year)
-    # تصفية الساعات التي تطابق اسم المكان المحدد
     emp_place_hours = 0.0
     for _, row in emp_daily_df.iterrows():
       row_place = str(row["Ort"]).strip()
@@ -656,7 +655,6 @@ elif page == t["p4"]:
       place_data_rows.append({"Mitarbeiter": emp, "Stunden": round(emp_place_hours, 2)})
 
   if not place_data_rows:
-    # إذا لم توجد ساعات مسجلة بعد لهذا المكان، نعرض قائمة فارغة أو بصفر
     place_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Stunden": 0.0}])
   else:
     place_df = pd.DataFrame(place_data_rows)
@@ -675,7 +673,7 @@ elif page == t["p4"]:
 
   st.markdown("---")
   st.subheader(t["add_place"])
-  new_place_name = st.text_input("Name des neues Ortes:")
+  new_place_name = st.text_input("Name des neuen Ortes:")
   if st.button(t["add_btn"], key="add_place_btn"):
     if new_place_name and new_place_name not in places_list:
       places_list.append(new_place_name)
