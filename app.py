@@ -307,7 +307,7 @@ elif page == "📋 Mitarbeiter Stundenzettel":
   st.subheader(f"Arbeitszeiterfassung für: {selected_employee} ({stundenzettel_monat})")
 
   # تحميل جدول الساعات الخاص بالموظف لهذا الشهر المحدد حصراً
-  current_emp_df = load_employee_hours(selected_employee, stundenzettel_monat)
+  current_emp_df = load_employee_month_hours(selected_employee, stundenzettel_monat)
 
   edited_df = st.data_editor(
       current_emp_df,
