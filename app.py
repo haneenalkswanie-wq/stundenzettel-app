@@ -37,19 +37,21 @@ def save_json_file(filename, data):
 
 
 def load_employees():
-  return load_json_file(EMPLOYEES_FILE, ["Sakleh Alsoudi", "Alaa Edin Ibrahim", "Neuer Mitarbeiter"])
+  emp_list = load_json_file(EMPLOYEES_FILE, ["Sakleh Alsoudi", "Alaa Edin Ibrahim", "Neuer Mitarbeiter"])
+  return sorted(emp_list)  # ترتيب تصاعدي دائم للأسماء
 
 
 def save_employees(emp_list):
-  save_json_file(EMPLOYEES_FILE, emp_list)
+  save_json_file(EMPLOYEES_FILE, sorted(emp_list))
 
 
 def load_places():
-  return load_json_file(PLACES_FILE, ["Limehome Salzburg", "Nespresso Store", "IKEA Wals"])
+  places_list = load_json_file(PLACES_FILE, ["Limehome Salzburg", "Nespresso Store", "IKEA Wals"])
+  return sorted(places_list)
 
 
 def save_places(places_list):
-  save_json_file(PLACES_FILE, places_list)
+  save_json_file(PLACES_FILE, sorted(places_list))
 
 
 # دوال حفظ وتحميل ساعات الموظفين الشهرية (الصفحة الأولى)
@@ -89,7 +91,7 @@ def save_employee_month_hours(emp_name, month_str, year_val, df):
   save_json_file(filename, df.to_dict(orient="list"))
 
 
-# دوال الساعات اليومية المستقلة (الصفحة الثانية)
+# دوال الساعات اليومية المستقلة (الصفحة الثانية - مع عمود اسم العامل وقائمة منسدلة)
 def get_daily_hours_file(month_str, year_val):
   safe_month = "".join(c for c in month_str if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
   return f"daily_hours_{safe_month}_{year_val}.json"
@@ -110,6 +112,7 @@ def load_daily_hours(month_str, year_val):
     days_data.append(
         {
             "Datum": str(day),
+            "Mitarbeiter": "",
             "Ort": "",
             "Beginn": "",
             "Ende": "",
@@ -125,7 +128,7 @@ def save_daily_hours(month_str, year_val, df):
   save_json_file(filename, df.to_dict(orient="list"))
 
 
-# دوال ساعات الأماكن المربطوطة بالعمال (الصفحة الثالثة القديمة)
+# دوال ساعات الأماكن المربوطة بالعمال (الصفحة الثالثة)
 def load_locations():
   if os.path.exists(LOCATIONS_FILE):
     try:
@@ -152,26 +155,30 @@ def save_locations(df):
     json.dump(data, f, ensure_ascii=False, indent=4)
 
 
-# دوال ساعات الأماكن الفردية (الصفحة الرابعة)
+# دوال ساعات الأماكن المخصصة (الصفحة الرابعة - اختيار العمال المطلوبين فقط)
 def get_place_hours_file(place_name, month_str, year_val):
   safe_place = "".join(c for c in place_name if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
   safe_month = "".join(c for c in month_str if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
   return f"place_{safe_place}_{safe_month}_{year_val}.json"
 
 
-def load_place_hours(place_name, month_str, year_val, employees):
+def load_place_hours(place_name, month_str, year_val, selected_employees):
   filename = get_place_hours_file(place_name, month_str, year_val)
+  existing_data = {}
   if os.path.exists(filename):
     try:
       with open(filename, "r", encoding="utf-8") as f:
         data = json.load(f)
-        return pd.DataFrame(data)
+        df_old = pd.DataFrame(data)
+        for _, row in df_old.iterrows():
+          existing_data[row["Mitarbeiter"]] = row["Stunden"]
     except:
       pass
   
   df_data = []
-  for emp in employees:
-    df_data.append({"Mitarbeiter": emp, "Stunden": 0.0})
+  for emp in selected_employees:
+    hrs = existing_data.get(emp, 0.0)
+    df_data.append({"Mitarbeiter": emp, "Stunden": hrs})
   return pd.DataFrame(df_data)
 
 
@@ -261,15 +268,13 @@ page = st.sidebar.radio(
 
 
 # ---------------------------------------------------------
-# دوال طباعة PDF المخصصة والجميلة لكل الصفحات
+# دوال طباعة PDF المخصصة
 # ---------------------------------------------------------
 
-# 1. طباعة تقرير الموظف (طولي - Portrait)
 def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
   elements = []
-  
   styles = getSampleStyleSheet()
   title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
   
@@ -319,12 +324,10 @@ def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
   return buffer.getvalue()
 
 
-# 2. طباعة الساعات اليومية (طولي - Portrait)
 def generate_daily_pdf(month_str, year_val, df, total_hours):
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
   elements = []
-  
   styles = getSampleStyleSheet()
   title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
   
@@ -334,23 +337,25 @@ def generate_daily_pdf(month_str, year_val, df, total_hours):
   elements.append(Paragraph(f"<b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 15))
   
-  table_data = [["Datum", "Ort", "Beginn", "Ende", "Pause", "Arbeitszeit"]]
+  table_data = [["Datum", "Mitarbeiter", "Ort", "Beginn", "Ende", "Pause", "Arbeitszeit"]]
   for index, row in df.iterrows():
     table_data.append([
         str(row["Datum"]),
+        str(row["Mitarbeiter"] if pd.notna(row["Mitarbeiter"]) else ""),
         str(row["Ort"] if pd.notna(row["Ort"]) else ""),
         str(row["Beginn"] if pd.notna(row["Beginn"]) else ""),
         str(row["Ende"] if pd.notna(row["Ende"]) else ""),
         str(row["Pause"] if pd.notna(row["Pause"]) else ""),
         str(row["Arbeitszeit (abzgl. Pause)"])
     ])
-  table_data.append(["Summe:", "", "", "", "", f"{total_hours:.2f} St."])
+  table_data.append(["Summe:", "", "", "", "", "", f"{total_hours:.2f} St."])
   
-  t_pdf = Table(table_data, colWidths=[50, 100, 70, 70, 70, 180])
+  t_pdf = Table(table_data, colWidths=[40, 90, 80, 50, 50, 50, 140])
   t_pdf.setStyle(TableStyle([
       ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
       ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
       ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+      ('FONTSIZE', (0, 0), (-1, -1), 8),
       ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
       ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor("#666666")),
       ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f0f0f0")),
@@ -358,18 +363,15 @@ def generate_daily_pdf(month_str, year_val, df, total_hours):
       ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
   ]))
   elements.append(t_pdf)
-  
   doc.build(elements)
   buffer.seek(0)
   return buffer.getvalue()
 
 
-# 3. طباعة جدول المواقع الشهري (عريض - Landscape)
 def generate_location_pdf(month_name, year_val, df, days_count):
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
   elements = []
-  
   styles = getSampleStyleSheet()
   title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
   
@@ -399,18 +401,15 @@ def generate_location_pdf(month_name, year_val, df, days_count):
       ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#888888")),
   ]))
   elements.append(t_pdf)
-  
   doc.build(elements)
   buffer.seek(0)
   return buffer.getvalue()
 
 
-# 4. طباعة تقرير الأماكن الفردية (طولي - Portrait)
 def generate_place_pdf(place_name, month_str, year_val, df, total_hours):
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
   elements = []
-  
   styles = getSampleStyleSheet()
   title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
   
@@ -437,18 +436,15 @@ def generate_place_pdf(place_name, month_str, year_val, df, total_hours):
       ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
   ]))
   elements.append(t_pdf)
-  
   doc.build(elements)
   buffer.seek(0)
   return buffer.getvalue()
 
 
-# 5. طباعة ملخص الأشهر (طولي - Portrait)
 def generate_summary_pdf(month_str, year_val, df, total_hours):
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
   elements = []
-  
   styles = getSampleStyleSheet()
   title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
   
@@ -475,7 +471,6 @@ def generate_summary_pdf(month_str, year_val, df, total_hours):
       ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
   ]))
   elements.append(t_pdf)
-  
   doc.build(elements)
   buffer.seek(0)
   return buffer.getvalue()
@@ -569,11 +564,13 @@ if page == t["p1"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الثانية: الساعات اليومية الجديدة
+# الصفحة الثانية: الساعات اليومية (مع عمود اسم العامل المنسدل والترتيب)
 # ---------------------------------------------------------
 elif page == t["p2"]:
   st.title("📝 Clean & Care GmbH - Tägliche Stunden")
   st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
+
+  employees_list = load_employees()
 
   col1, col2 = st.columns(2)
   with col1:
@@ -588,6 +585,9 @@ elif page == t["p2"]:
       num_rows="fixed",
       use_container_width=True,
       key=f"daily_table_{daily_month}_{daily_year}",
+      column_config={
+          "Mitarbeiter": st.column_config.SelectboxColumn("Mitarbeiter", options=employees_list),
+      }
   )
 
   total_daily_sum = 0.0
@@ -695,7 +695,7 @@ elif page == t["p3"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الرابعة: الأماكن وساعات العمال الفردية
+# الصفحة الرابعة: الأماكن وساعات العمال (اختيار العمال المطلوبين فقط)
 # ---------------------------------------------------------
 elif page == t["p4"]:
   st.title("🏢 Clean & Care GmbH - Orte & Mitarbeiter-Stunden")
@@ -713,7 +713,14 @@ elif page == t["p4"]:
 
   st.subheader(f"Mitarbeiter-Stunden für Ort: {selected_place} ({place_month} {place_year})")
 
-  place_df = load_place_hours(selected_place, place_month, place_year, employees_list)
+  # خيار لاختيار الأسماء المحددة فقط لهذا المكان
+  selected_emps_for_place = st.multiselect(
+      "Mitarbeiter für diesen Ort auswählen (اختر العمال لهذا المكان فقط):",
+      employees_list,
+      default=employees_list  # افتراضياً يختار الكل ويمكنك التعديل
+  )
+
+  place_df = load_place_hours(selected_place, place_month, place_year, selected_emps_for_place)
 
   edited_place_df = st.data_editor(
       place_df,
