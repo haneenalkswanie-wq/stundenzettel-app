@@ -646,7 +646,7 @@ elif page == t["p3"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الرابعة: الأماكن وساعات العمال (مع خيار العمال غير المحددة تلقائياً والمربوطة)
+# الصفحة الرابعة: الأماكن وساعات العمال (مربطة تلقائياً بالساعات اليومية بدون أزرار اختيار)
 # ---------------------------------------------------------
 elif page == t["p4"]:
   st.title("🏢 Clean & Care GmbH - Orte & Mitarbeiter-Stunden")
@@ -664,17 +664,9 @@ elif page == t["p4"]:
 
   st.subheader(f"Mitarbeiter-Stunden für Ort: {selected_place} ({place_month} {place_year}) - [Automatisch aus Täglichen Stunden]")
 
-  # جعل العمال غير محددين افتراضياً (value=False) وأنتِ تحددين من تريدين
-  with st.expander("⚙️ Mitarbeiter für diesen Ort auswählen / اختيار العمال لهذا المكان", expanded=True):
-    selected_emps_for_place = []
-    cols_chk = st.columns(3)
-    for idx, emp in enumerate(employees_list):
-      with cols_chk[idx % 3]:
-        if st.checkbox(emp, value=False, key=f"chk_emp_{selected_place}_{emp}"):
-          selected_emps_for_place.append(emp)
-
+  # جلب ساعات كل العمال تلقائياً من ملفات الساعات اليومية للموظفين والمطابقة مع اسم المكان
   place_data_rows = []
-  for emp in selected_emps_for_place:
+  for emp in employees_list:
     emp_daily_df = load_daily_emp_hours(emp, place_month, place_year)
     emp_place_hours = 0.0
     for _, row in emp_daily_df.iterrows():
@@ -689,7 +681,7 @@ elif page == t["p4"]:
       place_data_rows.append({"Mitarbeiter": emp, "Stunden": round(emp_place_hours, 2)})
 
   if not place_data_rows:
-    place_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst / اختر عاملاً لديه ساعات", "Stunden": 0.0}])
+    place_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Stunden": 0.0}])
   else:
     place_df = pd.DataFrame(place_data_rows)
 
