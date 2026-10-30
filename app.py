@@ -128,7 +128,7 @@ def save_daily_emp_hours(emp_name, month_str, year_val, df):
   save_json_file(filename, df.to_dict(orient="list"))
 
 
-# دوال ساعات المواقع اليومية المخصصة لكل مكان والشهر/السنة
+# دوال ساعات المواقع اليومية المخصصة
 def get_location_month_file(place_name, month_str, year_val):
   safe_place = "".join(c for c in place_name if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
   safe_month = "".join(c for c in month_str if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
@@ -145,7 +145,6 @@ def load_location_month_hours(place_name, month_str, year_val, days_count):
     except:
       pass
   
-  # جدول افتراضي لأيام الشهر (Tag 1 لغاية آخر الشهر) مع خانة الساعات
   loc_days = []
   for d in range(1, days_count + 1):
     loc_days.append({"Tag": str(d), "Stunden": 0.0})
@@ -199,6 +198,7 @@ if not is_arabic:
         "del_btn": "Löschen",
         "place_label": "Ort / Platz auswählen:",
         "add_place": "Neuen Ort hinzufügen",
+        "del_place": "Ort löschen",
     }
 else:
     t = {
@@ -222,6 +222,7 @@ else:
         "del_btn": "حذف",
         "place_label": "اختر اسم المكان:",
         "add_place": "إضافة مكان جديد",
+        "del_place": "حذف مكان",
     }
 
 page = st.sidebar.radio(
@@ -563,7 +564,7 @@ elif page == t["p2"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الثالثة: ملخص ساعات المواقع (مع اختيار المكان وإدخال الساعات اليومية)
+# الصفحة الثالثة: ملخص ساعات المواقع (مع أزرار إضافة وحذف الموقع)
 # ---------------------------------------------------------
 elif page == t["p3"]:
   st.title("🏢 Clean & Care GmbH - Objekt-Stundenübersicht")
@@ -619,9 +620,34 @@ elif page == t["p3"]:
   with col_l3:
     st.metric(t["sum_label"], f"{total_loc_sum:.2f} St.")
 
+  # قسم إدارة الأماكن (إضافة وحذف)
+  st.markdown("---")
+  add_col, del_col = st.columns(2)
+  with add_col:
+    st.subheader(t["add_place"])
+    new_place_name = st.text_input("Name des neuen Ortes:", key="p3_new_place")
+    if st.button(t["add_btn"], key="p3_add_btn"):
+      if new_place_name and new_place_name not in places_list:
+        places_list.append(new_place_name)
+        save_places(places_list)
+        st.success(t["success_msg"])
+        st.rerun()
+  with del_col:
+    st.subheader(t["del_place"])
+    if len(places_list) > 0:
+      place_to_delete = st.selectbox("Ort löschen:", places_list, key="p3_del_select")
+      if st.button(t["del_btn"], key="p3_del_btn"):
+        if len(places_list) > 1:
+          places_list.remove(place_to_delete)
+          save_places(places_list)
+          st.success(t["success_msg"])
+          st.rerun()
+        else:
+          st.warning("Es muss mindestens ein Ort bleiben.")
+
 
 # ---------------------------------------------------------
-# الصفحة الرابعة: الأماكن وساعات العمال (المرتبطة بالساعات اليومية)
+# الصفحة الرابعة: الأماكن وساعات العمال (مع زر حذف موقع أيضاً)
 # ---------------------------------------------------------
 elif page == t["p4"]:
   st.title("🏢 Clean & Care GmbH - Orte & Mitarbeiter-Stunden")
@@ -672,14 +698,28 @@ elif page == t["p4"]:
     st.metric(t["sum_label"], f"{total_place_hours:.2f} St.")
 
   st.markdown("---")
-  st.subheader(t["add_place"])
-  new_place_name = st.text_input("Name des neuen Ortes:")
-  if st.button(t["add_btn"], key="add_place_btn"):
-    if new_place_name and new_place_name not in places_list:
-      places_list.append(new_place_name)
-      save_places(places_list)
-      st.success(t["success_msg"])
-      st.rerun()
+  add_col_4, del_col_4 = st.columns(2)
+  with add_col_4:
+    st.subheader(t["add_place"])
+    new_place_name_4 = st.text_input("Name des neuen Ortes:", key="p4_new_place")
+    if st.button(t["add_btn"], key="p4_add_btn"):
+      if new_place_name_4 and new_place_name_4 not in places_list:
+        places_list.append(new_place_name_4)
+        save_places(places_list)
+        st.success(t["success_msg"])
+        st.rerun()
+  with del_col_4:
+    st.subheader(t["del_place"])
+    if len(places_list) > 0:
+      place_to_delete_4 = st.selectbox("Ort löschen:", places_list, key="p4_del_select")
+      if st.button(t["del_btn"], key="p4_del_btn"):
+        if len(places_list) > 1:
+          places_list.remove(place_to_delete_4)
+          save_places(places_list)
+          st.success(t["success_msg"])
+          st.rerun()
+        else:
+          st.warning("Es muss mindestens ein Ort bleiben.")
 
 
 # ---------------------------------------------------------
