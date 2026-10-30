@@ -165,7 +165,7 @@ years_list = [2024, 2025, 2026, 2027, 2028, 2029, 2030]
 
 
 # ---------------------------------------------------------
-# نظام لغة الواجهة (فصل كامل بين الألماني والعربي)
+# نظام لغة الواجهة
 # ---------------------------------------------------------
 st.sidebar.title("⚙️ Einstellungen")
 lang_choice = st.sidebar.radio("Sprache / اللغة:", ["Deutsch", "العربية"])
@@ -185,7 +185,7 @@ if not is_arabic:
         "year_label": "Jahr auswählen:",
         "save_btn": "💾 Speichern",
         "success_msg": "Erfolgreich gespeichert!",
-        "pdf_btn": "📥 Stundenzettel PDF herunterladen",
+        "pdf_btn": "📥 PDF herunterladen",
         "sum_label": "Summe:",
         "add_emp": "Neuen Mitarbeiter hinzufügen",
         "del_emp": "Mitarbeiter löschen",
@@ -230,33 +230,25 @@ page = st.sidebar.radio(
 
 
 # ---------------------------------------------------------
-# دالة توليد PDF لتقرير ساعات الموظف مع التوقيعات بالأسفل
+# دوال طباعة PDF المخصصة والجميلة لكل الصفحات
 # ---------------------------------------------------------
+
+# 1. طباعة تقرير الموظف (طولي - Portrait)
 def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
   elements = []
   
   styles = getSampleStyleSheet()
-  title_style = ParagraphStyle(
-      'TitleStyle',
-      parent=styles['Heading1'],
-      fontSize=14,
-      leading=18,
-      alignment=0,
-      textColor=colors.HexColor("#111111")
-  )
+  title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
   
   elements.append(Paragraph("<b>CLEAN & CARE GmbH</b>", title_style))
   elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
   elements.append(Spacer(1, 15))
-  
-  info_text = f"<b>Name:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}"
-  elements.append(Paragraph(info_text, styles['Normal']))
+  elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 15))
   
   table_data = [["Datum", "Ort", "Beginn", "Ende", "Pause", "Arbeitszeit (abzgl. Pause)"]]
-  
   for index, row in df.iterrows():
     table_data.append([
         str(row["Datum"]),
@@ -266,7 +258,6 @@ def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
         str(row["Pause"] if pd.notna(row["Pause"]) else ""),
         str(row["Arbeitszeit (abzgl. Pause)"])
     ])
-    
   table_data.append(["Summe:", "", "", "", "", f"{total_hours:.2f} St."])
   
   t_pdf = Table(table_data, colWidths=[50, 100, 70, 70, 70, 180])
@@ -280,7 +271,6 @@ def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
       ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
       ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
   ]))
-  
   elements.append(t_pdf)
   elements.append(Spacer(1, 40))
   
@@ -290,10 +280,7 @@ def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
       ["Datum: ______________", "Datum: ______________"]
   ]
   sig_table = Table(sig_data, colWidths=[250, 250])
-  sig_table.setStyle(TableStyle([
-      ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-      ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-  ]))
+  sig_table.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'LEFT'), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
   elements.append(sig_table)
   
   doc.build(elements)
@@ -301,8 +288,129 @@ def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
   return buffer.getvalue()
 
 
+# 2. طباعة الساعات اليومية (طولي - Portrait)
+def generate_daily_pdf(month_str, year_val, df, total_hours):
+  buffer = io.BytesIO()
+  doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+  elements = []
+  
+  styles = getSampleStyleSheet()
+  title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
+  
+  elements.append(Paragraph("<b>CLEAN & CARE GmbH - Tägliche Stunden</b>", title_style))
+  elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
+  elements.append(Spacer(1, 15))
+  elements.append(Paragraph(f"<b>Monat:</b> {month_str} {year_val}", styles['Normal']))
+  elements.append(Spacer(1, 15))
+  
+  table_data = [["Datum", "Ort", "Beginn", "Ende", "Pause", "Arbeitszeit"]]
+  for index, row in df.iterrows():
+    table_data.append([
+        str(row["Datum"]),
+        str(row["Ort"] if pd.notna(row["Ort"]) else ""),
+        str(row["Beginn"] if pd.notna(row["Beginn"]) else ""),
+        str(row["Ende"] if pd.notna(row["Ende"]) else ""),
+        str(row["Pause"] if pd.notna(row["Pause"]) else ""),
+        str(row["Arbeitszeit (abzgl. Pause)"])
+    ])
+  table_data.append(["Summe:", "", "", "", "", f"{total_hours:.2f} St."])
+  
+  t_pdf = Table(table_data, colWidths=[50, 100, 70, 70, 70, 180])
+  t_pdf.setStyle(TableStyle([
+      ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
+      ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+      ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+      ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor("#666666")),
+      ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f0f0f0")),
+      ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+      ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
+  ]))
+  elements.append(t_pdf)
+  
+  doc.build(elements)
+  buffer.seek(0)
+  return buffer.getvalue()
+
+
+# 3. طباعة تقرير الأماكن (عريض - Landscape)
+def generate_place_pdf(place_name, month_str, year_val, df, total_hours):
+  buffer = io.BytesIO()
+  doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+  elements = []
+  
+  styles = getSampleStyleSheet()
+  title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
+  
+  elements.append(Paragraph("<b>CLEAN & CARE GmbH - Ort-Stundenbericht</b>", title_style))
+  elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
+  elements.append(Spacer(1, 15))
+  elements.append(Paragraph(f"<b>Ort:</b> {place_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
+  elements.append(Spacer(1, 15))
+  
+  table_data = [["Mitarbeiter", "Stunden"]]
+  for index, row in df.iterrows():
+    table_data.append([str(row["Mitarbeiter"]), str(row["Stunden"])])
+  table_data.append(["Gesamtsumme:", f"{total_hours:.2f} St."])
+  
+  t_pdf = Table(table_data, colWidths=[300, 200])
+  t_pdf.setStyle(TableStyle([
+      ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
+      ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+      ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+      ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor("#666666")),
+      ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f0f0f0")),
+      ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+      ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
+  ]))
+  elements.append(t_pdf)
+  
+  doc.build(elements)
+  buffer.seek(0)
+  return buffer.getvalue()
+
+
+# 4. طباعة ملخص الأشهر (طولي - Portrait)
+def generate_summary_pdf(month_str, year_val, df, total_hours):
+  buffer = io.BytesIO()
+  doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+  elements = []
+  
+  styles = getSampleStyleSheet()
+  title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
+  
+  elements.append(Paragraph("<b>CLEAN & CARE GmbH - Monatsübersicht</b>", title_style))
+  elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
+  elements.append(Spacer(1, 15))
+  elements.append(Paragraph(f"<b>Monat:</b> {month_str} {year_val}", styles['Normal']))
+  elements.append(Spacer(1, 15))
+  
+  table_data = [["Mitarbeiter", "Gesamtstunden"]]
+  for index, row in df.iterrows():
+    table_data.append([str(row["Mitarbeiter"]), str(row["Gesamtstunden"])])
+  table_data.append(["Gesamtsumme:", f"{total_hours:.2f} St."])
+  
+  t_pdf = Table(table_data, colWidths=[250, 200])
+  t_pdf.setStyle(TableStyle([
+      ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
+      ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+      ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+      ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor("#666666")),
+      ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f0f0f0")),
+      ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+      ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
+  ]))
+  elements.append(t_pdf)
+  
+  doc.build(elements)
+  buffer.seek(0)
+  return buffer.getvalue()
+
+
 # ---------------------------------------------------------
-# الصفحة الأولى: استمارة ساعات العمال (مع طباعة PDF)
+# الصفحة الأولى: استمارة ساعات العمال
 # ---------------------------------------------------------
 if page == t["p1"]:
   st.title("📋 Clean & Care GmbH - Stundenzettel")
@@ -446,12 +554,15 @@ elif page == t["p2"]:
     total_daily_sum += hrs
 
   st.markdown("---")
-  col_d1, col_d2 = st.columns([3, 1])
+  col_d1, col_d2, col_d3 = st.columns([2, 1, 1])
   with col_d1:
+    pdf_daily_data = generate_daily_pdf(daily_month, daily_year, edited_daily_df, total_daily_sum)
+    st.download_button(t["pdf_btn"], pdf_daily_data, f"Tägliche_Stunden_{daily_month}_{daily_year}.pdf", "application/pdf", key="p2_pdf")
+  with col_d2:
     if st.button(t["save_btn"], key="p2_save"):
       save_daily_hours(daily_month, daily_year, edited_daily_df)
       st.success(t["success_msg"])
-  with col_d2:
+  with col_d3:
     st.metric(t["sum_label"], f"{total_daily_sum:.2f} St.")
 
 
@@ -483,12 +594,19 @@ elif page == t["p3"]:
       key=f"place_editor_{selected_place}_{place_month}_{place_year}",
   )
 
-  if st.button(t["save_btn"], key="p3_save"):
-    save_place_hours(selected_place, place_month, place_year, edited_place_df)
-    st.success(t["success_msg"])
-
   total_place_hours = edited_place_df["Stunden"].astype(float).sum()
-  st.metric(label=f"Gesamtstunden für {selected_place}:", value=f"{total_place_hours:.2f} St.")
+
+  st.markdown("---")
+  col_p1, col_p2, col_p3 = st.columns([2, 1, 1])
+  with col_p1:
+    pdf_place_data = generate_place_pdf(selected_place, place_month, place_year, edited_place_df, total_place_hours)
+    st.download_button(t["pdf_btn"], pdf_place_data, f"Ort_Report_{selected_place}_{place_month}_{place_year}.pdf", "application/pdf", key="p3_pdf")
+  with col_p2:
+    if st.button(t["save_btn"], key="p3_save"):
+      save_place_hours(selected_place, place_month, place_year, edited_place_df)
+      st.success(t["success_msg"])
+  with col_p3:
+    st.metric(t["sum_label"], f"{total_place_hours:.2f} St.")
 
   st.markdown("---")
   st.subheader(t["add_place"])
@@ -560,5 +678,13 @@ elif page == t["p5"]:
     })
     total_company_hours += emp_total
 
-  st.dataframe(pd.DataFrame(summary_data), use_container_width=True)
-  st.metric("Gesamtsumme aller Mitarbeiter:", f"{total_company_hours:.2f} St.")
+  summary_df = pd.DataFrame(summary_data)
+  st.dataframe(summary_df, use_container_width=True)
+
+  st.markdown("---")
+  col_s1, col_s2 = st.columns([2, 1])
+  with col_s1:
+    pdf_summary_data = generate_summary_pdf(summary_month, summary_year, summary_df, total_company_hours)
+    st.download_button(t["pdf_btn"], pdf_summary_data, f"Monatsübersicht_{summary_month}_{summary_year}.pdf", "application/pdf", key="p5_pdf")
+  with col_s2:
+    st.metric("Gesamtsumme:", f"{total_company_hours:.2f} St.")
