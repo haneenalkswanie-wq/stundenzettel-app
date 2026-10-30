@@ -35,9 +35,8 @@ def save_employees(emp_list):
     json.dump(emp_list, f, ensure_ascii=False, indent=4)
 
 
-# دوال حفظ وتحميل ساعات كل موظف على حدة
+# دوال حفظ وتحميل ساعات كل موظف مع دعم حفظ الأشهر
 def get_employee_file(emp_name):
-  # إنشاء اسم ملف آمن خاص بكل موظف
   safe_name = "".join(c for c in emp_name if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
   return f"emp_hours_{safe_name}.json"
 
@@ -52,7 +51,6 @@ def load_employee_hours(emp_name):
     except:
       pass
   
-  # جدول افتراضي جديد للموظف
   days_data = []
   for day in range(1, 32):
     days_data.append(
@@ -102,7 +100,7 @@ def save_locations(df):
     json.dump(data, f, ensure_ascii=False, indent=4)
 
 
-# القائمة الجانبية باللغة الألمانية
+# القائمة الجانبية باللغة الألمانية مع الصفحة الجديدة
 st.sidebar.title("📌 Hauptmenü")
 page = st.sidebar.radio(
     "Navigation wählen:",
@@ -110,6 +108,7 @@ page = st.sidebar.radio(
         "📋 Mitarbeiter Stundenzettel",
         "👥 Mitarbeiterverwaltung",
         "🏢 Objekt-Stundenübersicht",
+        "📅 Monatsübersicht (ملخص الأشهر)",
     ],
 )
 
@@ -255,7 +254,6 @@ if page == "👥 Mitarbeiterverwaltung":
     if new_emp_name and new_emp_name not in st.session_state.employees_list:
       st.session_state.employees_list.append(new_emp_name)
       save_employees(st.session_state.employees_list)
-      # إنشاء ملف ساعات خاص بالموظف الجديد تلقائياً
       save_employee_hours(new_emp_name, load_employee_hours(new_emp_name))
       st.success(f"Mitarbeiter ({new_emp_name}) erfolgreich hinzugefügt und gespeichert!")
       st.rerun()
@@ -272,7 +270,6 @@ if page == "👥 Mitarbeiterverwaltung":
       if len(st.session_state.employees_list) > 1:
         st.session_state.employees_list.remove(emp_to_delete)
         save_employees(st.session_state.employees_list)
-        # حذف ملف ساعات الموظف إذا أردتِ أو إبقاؤه
         st.success(f"Mitarbeiter ({emp_to_delete}) wurde gelöscht!")
         st.rerun()
       else:
@@ -309,7 +306,6 @@ elif page == "📋 Mitarbeiter Stundenzettel":
 
   st.subheader(f"Arbeitszeiterfassung für: {selected_employee}")
 
-  # تحميل جدول الساعات الخاص حصراً بالموظف المختار حالياً
   current_emp_df = load_employee_hours(selected_employee)
 
   edited_df = st.data_editor(
@@ -378,7 +374,6 @@ elif page == "📋 Mitarbeiter Stundenzettel":
   with col_res2:
     st.metric(label="Summe:", value=f"{total_sum_hours:.2f} St.")
   with col_res3:
-    # زر حفظ خاص بساعات هذا الموظف فقط
     if st.button(f"💾 {selected_employee} Stunden speichern"):
       save_employee_hours(selected_employee, edited_df)
       st.success(f"Stunden für {selected_employee} erfolgreich gespeichert!")
@@ -405,18 +400,8 @@ elif page == "🏢 Objekt-Stundenübersicht":
     loc_month = st.selectbox(
         "Monat auswählen:",
         [
-            "Januar",
-            "Februar",
-            "März",
-            "April",
-            "Mai",
-            "Juni",
-            "Juli",
-            "August",
-            "September",
-            "Oktober",
-            "November",
-            "Dezember",
+            "Januar", "Februar", "März", "April", "Mai", "Juni",
+            "Juli", "August", "September", "Oktober", "November", "Dezember",
         ],
         index=9,
         key="loc_month_select"
@@ -475,4 +460,54 @@ elif page == "🏢 Objekt-Stundenübersicht":
       data=loc_pdf_data,
       file_name=f"Objekte_Report_{loc_month}_{loc_year}.pdf",
       mime="application/pdf",
+  )
+
+# ---------------------------------------------------------
+# الصفحة الرابعة: ملخص الأشهر (Monatsübersicht) لعرض أسماء العمال وساعاتهم الكلية للشهر المختار
+# ---------------------------------------------------------
+elif page == "📅 Monatsübersicht (ملخص الأشهر)":
+  st.title("📅 Clean & Care GmbH - Monatsübersicht")
+  st.write("Wählen Sie einen Monat, um die Gesamtstunden aller Mitarbeiter zu sehen:")
+
+  selected_summary_month = st.selectbox(
+      "Monat wählen:",
+      [
+          "Januar", "Februar", "März", "April", "Mai", "Juni",
+          "Juli", "August", "September", "Oktober", "November", "Dezember",
+          "Oktober 2026"  # دعم للشهر الافتراضي المكتوب
+      ],
+      index=9,
+      key="summary_month_dropdown"
+  )
+
+  if "employees_list" not in st.session_state:
+    st.session_state.employees_list = load_employees()
+
+  st.subheader(f"📊 Gesamtstunden der Mitarbeiter für: {selected_summary_month}")
+
+  summary_data = []
+  total_company_hours = 0.0
+
+  for emp in st.session_state.employees_list:
+    emp_df = load_employee_hours(emp)
+    # جمع الساعات الكلية المسجلة بجدول هذا الموظف
+    if "Arbeitszeit (abzgl. Pause)" in emp_df.columns:
+      emp_total = emp_df["Arbeitszeit (abzgl. Pause)"].astype(float).sum()
+    else:
+      emp_total = 0.0
+    
+    summary_data.append({
+        "Mitarbeiter (اسم الموظف)": emp,
+        "Gesamtstunden (إجمالي الساعات)": f"{emp_total:.2f} St."
+    })
+    total_company_hours += emp_total
+
+  summary_table_df = pd.DataFrame(summary_data)
+  
+  st.dataframe(summary_table_df, use_container_width=True)
+
+  st.markdown("---")
+  st.metric(
+      label="Gesamtsumme aller Mitarbeiter (إجمالي ساعات كل العمال):",
+      value=f"{total_company_hours:.2f} St."
   )
