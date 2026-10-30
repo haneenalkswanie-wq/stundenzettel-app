@@ -14,12 +14,12 @@ st.set_page_config(
     page_title="Clean & Care - Stundenzettel", page_icon="📋", layout="wide"
 )
 
-# ملفات الحفظ المحلي لضمان بقاء البيانات دائمة
+# ملفات الحفظ المحلي
 EMPLOYEES_FILE = "employees_data.json"
 LOCATIONS_FILE = "locations_data.json"
 
 
-# دوال الحفظ والتحميل لملفات النظام
+# دوال إدارة العمال والموظفين
 def load_employees():
   if os.path.exists(EMPLOYEES_FILE):
     try:
@@ -35,6 +35,47 @@ def save_employees(emp_list):
     json.dump(emp_list, f, ensure_ascii=False, indent=4)
 
 
+# دوال حفظ وتحميل ساعات كل موظف على حدة
+def get_employee_file(emp_name):
+  # إنشاء اسم ملف آمن خاص بكل موظف
+  safe_name = "".join(c for c in emp_name if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
+  return f"emp_hours_{safe_name}.json"
+
+
+def load_employee_hours(emp_name):
+  filename = get_employee_file(emp_name)
+  if os.path.exists(filename):
+    try:
+      with open(filename, "r", encoding="utf-8") as f:
+        data = json.load(f)
+        return pd.DataFrame(data)
+    except:
+      pass
+  
+  # جدول افتراضي جديد للموظف
+  days_data = []
+  for day in range(1, 32):
+    days_data.append(
+        {
+            "Datum": str(day),
+            "Ort": "",
+            "Beginn": "",
+            "Ende": "",
+            "Pause": "",
+            "Arbeitszeit (abzgl. Pause)": 0.0,
+        }
+    )
+  return pd.DataFrame(days_data)
+
+
+def save_employee_hours(emp_name, df):
+  filename = get_employee_file(emp_name)
+  data = df.to_dict(orient="list")
+  with open(filename, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=4)
+
+
+# دوال للمواقع
 def load_locations():
   if os.path.exists(LOCATIONS_FILE):
     try:
@@ -43,7 +84,6 @@ def load_locations():
         return pd.DataFrame(data)
     except:
       pass
-  # جدول افتراضي أولي للمواقع
   init_data = {
       "Objekt": [
           "Limehome Salzburg",
@@ -72,6 +112,7 @@ page = st.sidebar.radio(
         "🏢 Objekt-Stundenübersicht",
     ],
 )
+
 
 # ---------------------------------------------------------
 # دالة توليد PDF لتقرير ساعات الموظف
@@ -210,18 +251,18 @@ if page == "👥 Mitarbeiterverwaltung":
   st.subheader("➕ Neuen Mitarbeiter hinzufügen")
   new_emp_name = st.text_input("Name des Mitarbeiters:")
   
-  col_add, col_save_emp = st.columns([1, 1])
-  with col_add:
-    if st.button("Hinzufügen"):
-      if new_emp_name and new_emp_name not in st.session_state.employees_list:
-        st.session_state.employees_list.append(new_emp_name)
-        save_employees(st.session_state.employees_list)
-        st.success(f"Mitarbeiter ({new_emp_name}) erfolgreich hinzugefügt und gespeichert!")
-        st.rerun()
-      elif not new_emp_name:
-        st.warning("Bitte geben Sie einen Namen ein.")
-      else:
-        st.info("Dieser Mitarbeiter existiert bereits.")
+  if st.button("Hinzufügen"):
+    if new_emp_name and new_emp_name not in st.session_state.employees_list:
+      st.session_state.employees_list.append(new_emp_name)
+      save_employees(st.session_state.employees_list)
+      # إنشاء ملف ساعات خاص بالموظف الجديد تلقائياً
+      save_employee_hours(new_emp_name, load_employee_hours(new_emp_name))
+      st.success(f"Mitarbeiter ({new_emp_name}) erfolgreich hinzugefügt und gespeichert!")
+      st.rerun()
+    elif not new_emp_name:
+      st.warning("Bitte geben Sie einen Namen ein.")
+    else:
+      st.info("Dieser Mitarbeiter existiert bereits.")
 
   st.markdown("---")
   st.subheader("🗑️ Mitarbeiter löschen")
@@ -231,7 +272,8 @@ if page == "👥 Mitarbeiterverwaltung":
       if len(st.session_state.employees_list) > 1:
         st.session_state.employees_list.remove(emp_to_delete)
         save_employees(st.session_state.employees_list)
-        st.success(f"Mitarbeiter ({emp_to_delete}) wurde gelöscht und gespeichert!")
+        # حذف ملف ساعات الموظف إذا أردتِ أو إبقاؤه
+        st.success(f"Mitarbeiter ({emp_to_delete}) wurde gelöscht!")
         st.rerun()
       else:
         st.warning("Es muss mindestens ein Mitarbeiter erhalten bleiben.")
@@ -242,7 +284,7 @@ if page == "👥 Mitarbeiterverwaltung":
     st.write(f"{idx}. {emp}")
 
 # ---------------------------------------------------------
-# الصفحة الأولى: تسجيل ساعات الموظفين (Stundenzettel)
+# الصفحة الأولى: تسجيل ساعات الموظفين (Stundenzettel لكل موظف مستقل)
 # ---------------------------------------------------------
 elif page == "📋 Mitarbeiter Stundenzettel":
   st.title("📋 Clean & Care GmbH - Stundenzettel")
@@ -256,7 +298,7 @@ elif page == "📋 Mitarbeiter Stundenzettel":
 
   col1, col2 = st.columns(2)
   with col1:
-    selected_employee = st.selectbox("Name:", st.session_state.employees_list)
+    selected_employee = st.selectbox("Name (Mitarbeiter wählen):", st.session_state.employees_list, key="selected_emp_dropdown")
   with col2:
     stundenzettel_monat = st.text_input(
         "Stundenzettel Monat:",
@@ -267,28 +309,15 @@ elif page == "📋 Mitarbeiter Stundenzettel":
 
   st.subheader(f"Arbeitszeiterfassung für: {selected_employee}")
 
-  if "employee_df" not in st.session_state:
-    days_data = []
-    for day in range(1, 32):
-      days_data.append(
-          {
-              "Datum": str(day),
-              "Ort": "",
-              "Beginn": "",
-              "Ende": "",
-              "Pause": "",
-              "Arbeitszeit (abzgl. Pause)": 0.0,
-          }
-      )
-    st.session_state.employee_df = pd.DataFrame(days_data)
+  # تحميل جدول الساعات الخاص حصراً بالموظف المختار حالياً
+  current_emp_df = load_employee_hours(selected_employee)
 
   edited_df = st.data_editor(
-      st.session_state.employee_df,
+      current_emp_df,
       num_rows="fixed",
       use_container_width=True,
-      key="emp_table_editor",
+      key=f"emp_table_editor_{selected_employee}",
   )
-  st.session_state.employee_df = edited_df
 
   total_sum_hours = 0.0
 
@@ -349,9 +378,10 @@ elif page == "📋 Mitarbeiter Stundenzettel":
   with col_res2:
     st.metric(label="Summe:", value=f"{total_sum_hours:.2f} St.")
   with col_res3:
-    # زر حفظ بيانات جدول الموظف
-    if st.button("💾 Speichern (حفظ البيانات)"):
-      st.success("Erfolgreich gespeichert! (تم الحفظ بنجاح)")
+    # زر حفظ خاص بساعات هذا الموظف فقط
+    if st.button(f"💾 {selected_employee} Stunden speichern"):
+      save_employee_hours(selected_employee, edited_df)
+      st.success(f"Stunden für {selected_employee} erfolgreich gespeichert!")
 
   st.markdown("---")
   sig_col1, sig_col2 = st.columns(2)
@@ -365,7 +395,7 @@ elif page == "📋 Mitarbeiter Stundenzettel":
     st.text("Datum: ______________")
 
 # ---------------------------------------------------------
-# الصفحة الثالثة: متابعة ساعات المواقع (Objekt-Stundenübersicht) مع زر حفظ دائم
+# الصفحة الثالثة: متابعة ساعات المواقع (Objekt-Stundenübersicht)
 # ---------------------------------------------------------
 elif page == "🏢 Objekt-Stundenübersicht":
   st.title("🏢 Clean & Care GmbH - Objekt-Stundenübersicht")
@@ -401,7 +431,6 @@ elif page == "🏢 Objekt-Stundenübersicht":
   m_num = month_map[loc_month]
   days_in_month = pd.Period(f"{loc_year}-{m_num}").days_in_month
 
-  # تحميل بيانات المواقع المحفوظة محلياً أو إنشاء جدول افتراضي
   if "locations_data" not in st.session_state:
     st.session_state.locations_data = load_locations()
 
@@ -418,7 +447,6 @@ elif page == "🏢 Objekt-Stundenübersicht":
   active_day_cols = [str(d) for d in range(1, days_in_month + 1)]
   existing_cols = [c for c in active_day_cols if c in edited_locations_df.columns]
 
-  # حساب المجموع الكلي بشكل آمن وثابت بدون تعليق
   try:
       edited_locations_df["Summe"] = edited_locations_df[existing_cols].astype(float).sum(axis=1)
   except:
@@ -426,10 +454,9 @@ elif page == "🏢 Objekt-Stundenübersicht":
 
   st.markdown("---")
   
-  # زر حفظ بيانات المواقع بشكل دائم في الملف المحلي
-  if st.button("💾 Objekt-Stunden speichern (حفظ ساعات المواقع)"):
+  if st.button("💾 Objekt-Stunden speichern"):
     save_locations(edited_locations_df)
-    st.success("Alle Objekt-Stunden wurden erfolgreich gespeichert! (تم حفظ كل ساعات المواقع بنجاح)")
+    st.success("Alle Objekt-Stunden wurden erfolgreich gespeichert!")
 
   st.subheader("📊 Zusammenfassung")
   summary_df = edited_locations_df[["Objekt", "Summe"]]
