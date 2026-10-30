@@ -88,7 +88,7 @@ def save_employee_month_hours(emp_name, month_str, df):
   save_json_file(filename, df.to_dict(orient="list"))
 
 
-# دوال الساعات اليومية المستقلة (الصفحة الثانية بنفس تصميم الأولى تماماً)
+# دوال الساعات اليومية المستقلة (الصفحة الثانية)
 def get_daily_hours_file(month_str):
   safe_month = "".join(c for c in month_str if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
   return f"daily_hours_{safe_month}.json"
@@ -164,8 +164,8 @@ if not is_arabic:
     # القاموس الألماني بالكامل
     t = {
         "menu": "📌 Hauptmenü",
-        "p1": "📋 Mitarbeiter Stundenzettel (PDF)",
-        "p2": "📝 Tägliche Stunden (Tabelle)",
+        "p1": "📋 Mitarbeiter Stundenzettel",
+        "p2": "📝 Tägliche Stunden",
         "p3": "🏢 Orte & Stunden",
         "p4": "👥 Mitarbeiterverwaltung",
         "p5": "📅 Monatsübersicht",
@@ -183,11 +183,11 @@ if not is_arabic:
         "add_place": "Neuen Ort hinzufügen",
     }
 else:
-    # القاموس العربي بالكامل
+    # القاموس العربي بالكامل (بدون الكلمات الإضافية)
     t = {
         "menu": "📌 القائمة الرئيسية",
-        "p1": "📋 استمارة ساعات العمال (مع طباعة PDF)",
-        "p2": "📝 الساعات اليومية (جدول مستقل)",
+        "p1": "📋 استمارة ساعات العمال",
+        "p2": "📝 الساعات اليومية",
         "p3": "🏢 الأماكن وساعات العمال",
         "p4": "👥 إدارة العمال",
         "p5": "📅 ملخص الأشهر",
@@ -272,7 +272,6 @@ def generate_employee_pdf(emp_name, month_str, df, total_hours):
   elements.append(t_pdf)
   elements.append(Spacer(1, 40))
   
-  # جدول التوقيعات الرسمي في الأسفل
   sig_data = [
       ["__________________________________", "__________________________________"],
       ["Unterschrift Arbeitnehmer", "Unterschrift Arbeitgeber / GF"],
@@ -376,7 +375,7 @@ if page == t["p1"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الثانية: الساعات اليومية الجديدة (نفس تصميم الأولى وبدون استراحة تلقائية)
+# الصفحة الثانية: الساعات اليومية الجديدة
 # ---------------------------------------------------------
 elif page == t["p2"]:
   st.title("📝 Clean & Care GmbH - Tägliche Stunden")
@@ -443,7 +442,7 @@ elif page == t["p2"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الثالثة: الأماكن وساعات العمال (قائمة منسدلة بالأماكن)
+# الصفحة الثالثة: الأماكن وساعات العمال
 # ---------------------------------------------------------
 elif page == t["p3"]:
   st.title("🏢 Clean & Care GmbH - Orte & Mitarbeiter-Stunden")
