@@ -56,7 +56,7 @@ def save_places(places_list):
   save_json_file(PLACES_FILE, sorted(places_list))
 
 
-# دوال حفظ وتحميل ساعات الموظف الشهرية الفردية (الصفحة الأولى)
+# دوال حفظ وتحميل ساعات الموظف الشهرية الفردية
 def get_employee_month_file(emp_name, month_str, year_val):
   safe_emp = "".join(c for c in emp_name if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
   safe_month = "".join(c for c in month_str if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
@@ -134,30 +134,15 @@ def save_daily_emp_hours(emp_name, month_str, year_val, df):
   save_json_file(filename, df.to_dict(orient="list"))
 
 
-# قاموس تحويل الأشهر للعربية والألمانية
-months_map_ar_to_de = {
-    "يناير": "Januar", "فبراير": "Februar", "مارس": "März", "أبريل": "April",
-    "مايو": "Mai", "يونيو": "Juni", "يوليو": "Juli", "أغسطس": "August",
-    "سبتمبر": "September", "أكتوبر": "Oktober", "نوفمبر": "November", "ديسمبر": "Dezember"
-}
-
-def get_german_month(month_str):
-  return months_map_ar_to_de.get(month_str, month_str)
-
-
 months_list_de = [
     "Januar", "Februar", "März", "April", "Mai", "Juni",
     "Juli", "August", "September", "Oktober", "November", "Dezember"
-]
-months_list_ar = [
-    "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
-    "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"
 ]
 years_list = [2024, 2025, 2026, 2027, 2028, 2029, 2030]
 
 
 # ---------------------------------------------------------
-# نظام لغة الواجهة
+# نظام لغة القائمة الجانبية (ألماني بالأساس، والأسماء تتغير للعربي عند الحاجة)
 # ---------------------------------------------------------
 st.sidebar.title("⚙️ Einstellungen")
 lang_choice = st.sidebar.radio("Sprache / اللغة:", ["Deutsch", "العربية"])
@@ -189,27 +174,27 @@ if not is_arabic:
     }
 else:
     t = {
-        "menu": "📌 القائمة الرئيسية",
-        "p1": "📋 استمارة ساعات العمال",
-        "p2": "📝 الساعات اليومية",
-        "p3": "🏢 ملخص ساعات المواقع",
-        "p4": "🏢 الأماكن وساعات العمال",
-        "p5": "👥 إدارة العمال",
-        "p6": "📅 ملخص الأشهر",
-        "emp_label": "اختر اسم الموظف:",
-        "month_label": "اختر الشهر:",
-        "year_label": "اختر السنة:",
-        "save_btn": "💾 حفظ",
-        "success_msg": "تم الحفظ بنجاح!",
-        "pdf_btn": "📥 تحميل ملف PDF",
-        "sum_label": "المجموع:",
-        "add_emp": "إضافة موظف جديد",
-        "del_emp": "حذف موظف",
-        "add_btn": "إضافة",
-        "del_btn": "حذف",
-        "place_label": "اختر اسم المكان:",
-        "add_place": "إضافة مكان جديد",
-        "del_place": "حذف مكان",
+        "menu": "📌 القائمة الرئيسية (Hauptmenü)",
+        "p1": "📋 استمارة ساعات العمال (Mitarbeiter Stundenzettel)",
+        "p2": "📝 الساعات اليومية (Tägliche Stunden)",
+        "p3": "🏢 ملخص ساعات المواقع (Objekt-Stundenübersicht)",
+        "p4": "🏢 الأماكن وساعات العمال (Orte & Mitarbeiter)",
+        "p5": "👥 إدارة العمال (Mitarbeiterverwaltung)",
+        "p6": "📅 ملخص الأشهر (Monatsübersicht)",
+        "emp_label": "Mitarbeiter wählen:",
+        "month_label": "Monat auswählen:",
+        "year_label": "Jahr auswählen:",
+        "save_btn": "💾 Speichern",
+        "success_msg": "Erfolgreich gespeichert!",
+        "pdf_btn": "📥 PDF herunterladen",
+        "sum_label": "Summe:",
+        "add_emp": "Neuen Mitarbeiter hinzufügen",
+        "del_emp": "Mitarbeiter löschen",
+        "add_btn": "Hinzufügen",
+        "del_btn": "Löschen",
+        "place_label": "Ort / Platz auswählen:",
+        "add_place": "Neuen Ort hinzufügen",
+        "del_place": "Ort löschen",
     }
 
 page = st.sidebar.radio(
@@ -226,10 +211,9 @@ page = st.sidebar.radio(
 
 
 # ---------------------------------------------------------
-# دوال طباعة PDF
+# دوال طباعة PDF باللغة الألمانية حصراً
 # ---------------------------------------------------------
 def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
-  de_month = get_german_month(month_str)
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
   elements = []
@@ -239,7 +223,7 @@ def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
   elements.append(Paragraph("<b>CLEAN & CARE GmbH</b>", title_style))
   elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
   elements.append(Spacer(1, 15))
-  elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {de_month} {year_val}", styles['Normal']))
+  elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 15))
   
   table_data = [["Datum", "Ort", "Beginn", "Ende", "Pause", "Arbeitszeit (abzgl. Pause)"]]
@@ -283,7 +267,6 @@ def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
 
 
 def generate_daily_pdf(emp_name, month_str, year_val, df, total_hours):
-  de_month = get_german_month(month_str)
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=20, leftMargin=20, topMargin=30, bottomMargin=30)
   elements = []
@@ -293,7 +276,7 @@ def generate_daily_pdf(emp_name, month_str, year_val, df, total_hours):
   elements.append(Paragraph("<b>CLEAN & CARE GmbH - Tägliche Arbeitszeiten</b>", title_style))
   elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
   elements.append(Spacer(1, 10))
-  elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {de_month} {year_val}", styles['Normal']))
+  elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 10))
   
   table_data = [["Tag", "Ort 1", "Std 1", "Ort 2", "Std 2", "Ort 3", "Std 3", "Pause", "Gesamt"]]
@@ -327,7 +310,6 @@ def generate_daily_pdf(emp_name, month_str, year_val, df, total_hours):
 
 
 def generate_single_location_pdf(place_name, month_str, year_val, df, total_hours):
-  de_month = get_german_month(month_str)
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
   elements = []
@@ -337,7 +319,7 @@ def generate_single_location_pdf(place_name, month_str, year_val, df, total_hour
   elements.append(Paragraph("<b>CLEAN & CARE GmbH - Objekt-Stundenbericht</b>", title_style))
   elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
   elements.append(Spacer(1, 15))
-  elements.append(Paragraph(f"<b>Objekt / Ort:</b> {place_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {de_month} {year_val}", styles['Normal']))
+  elements.append(Paragraph(f"<b>Objekt / Ort:</b> {place_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 15))
   
   table_data = [["Tag (Datum)", "Stunden"]]
@@ -363,7 +345,6 @@ def generate_single_location_pdf(place_name, month_str, year_val, df, total_hour
 
 
 def generate_place_pdf(place_name, month_str, year_val, df, total_hours):
-  de_month = get_german_month(month_str)
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
   elements = []
@@ -373,7 +354,7 @@ def generate_place_pdf(place_name, month_str, year_val, df, total_hours):
   elements.append(Paragraph("<b>CLEAN & CARE GmbH - Ort-Stundenbericht</b>", title_style))
   elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
   elements.append(Spacer(1, 15))
-  elements.append(Paragraph(f"<b>Ort:</b> {place_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {de_month} {year_val}", styles['Normal']))
+  elements.append(Paragraph(f"<b>Ort:</b> {place_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 15))
   
   table_data = [["Mitarbeiter", "Stunden"]]
@@ -399,7 +380,6 @@ def generate_place_pdf(place_name, month_str, year_val, df, total_hours):
 
 
 def generate_summary_pdf(month_str, year_val, df, total_hours):
-  de_month = get_german_month(month_str)
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
   elements = []
@@ -409,7 +389,7 @@ def generate_summary_pdf(month_str, year_val, df, total_hours):
   elements.append(Paragraph("<b>CLEAN & CARE GmbH - Monatsübersicht</b>", title_style))
   elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
   elements.append(Spacer(1, 15))
-  elements.append(Paragraph(f"<b>Monat:</b> {de_month} {year_val}", styles['Normal']))
+  elements.append(Paragraph(f"<b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 15))
   
   table_data = [["Mitarbeiter", "Gesamtstunden"]]
@@ -435,7 +415,7 @@ def generate_summary_pdf(month_str, year_val, df, total_hours):
 
 
 # ---------------------------------------------------------
-# الصفحة الأولى: استمارة ساعات العمال (المكان الواحد مع التوقيع)
+# الصفحة الأولى: استمارة ساعات العمال (Mitarbeiter Stundenzettel)
 # ---------------------------------------------------------
 if page == t["p1"]:
   st.title("📋 Clean & Care GmbH - Stundenzettel")
@@ -448,7 +428,7 @@ if page == t["p1"]:
   with col1:
     selected_employee = st.selectbox(t["emp_label"], employees_list, key="p1_emp")
   with col2:
-    selected_month = st.selectbox(t["month_label"], months_list_de if not is_arabic else months_list_ar, index=9, key="p1_month")
+    selected_month = st.selectbox(t["month_label"], months_list_de, index=9, key="p1_month")
   with col3:
     selected_year = st.selectbox(t["year_label"], years_list, index=2, key="p1_year")
 
@@ -466,7 +446,6 @@ if page == t["p1"]:
       }
   )
 
-  # الحل السحري لتفادي خطأ TypeError الخاص بالـ PyArrow
   edited_df = edited_df.astype(object)
 
   total_sum_hours = 0.0
@@ -529,7 +508,7 @@ if page == t["p1"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الثانية: الساعات اليومية (3 أماكن)
+# الصفحة الثانية: الساعات اليومية (Tägliche Stunden)
 # ---------------------------------------------------------
 elif page == t["p2"]:
   st.title("📝 Clean & Care GmbH - Tägliche Stunden")
@@ -542,7 +521,7 @@ elif page == t["p2"]:
   with col1:
     daily_emp = st.selectbox(t["emp_label"], employees_list, key="daily_emp_select")
   with col2:
-    daily_month = st.selectbox(t["month_label"], months_list_de if not is_arabic else months_list_ar, index=9, key="daily_month_select")
+    daily_month = st.selectbox(t["month_label"], months_list_de, index=9, key="daily_month_select")
   with col3:
     daily_year = st.selectbox(t["year_label"], years_list, index=2, key="daily_year_select")
 
@@ -562,7 +541,6 @@ elif page == t["p2"]:
       }
   )
 
-  # الحل السحري لتفادي خطأ TypeError الخاص بالـ PyArrow هنا أيضاً
   edited_daily_df = edited_daily_df.astype(object)
 
   total_daily_sum = 0.0
@@ -631,17 +609,15 @@ elif page == t["p3"]:
 
   col1, col2, col3 = st.columns(3)
   with col1:
-    selected_loc_place = st.selectbox(t["place_label"], places_list, key="loc_place_select") if places_list else st.warning("أضف مكاناً أولاً")
+    selected_loc_place = st.selectbox(t["place_label"], places_list, key="loc_place_select") if places_list else st.warning("Kein Ort vorhanden")
   with col2:
-    loc_month = st.selectbox(t["month_label"], months_list_de if not is_arabic else months_list_ar, index=9, key="loc_month_select")
+    loc_month = st.selectbox(t["month_label"], months_list_de, index=9, key="loc_month_select")
   with col3:
     loc_year = st.selectbox(t["year_label"], years_list, index=2, key="loc_year_select")
 
   month_map = {
       "Januar": 1, "Februar": 2, "März": 3, "April": 4, "Mai": 5, "Juni": 6,
-      "Juli": 7, "August": 8, "September": 9, "Oktober": 10, "November": 11, "Dezember": 12,
-      "يناير": 1, "فبراير": 2, "مارس": 3, "أبريل": 4, "مايو": 5, "يونيو": 6,
-      "يوليو": 7, "أغسطس": 8, "سبتمبر": 9, "أكتوبر": 10, "نوفمبر": 11, "ديسمبر": 12
+      "Juli": 7, "August": 8, "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
   }
   m_num = month_map.get(loc_month, 10)
   days_in_month = pd.Period(f"{loc_year}-{m_num}").days_in_month
@@ -743,9 +719,9 @@ elif page == t["p4"]:
 
   col1, col2, col3 = st.columns(3)
   with col1:
-    selected_place = st.selectbox(t["place_label"], places_list, key="p4_place_select") if places_list else st.warning("أضف مكان أولاً")
+    selected_place = st.selectbox(t["place_label"], places_list, key="p4_place_select") if places_list else st.warning("Kein Ort vorhanden")
   with col2:
-    place_month = st.selectbox(t["month_label"], months_list_de if not is_arabic else months_list_ar, index=9, key="place_month_select")
+    place_month = st.selectbox(t["month_label"], months_list_de, index=9, key="place_month_select")
   with col3:
     place_year = st.selectbox(t["year_label"], years_list, index=2, key="place_year_select")
 
@@ -840,7 +816,7 @@ elif page == t["p5"]:
       if len(employees_list) > 1:
         employees_list.remove(emp_to_delete)
         save_employees(employees_list)
-        st.success("تم حذف اسم الموظف من القائمة مع الاحتفاظ بكافة ساعاته السابقة بأمان!")
+        st.success("Mitarbeiter erfolgreich gelöscht!")
         st.rerun()
       else:
         st.warning("Es muss mindestens ein Mitarbeiter bleiben.")
@@ -854,7 +830,7 @@ elif page == t["p6"]:
   
   col1, col2 = st.columns(2)
   with col1:
-    summary_month = st.selectbox(t["month_label"], months_list_de if not is_arabic else months_list_ar, index=9, key="summary_month_select")
+    summary_month = st.selectbox(t["month_label"], months_list_de, index=9, key="summary_month_select")
   with col2:
     summary_year = st.selectbox(t["year_label"], years_list, index=2, key="summary_year_select")
 
