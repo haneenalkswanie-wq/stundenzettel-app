@@ -14,13 +14,15 @@ st.set_page_config(
     page_title="Clean & Care - Stundenzettel", page_icon="📋", layout="wide"
 )
 
-# ملفات الحفظ المحلي
-EMPLOYEES_FILE = "employees_data.json"
-PLACES_FILE = "places_list.json"
-LOCATIONS_FILE = "locations_data.json"
+# إنشاء مجلد آمن لحفظ البيانات بشكل دائم ومنع ضياعها
+DATA_DIR = "data"
+if not os.path.exists(DATA_DIR):
+  os.makedirs(DATA_DIR)
+
+EMPLOYEES_FILE = os.path.join(DATA_DIR, "employees_data.json")
+PLACES_FILE = os.path.join(DATA_DIR, "places_list.json")
 
 
-# دوال التحميل والحفظ العامة
 def load_json_file(filename, default_val):
   if os.path.exists(filename):
     try:
@@ -37,7 +39,7 @@ def save_json_file(filename, data):
 
 
 def load_employees():
-  emp_list = load_json_file(EMPLOYEES_FILE, ["Sakleh Alsoudi", "Alaa Edin Ibrahim", "Neuer Mitarbeiter"])
+  emp_list = load_json_file(EMPLOYEES_FILE, ["Sakleh Alsoudi", "Alaa Edin Ibrahim"])
   return sorted(emp_list)
 
 
@@ -46,7 +48,7 @@ def save_employees(emp_list):
 
 
 def load_places():
-  places_list = load_json_file(PLACES_FILE, ["Limehome Salzburg", "Nespresso Store", "IKEA Wals"])
+  places_list = load_json_file(PLACES_FILE, ["Limehome Salzburg", "Nespresso Store", "IKEA Wals", "Villach Hauptplatz"])
   return sorted(places_list)
 
 
@@ -54,48 +56,11 @@ def save_places(places_list):
   save_json_file(PLACES_FILE, sorted(places_list))
 
 
-# دوال حفظ وتحميل ساعات الموظفين الشهرية (الصفحة الأولى)
-def get_employee_month_file(emp_name, month_str, year_val):
-  safe_emp = "".join(c for c in emp_name if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
-  safe_month = "".join(c for c in month_str if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
-  return f"emp_{safe_emp}_{safe_month}_{year_val}.json"
-
-
-def load_employee_month_hours(emp_name, month_str, year_val):
-  filename = get_employee_month_file(emp_name, month_str, year_val)
-  if os.path.exists(filename):
-    try:
-      with open(filename, "r", encoding="utf-8") as f:
-        data = json.load(f)
-        return pd.DataFrame(data)
-    except:
-      pass
-  
-  days_data = []
-  for day in range(1, 32):
-    days_data.append(
-        {
-            "Datum": str(day),
-            "Ort": "",
-            "Beginn": "",
-            "Ende": "",
-            "Pause": "",
-            "Arbeitszeit (abzgl. Pause)": 0.0,
-        }
-    )
-  return pd.DataFrame(days_data)
-
-
-def save_employee_month_hours(emp_name, month_str, year_val, df):
-  filename = get_employee_month_file(emp_name, month_str, year_val)
-  save_json_file(filename, df.to_dict(orient="list"))
-
-
-# دوال الساعات اليومية للعامل المحدد
+# دوال حفظ وتحميل الساعات اليومية (3 أماكن + استراحة عامة واحدة قبل المجموع)
 def get_daily_emp_file(emp_name, month_str, year_val):
   safe_emp = "".join(c for c in emp_name if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
   safe_month = "".join(c for c in month_str if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
-  return f"daily_emp_{safe_emp}_{safe_month}_{year_val}.json"
+  return os.path.join(DATA_DIR, f"daily_emp_{safe_emp}_{safe_month}_{year_val}.json")
 
 
 def load_daily_emp_hours(emp_name, month_str, year_val):
@@ -113,11 +78,11 @@ def load_daily_emp_hours(emp_name, month_str, year_val):
     days_data.append(
         {
             "Datum": str(day),
-            "Ort": "",
-            "Beginn": "",
-            "Ende": "",
+            "Ort 1": "", "Beginn 1": "", "Ende 1": "",
+            "Ort 2": "", "Beginn 2": "", "Ende 2": "",
+            "Ort 3": "", "Beginn 3": "", "Ende 3": "",
             "Pause": "",
-            "Arbeitszeit (abzgl. Pause)": 0.0,
+            "Gesamtstunden": 0.0,
         }
     )
   return pd.DataFrame(days_data)
@@ -128,35 +93,17 @@ def save_daily_emp_hours(emp_name, month_str, year_val, df):
   save_json_file(filename, df.to_dict(orient="list"))
 
 
-# دوال ساعات المواقع اليومية المخصصة
-def get_location_month_file(place_name, month_str, year_val):
-  safe_place = "".join(c for c in place_name if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
-  safe_month = "".join(c for c in month_str if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
-  return f"loc_month_{safe_place}_{safe_month}_{year_val}.json"
+# قاموس تحويل الأشهر للعربية والألمانية لضمان طباعة سليمة 100%
+months_map_ar_to_de = {
+    "يناير": "Januar", "فبراير": "Februar", "مارس": "März", "أبريل": "April",
+    "مايو": "Mai", "يونيو": "Juni", "يوليو": "Juli", "أغسطس": "August",
+    "سبتمبر": "September", "أكتوبر": "Oktober", "نوفمبر": "November", "ديسمبر": "Dezember"
+}
+
+def get_german_month(month_str):
+  return months_map_ar_to_de.get(month_str, month_str)
 
 
-def load_location_month_hours(place_name, month_str, year_val, days_count):
-  filename = get_location_month_file(place_name, month_str, year_val)
-  if os.path.exists(filename):
-    try:
-      with open(filename, "r", encoding="utf-8") as f:
-        data = json.load(f)
-        return pd.DataFrame(data)
-    except:
-      pass
-  
-  loc_days = []
-  for d in range(1, days_count + 1):
-    loc_days.append({"Tag": str(d), "Stunden": 0.0})
-  return pd.DataFrame(loc_days)
-
-
-def save_location_month_hours(place_name, month_str, year_val, df):
-  filename = get_location_month_file(place_name, month_str, year_val)
-  save_json_file(filename, df.to_dict(orient="list"))
-
-
-# القوائم الثابتة
 months_list_de = [
     "Januar", "Februar", "März", "April", "Mai", "Juni",
     "Juli", "August", "September", "Oktober", "November", "Dezember"
@@ -173,13 +120,11 @@ years_list = [2024, 2025, 2026, 2027, 2028, 2029, 2030]
 # ---------------------------------------------------------
 st.sidebar.title("⚙️ Einstellungen")
 lang_choice = st.sidebar.radio("Sprache / اللغة:", ["Deutsch", "العربية"])
-
 is_arabic = (lang_choice == "العربية")
 
 if not is_arabic:
     t = {
         "menu": "📌 Hauptmenü",
-        "p1": "📋 Mitarbeiter Stundenzettel",
         "p2": "📝 Tägliche Stunden",
         "p3": "🏢 Objekt-Stundenübersicht",
         "p4": "🏢 Orte & Mitarbeiter-Stunden",
@@ -203,7 +148,6 @@ if not is_arabic:
 else:
     t = {
         "menu": "📌 القائمة الرئيسية",
-        "p1": "📋 استمارة ساعات العمال",
         "p2": "📝 الساعات اليومية",
         "p3": "🏢 ملخص ساعات المواقع",
         "p4": "🏢 الأماكن وساعات العمال",
@@ -228,7 +172,6 @@ else:
 page = st.sidebar.radio(
     t["menu"],
     [
-        t["p1"],
         t["p2"],
         t["p3"],
         t["p4"],
@@ -239,63 +182,54 @@ page = st.sidebar.radio(
 
 
 # ---------------------------------------------------------
-# دوال طباعة PDF الجميلة
+# دوال طباعة PDF باللغة الألمانية حصراً
 # ---------------------------------------------------------
-
-def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
+def generate_daily_pdf(emp_name, month_str, year_val, df, total_hours):
+  de_month = get_german_month(month_str)
   buffer = io.BytesIO()
-  doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+  doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=20, leftMargin=20, topMargin=30, bottomMargin=30)
   elements = []
   styles = getSampleStyleSheet()
-  title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
+  title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=13, leading=16, textColor=colors.HexColor("#111111"))
   
-  elements.append(Paragraph("<b>CLEAN & CARE GmbH</b>", title_style))
+  elements.append(Paragraph("<b>CLEAN & CARE GmbH - Tägliche Arbeitszeiten</b>", title_style))
   elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
-  elements.append(Spacer(1, 15))
-  elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
-  elements.append(Spacer(1, 15))
+  elements.append(Spacer(1, 10))
+  elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {de_month} {year_val}", styles['Normal']))
+  elements.append(Spacer(1, 10))
   
-  table_data = [["Datum", "Ort", "Beginn", "Ende", "Pause", "Arbeitszeit (abzgl. Pause)"]]
-  for index, row in df.iterrows():
+  table_data = [["Tag", "Ort 1", "Std 1", "Ort 2", "Std 2", "Ort 3", "Std 3", "Pause", "Gesamt"]]
+  for _, row in df.iterrows():
     table_data.append([
         str(row["Datum"]),
-        str(row["Ort"] if pd.notna(row["Ort"]) else ""),
-        str(row["Beginn"] if pd.notna(row["Beginn"]) else ""),
-        str(row["Ende"] if pd.notna(row["Ende"]) else ""),
+        str(row["Ort 1"] if pd.notna(row["Ort 1"]) else ""), str(row.get("Hrs1", "")),
+        str(row["Ort 2"] if pd.notna(row["Ort 2"]) else ""), str(row.get("Hrs2", "")),
+        str(row["Ort 3"] if pd.notna(row["Ort 3"]) else ""), str(row.get("Hrs3", "")),
         str(row["Pause"] if pd.notna(row["Pause"]) else ""),
-        str(row["Arbeitszeit (abzgl. Pause)"])
+        str(row["Gesamtstunden"])
     ])
-  table_data.append(["Summe:", "", "", "", "", f"{total_hours:.2f} St."])
+  table_data.append(["Summe:", "", "", "", "", "", "", "", f"{total_hours:.2f} St."])
   
-  t_pdf = Table(table_data, colWidths=[50, 100, 70, 70, 70, 180])
+  t_pdf = Table(table_data, colWidths=[25, 85, 40, 85, 40, 85, 40, 45, 55])
   t_pdf.setStyle(TableStyle([
       ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
       ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
       ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-      ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+      ('FONTSIZE', (0, 0), (-1, -1), 7),
+      ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
       ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor("#666666")),
       ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f0f0f0")),
       ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
       ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
   ]))
   elements.append(t_pdf)
-  elements.append(Spacer(1, 40))
-  
-  sig_data = [
-      ["__________________________________", "__________________________________"],
-      ["Unterschrift Arbeitnehmer", "Unterschrift Arbeitgeber / GF"],
-      ["Datum: ______________", "Datum: ______________"]
-  ]
-  sig_table = Table(sig_data, colWidths=[250, 250])
-  sig_table.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'LEFT'), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
-  elements.append(sig_table)
-  
   doc.build(elements)
   buffer.seek(0)
   return buffer.getvalue()
 
 
 def generate_single_location_pdf(place_name, month_str, year_val, df, total_hours):
+  de_month = get_german_month(month_str)
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
   elements = []
@@ -305,11 +239,11 @@ def generate_single_location_pdf(place_name, month_str, year_val, df, total_hour
   elements.append(Paragraph("<b>CLEAN & CARE GmbH - Objekt-Stundenbericht</b>", title_style))
   elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
   elements.append(Spacer(1, 15))
-  elements.append(Paragraph(f"<b>Objekt / Ort:</b> {place_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
+  elements.append(Paragraph(f"<b>Objekt / Ort:</b> {place_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {de_month} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 15))
   
   table_data = [["Tag (Datum)", "Stunden"]]
-  for index, row in df.iterrows():
+  for _, row in df.iterrows():
     table_data.append([str(row["Tag"]), str(row["Stunden"])])
   table_data.append(["Gesamtsumme:", f"{total_hours:.2f} St."])
   
@@ -331,6 +265,7 @@ def generate_single_location_pdf(place_name, month_str, year_val, df, total_hour
 
 
 def generate_place_pdf(place_name, month_str, year_val, df, total_hours):
+  de_month = get_german_month(month_str)
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
   elements = []
@@ -340,11 +275,11 @@ def generate_place_pdf(place_name, month_str, year_val, df, total_hours):
   elements.append(Paragraph("<b>CLEAN & CARE GmbH - Ort-Stundenbericht</b>", title_style))
   elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
   elements.append(Spacer(1, 15))
-  elements.append(Paragraph(f"<b>Ort:</b> {place_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
+  elements.append(Paragraph(f"<b>Ort:</b> {place_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {de_month} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 15))
   
   table_data = [["Mitarbeiter", "Stunden"]]
-  for index, row in df.iterrows():
+  for _, row in df.iterrows():
     table_data.append([str(row["Mitarbeiter"]), str(row["Stunden"])])
   table_data.append(["Gesamtsumme:", f"{total_hours:.2f} St."])
   
@@ -366,6 +301,7 @@ def generate_place_pdf(place_name, month_str, year_val, df, total_hours):
 
 
 def generate_summary_pdf(month_str, year_val, df, total_hours):
+  de_month = get_german_month(month_str)
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
   elements = []
@@ -375,11 +311,11 @@ def generate_summary_pdf(month_str, year_val, df, total_hours):
   elements.append(Paragraph("<b>CLEAN & CARE GmbH - Monatsübersicht</b>", title_style))
   elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
   elements.append(Spacer(1, 15))
-  elements.append(Paragraph(f"<b>Monat:</b> {month_str} {year_val}", styles['Normal']))
+  elements.append(Paragraph(f"<b>Monat:</b> {de_month} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 15))
   
   table_data = [["Mitarbeiter", "Gesamtstunden"]]
-  for index, row in df.iterrows():
+  for _, row in df.iterrows():
     table_data.append([str(row["Mitarbeiter"]), str(row["Gesamtstunden"])])
   table_data.append(["Gesamtsumme:", f"{total_hours:.2f} St."])
   
@@ -401,100 +337,14 @@ def generate_summary_pdf(month_str, year_val, df, total_hours):
 
 
 # ---------------------------------------------------------
-# الصفحة الأولى: استمارة ساعات العمال
+# الصفحة الأولى (المعتمدة): الساعات اليومية (3 أماكن + استراحة واحدة عامة قبل المجموع)
 # ---------------------------------------------------------
-if page == t["p1"]:
-  st.title("📋 Clean & Care GmbH - Stundenzettel")
-  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
-
-  employees_list = load_employees()
-  
-  col1, col2, col3 = st.columns(3)
-  with col1:
-    selected_employee = st.selectbox(t["emp_label"], employees_list, key="p1_emp")
-  with col2:
-    selected_month = st.selectbox(t["month_label"], months_list_de if not is_arabic else months_list_ar, index=9, key="p1_month")
-  with col3:
-    selected_year = st.selectbox(t["year_label"], years_list, index=2, key="p1_year")
-
-  st.subheader(f"Arbeitszeiterfassung für: {selected_employee} ({selected_month} {selected_year})")
-
-  current_emp_df = load_employee_month_hours(selected_employee, selected_month, selected_year)
-
-  edited_df = st.data_editor(
-      current_emp_df,
-      num_rows="fixed",
-      use_container_width=True,
-      key=f"p1_table_{selected_employee}_{selected_month}_{selected_year}",
-  )
-
-  total_sum_hours = 0.0
-  for index, row in edited_df.iterrows():
-    b_str = str(row["Beginn"]).strip()
-    e_str = str(row["Ende"]).strip()
-    p_input = str(row["Pause"]).strip()
-
-    hrs = 0.0
-    break_val = 0.0
-
-    if b_str and e_str and b_str != "nan" and e_str != "nan":
-      for fmt in ("%H:%M", "%H.%M", "%H"):
-        try:
-          t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
-          t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
-          gross_hours = (t2 - t1).total_seconds() / 3600
-          if gross_hours > 0:
-            if p_input and p_input != "nan" and p_input != "":
-              try:
-                break_val = float(p_input.replace(",", "."))
-              except:
-                break_val = 0.0
-            hrs = max(0.0, gross_hours - break_val)
-          break
-        except:
-          continue
-
-    if break_val > 0:
-      edited_df.at[index, "Pause"] = str(break_val)
-    else:
-      if not p_input or p_input == "nan":
-        edited_df.at[index, "Pause"] = ""
-
-    edited_df.at[index, "Arbeitszeit (abzgl. Pause)"] = round(hrs, 2)
-    total_sum_hours += hrs
-
-  st.markdown("---")
-  c1, c2, c3 = st.columns([2, 1, 1])
-  with c1:
-    pdf_data = generate_employee_pdf(selected_employee, selected_month, selected_year, edited_df, total_sum_hours)
-    st.download_button(t["pdf_btn"], pdf_data, f"Stundenzettel_{selected_employee}_{selected_month}_{selected_year}.pdf", "application/pdf")
-  with c2:
-    st.metric(t["sum_label"], f"{total_sum_hours:.2f} St.")
-  with c3:
-    if st.button(t["save_btn"], key="p1_save"):
-      save_employee_month_hours(selected_employee, selected_month, selected_year, edited_df)
-      st.success(t["success_msg"])
-
-  st.markdown("---")
-  sig_col1, sig_col2 = st.columns(2)
-  with sig_col1:
-    st.text("__________________________________")
-    st.text("Unterschrift Arbeitnehmer")
-    st.text("Datum: ______________")
-  with sig_col2:
-    st.text("__________________________________")
-    st.text("Unterschrift Arbeitgeber / GF")
-    st.text("Datum: ______________")
-
-
-# ---------------------------------------------------------
-# الصفحة الثانية: الساعات اليومية
-# ---------------------------------------------------------
-elif page == t["p2"]:
+if page == t["p2"]:
   st.title("📝 Clean & Care GmbH - Tägliche Stunden")
   st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
   employees_list = load_employees()
+  places_list = [""] + load_places()
 
   col1, col2, col3 = st.columns(3)
   with col1:
@@ -513,33 +363,45 @@ elif page == t["p2"]:
       num_rows="fixed",
       use_container_width=True,
       key=f"daily_table_{daily_emp}_{daily_month}_{daily_year}",
+      column_config={
+          "Ort 1": st.column_config.SelectboxColumn("Ort 1", options=places_list),
+          "Ort 2": st.column_config.SelectboxColumn("Ort 2", options=places_list),
+          "Ort 3": st.column_config.SelectboxColumn("Ort 3", options=places_list),
+      }
   )
 
   total_daily_sum = 0.0
   for index, row in edited_daily_df.iterrows():
-    b_str = str(row["Beginn"]).strip()
-    e_str = str(row["Ende"]).strip()
-    p_input = str(row["Pause"]).strip()
+    gross_day_total = 0.0
+    
+    for i in range(1, 4):
+      b_str = str(row.get(f"Beginn {i}", "")).strip()
+      e_str = str(row.get(f"Ende {i}", "")).strip()
+      hrs = 0.0
 
-    hrs = 0.0
+      if b_str and e_str and b_str != "nan" and e_str != "nan":
+        for fmt in ("%H:%M", "%H.%M", "%H"):
+          try:
+            t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
+            t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
+            gh = (t2 - t1).total_seconds() / 3600
+            if gh > 0:
+              hrs = gh
+            break
+          except:
+            continue
+
+      gross_day_total += hrs
+      edited_daily_df.at[index, f"Hrs{i}"] = round(hrs, 2) if hrs > 0 else ""
+
+    # استراحة عامة واحدة قبل مجموع الساعات
+    p_input = str(row.get("Pause", "")).strip()
     break_val = 0.0
-
-    if b_str and e_str and b_str != "nan" and e_str != "nan":
-      for fmt in ("%H:%M", "%H.%M", "%H"):
-        try:
-          t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
-          t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
-          gross_hours = (t2 - t1).total_seconds() / 3600
-          if gross_hours > 0:
-            if p_input and p_input != "nan" and p_input != "":
-              try:
-                break_val = float(p_input.replace(",", "."))
-              except:
-                break_val = 0.0
-            hrs = max(0.0, gross_hours - break_val)
-          break
-        except:
-          continue
+    if p_input and p_input != "nan" and p_input != "":
+      try:
+        break_val = float(p_input.replace(",", "."))
+      except:
+        break_val = 0.0
 
     if break_val > 0:
       edited_daily_df.at[index, "Pause"] = str(break_val)
@@ -547,13 +409,14 @@ elif page == t["p2"]:
       if not p_input or p_input == "nan":
         edited_daily_df.at[index, "Pause"] = ""
 
-    edited_daily_df.at[index, "Arbeitszeit (abzgl. Pause)"] = round(hrs, 2)
-    total_daily_sum += hrs
+    net_day_total = max(0.0, gross_day_total - break_val)
+    edited_daily_df.at[index, "Gesamtstunden"] = round(net_day_total, 2)
+    total_daily_sum += net_day_total
 
   st.markdown("---")
   col_d1, col_d2, col_d3 = st.columns([2, 1, 1])
   with col_d1:
-    pdf_daily_data = generate_employee_pdf(daily_emp, daily_month, daily_year, edited_daily_df, total_daily_sum)
+    pdf_daily_data = generate_daily_pdf(daily_emp, daily_month, daily_year, edited_daily_df, total_daily_sum)
     st.download_button(t["pdf_btn"], pdf_daily_data, f"Tägliche_Stunden_{daily_emp}_{daily_month}_{daily_year}.pdf", "application/pdf", key="p2_pdf")
   with col_d2:
     if st.button(t["save_btn"], key="p2_save"):
@@ -564,7 +427,7 @@ elif page == t["p2"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الثالثة: ملخص ساعات المواقع (مع أزرار إضافة وحذف الموقع)
+# الصفحة الثانية: ملخص ساعات المواقع (Objekt-Stundenübersicht)
 # ---------------------------------------------------------
 elif page == t["p3"]:
   st.title("🏢 Clean & Care GmbH - Objekt-Stundenübersicht")
@@ -574,7 +437,7 @@ elif page == t["p3"]:
 
   col1, col2, col3 = st.columns(3)
   with col1:
-    selected_loc_place = st.selectbox(t["place_label"], places_list, key="loc_place_select")
+    selected_loc_place = st.selectbox(t["place_label"], places_list, key="loc_place_select") if places_list else st.warning("أضف مكاناً أولاً")
   with col2:
     loc_month = st.selectbox(t["month_label"], months_list_de if not is_arabic else months_list_ar, index=9, key="loc_month_select")
   with col3:
@@ -589,36 +452,68 @@ elif page == t["p3"]:
   m_num = month_map.get(loc_month, 10)
   days_in_month = pd.Period(f"{loc_year}-{m_num}").days_in_month
 
-  st.subheader(f"Objekt: {selected_loc_place} ({loc_month} {loc_year})")
+  if places_list:
+    st.subheader(f"Objekt: {selected_loc_place} ({loc_month} {loc_year})")
 
-  loc_df = load_location_month_hours(selected_loc_place, loc_month, loc_year, days_in_month)
+    all_emp_files = [f for f in os.listdir(DATA_DIR) if f.startswith("daily_emp_") and f.endswith(f"_{loc_month}_{loc_year}.json")]
+    
+    loc_days_data = []
+    for d in range(1, days_in_month + 1):
+      day_sum = 0.0
+      for emp_file in all_emp_files:
+        try:
+          with open(os.path.join(DATA_DIR, emp_file), "r", encoding="utf-8") as f:
+            emp_data = json.load(f)
+            df_emp = pd.DataFrame(emp_data)
+            for _, r in df_emp.iterrows():
+              if str(r.get("Datum")) == str(d):
+                # حساب الإجمالي الخام لليوم لتوزيع الاستراحة بنسبة تناسبية إن وجدت
+                day_gross = 0.0
+                locs_in_day = []
+                for i in range(1, 4):
+                  loc_name = str(r.get(f"Ort {i}")).strip()
+                  b_str = str(r.get(f"Beginn {i}", "")).strip()
+                  e_str = str(r.get(f"Ende {i}", "")).strip()
+                  loc_hrs = 0.0
+                  if b_str and e_str and b_str != "nan" and e_str != "nan":
+                    for fmt in ("%H:%M", "%H.%M", "%H"):
+                      try:
+                        t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
+                        t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
+                        gh = (t2 - t1).total_seconds() / 3600
+                        if gh > 0:
+                          loc_hrs = gh
+                        break
+                      except:
+                        continue
+                  day_gross += loc_hrs
+                  locs_in_day.append((loc_name, loc_hrs))
 
-  edited_loc_df = st.data_editor(
-      loc_df,
-      num_rows="fixed",
-      use_container_width=True,
-      key=f"loc_table_{selected_loc_place}_{loc_month}_{loc_year}",
-  )
+                p_input = str(r.get("Pause", "")).strip()
+                break_val = float(p_input.replace(",", ".")) if p_input and p_input != "nan" and p_input != "" else 0.0
 
-  total_loc_sum = 0.0
-  for index, row in edited_loc_df.iterrows():
-    try:
-      val = float(str(row["Stunden"]).replace(",", "."))
-    except:
-      val = 0.0
-    total_loc_sum += val
+                for loc_name, loc_hrs in locs_in_day:
+                  if loc_name.lower() == selected_loc_place.strip().lower() and loc_hrs > 0:
+                    # خصم الاستراحة بشكل نسبي أو كامل إن وجد مكان واحد
+                    ratio = (loc_hrs / day_gross) if day_gross > 0 else 0
+                    net_loc_hrs = max(0.0, loc_hrs - (break_val * ratio))
+                    day_sum += net_loc_hrs
+        except:
+          pass
+      loc_days_data.append({"Tag": str(d), "Stunden": round(day_sum, 2)})
 
-  st.markdown("---")
-  col_l1, col_l2, col_l3 = st.columns([2, 1, 1])
-  with col_l1:
-    loc_pdf_data = generate_single_location_pdf(selected_loc_place, loc_month, loc_year, edited_loc_df, total_loc_sum)
-    st.download_button(t["pdf_btn"], loc_pdf_data, f"Objekt_{selected_loc_place}_{loc_month}_{loc_year}.pdf", "application/pdf", key="p3_pdf")
-  with col_l2:
-    if st.button(t["save_btn"], key="p3_save"):
-      save_location_month_hours(selected_loc_place, loc_month, loc_year, edited_loc_df)
-      st.success(t["success_msg"])
-  with col_l3:
-    st.metric(t["sum_label"], f"{total_loc_sum:.2f} St.")
+    loc_df = pd.DataFrame(loc_days_data)
+    st.dataframe(loc_df, use_container_width=True)
+
+    total_loc_sum = loc_df["Stunden"].astype(float).sum()
+
+    st.markdown("---")
+    col_l1, col_l2 = st.columns([2, 1])
+    with col_l1:
+      loc_pdf_data = generate_single_location_pdf(selected_loc_place, loc_month, loc_year, loc_df, total_loc_sum)
+      st.download_button(t["pdf_btn"], loc_pdf_data, f"Objekt_{selected_loc_place}_{loc_month}_{loc_year}.pdf", "application/pdf", key="p3_pdf")
+    with col_l2:
+      st.metric(t["sum_label"], f"{total_loc_sum:.2f} St.")
 
   st.markdown("---")
   add_col, del_col = st.columns(2)
@@ -646,84 +541,90 @@ elif page == t["p3"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الرابعة: الأماكن وساعات العمال (مربطة تلقائياً بالساعات اليومية بدون أزرار اختيار)
+# الصفحة الثالثة: الأماكن وساعات العمال (Orte & Mitarbeiter-Stunden)
 # ---------------------------------------------------------
 elif page == t["p4"]:
   st.title("🏢 Clean & Care GmbH - Orte & Mitarbeiter-Stunden")
 
   places_list = load_places()
-  employees_list = load_employees()
+  employees_list = load_json_file(EMPLOYEES_FILE, [])
 
   col1, col2, col3 = st.columns(3)
   with col1:
-    selected_place = st.selectbox(t["place_label"], places_list, key="p4_place_select")
+    selected_place = st.selectbox(t["place_label"], places_list, key="p4_place_select") if places_list else st.warning("أضف مكان أولاً")
   with col2:
     place_month = st.selectbox(t["month_label"], months_list_de if not is_arabic else months_list_ar, index=9, key="place_month_select")
   with col3:
     place_year = st.selectbox(t["year_label"], years_list, index=2, key="place_year_select")
 
-  st.subheader(f"Mitarbeiter-Stunden für Ort: {selected_place} ({place_month} {place_year}) - [Automatisch aus Täglichen Stunden]")
+  if places_list:
+    st.subheader(f"Mitarbeiter-Stunden für Ort: {selected_place} ({place_month} {place_year})")
 
-  # جلب ساعات كل العمال تلقائياً من ملفات الساعات اليومية للموظفين والمطابقة مع اسم المكان
-  place_data_rows = []
-  for emp in employees_list:
-    emp_daily_df = load_daily_emp_hours(emp, place_month, place_year)
-    emp_place_hours = 0.0
-    for _, row in emp_daily_df.iterrows():
-      row_place = str(row["Ort"]).strip()
-      if row_place.lower() == selected_place.lower():
-        try:
-          emp_place_hours += float(row["Arbeitszeit (abzgl. Pause)"])
-        except:
-          pass
-    
-    if emp_place_hours > 0:
-      place_data_rows.append({"Mitarbeiter": emp, "Stunden": round(emp_place_hours, 2)})
+    all_month_files = [f for f in os.listdir(DATA_DIR) if f.startswith("daily_emp_") and f.endswith(f"_{place_month}_{place_year}.json")]
+    active_emps = set(employees_list)
+    for f_name in all_month_files:
+      parts = f_name.replace("daily_emp_", "").replace(f"_{place_month}_{place_year}.json", "").split("_")
+      emp_recovered = " ".join(parts)
+      active_emps.add(emp_recovered)
 
-  if not place_data_rows:
-    place_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Stunden": 0.0}])
-  else:
-    place_df = pd.DataFrame(place_data_rows)
+    place_data_rows = []
+    for emp in sorted(list(active_emps)):
+      emp_daily_df = load_daily_emp_hours(emp, place_month, place_year)
+      emp_place_hours = 0.0
+      for _, row in emp_daily_df.iterrows():
+        day_gross = 0.0
+        locs_in_day = []
+        for i in range(1, 4):
+          loc_name = str(row.get(f"Ort {i}")).strip()
+          b_str = str(row.get(f"Beginn {i}", "")).strip()
+          e_str = str(row.get(f"Ende {i}", "")).strip()
+          loc_hrs = 0.0
+          if b_str and e_str and b_str != "nan" and e_str != "nan":
+            for fmt in ("%H:%M", "%H.%M", "%H"):
+              try:
+                t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
+                t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
+                gh = (t2 - t1).total_seconds() / 3600
+                if gh > 0:
+                  loc_hrs = gh
+                break
+              except:
+                continue
+          day_gross += loc_hrs
+          locs_in_day.append((loc_name, loc_hrs))
 
-  st.dataframe(place_df, use_container_width=True)
+        p_input = str(row.get("Pause", "")).strip()
+        break_val = float(p_input.replace(",", ".")) if p_input and p_input != "nan" and p_input != "" else 0.0
 
-  total_place_hours = place_df["Stunden"].astype(float).sum() if not place_df.empty else 0.0
+        for loc_name, loc_hrs in locs_in_day:
+          if loc_name.lower() == selected_place.strip().lower() and loc_hrs > 0:
+            ratio = (loc_hrs / day_gross) if day_gross > 0 else 0
+            net_loc_hrs = max(0.0, loc_hrs - (break_val * ratio))
+            emp_place_hours += net_loc_hrs
+      
+      if emp_place_hours > 0:
+        place_data_rows.append({"Mitarbeiter": emp, "Stunden": round(emp_place_hours, 2)})
 
-  st.markdown("---")
-  col_p1, col_p2 = st.columns([2, 1])
-  with col_p1:
-    pdf_place_data = generate_place_pdf(selected_place, place_month, place_year, place_df, total_place_hours)
-    st.download_button(t["pdf_btn"], pdf_place_data, f"Ort_Report_{selected_place}_{place_month}_{place_year}.pdf", "application/pdf", key="p4_pdf")
-  with col_p2:
-    st.metric(t["sum_label"], f"{total_place_hours:.2f} St.")
+    if not place_data_rows:
+      place_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Stunden": 0.0}])
+    else:
+      place_df = pd.DataFrame(place_data_rows)
 
-  st.markdown("---")
-  add_col_4, del_col_4 = st.columns(2)
-  with add_col_4:
-    st.subheader(t["add_place"])
-    new_place_name_4 = st.text_input("Name des neuen Ortes:", key="p4_new_place")
-    if st.button(t["add_btn"], key="p4_add_btn"):
-      if new_place_name_4 and new_place_name_4 not in places_list:
-        places_list.append(new_place_name_4)
-        save_places(places_list)
-        st.success(t["success_msg"])
-        st.rerun()
-  with del_col_4:
-    st.subheader(t["del_place"])
-    if len(places_list) > 0:
-      place_to_delete_4 = st.selectbox("Ort löschen:", places_list, key="p4_del_select")
-      if st.button(t["del_btn"], key="p4_del_btn"):
-        if len(places_list) > 1:
-          places_list.remove(place_to_delete_4)
-          save_places(places_list)
-          st.success(t["success_msg"])
-          st.rerun()
-        else:
-          st.warning("Es muss mindestens ein Ort bleiben.")
+    st.dataframe(place_df, use_container_width=True)
+
+    total_place_hours = place_df["Stunden"].astype(float).sum() if not place_df.empty else 0.0
+
+    st.markdown("---")
+    col_p1, col_p2 = st.columns([2, 1])
+    with col_p1:
+      pdf_place_data = generate_place_pdf(selected_place, place_month, place_year, place_df, total_place_hours)
+      st.download_button(t["pdf_btn"], pdf_place_data, f"Ort_Report_{selected_place}_{place_month}_{place_year}.pdf", "application/pdf", key="p4_pdf")
+    with col_p2:
+      st.metric(t["sum_label"], f"{total_place_hours:.2f} St.")
 
 
 # ---------------------------------------------------------
-# الصفحة الخامسة: إدارة العمال (Mitarbeiterverwaltung)
+# الصفحة الرابعة: إدارة العمال (Mitarbeiterverwaltung)
 # ---------------------------------------------------------
 elif page == t["p5"]:
   st.title("👥 Clean & Care GmbH - Mitarbeiterverwaltung")
@@ -747,14 +648,14 @@ elif page == t["p5"]:
       if len(employees_list) > 1:
         employees_list.remove(emp_to_delete)
         save_employees(employees_list)
-        st.success(t["success_msg"])
+        st.success("تم حذف اسم الموظف من القائمة مع الاحتفاظ بكافة ساعاته السابقة بأمان!")
         st.rerun()
       else:
         st.warning("Es muss mindestens ein Mitarbeiter bleiben.")
 
 
 # ---------------------------------------------------------
-# الصفحة السادسة: ملخص الأشهر (Monatsübersicht)
+# الصفحة الخامسة: ملخص الأشهر (Monatsübersicht - مربوطة بالساعات اليومية)
 # ---------------------------------------------------------
 elif page == t["p6"]:
   st.title("📅 Clean & Care GmbH - Monatsübersicht")
@@ -765,23 +666,33 @@ elif page == t["p6"]:
   with col2:
     summary_year = st.selectbox(t["year_label"], years_list, index=2, key="summary_year_select")
 
-  employees_list = load_employees()
+  all_month_files = [f for f in os.listdir(DATA_DIR) if f.startswith("daily_emp_") and f.endswith(f"_{summary_month}_{summary_year}.json")]
+  active_emps = set(load_employees())
+  for f_name in all_month_files:
+    parts = f_name.replace("daily_emp_", "").replace(f"_{summary_month}_{summary_year}.json", "").split("_")
+    emp_recovered = " ".join(parts)
+    active_emps.add(emp_recovered)
 
   st.subheader(f"📊 Gesamtstunden für: {summary_month} {summary_year}")
 
   summary_data = []
   total_company_hours = 0.0
 
-  for emp in employees_list:
-    emp_df = load_employee_month_hours(emp, summary_month, summary_year)
-    emp_total = emp_df["Arbeitszeit (abzgl. Pause)"].astype(float).sum() if "Arbeitszeit (abzgl. Pause)" in emp_df.columns else 0.0
-    summary_data.append({
-        "Mitarbeiter": emp,
-        "Gesamtstunden": f"{emp_total:.2f} St."
-    })
-    total_company_hours += emp_total
+  for emp in sorted(list(active_emps)):
+    emp_daily_df = load_daily_emp_hours(emp, summary_month, summary_year)
+    emp_total = emp_daily_df["Gesamtstunden"].astype(float).sum() if "Gesamtstunden" in emp_daily_df.columns else 0.0
+    if emp_total > 0:
+      summary_data.append({
+          "Mitarbeiter": emp,
+          "Gesamtstunden": f"{emp_total:.2f} St."
+      })
+      total_company_hours += emp_total
 
-  summary_df = pd.DataFrame(summary_data)
+  if not summary_data:
+    summary_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Gesamtstunden": "0.00 St."}])
+  else:
+    summary_df = pd.DataFrame(summary_data)
+
   st.dataframe(summary_df, use_container_width=True)
 
   st.markdown("---")
