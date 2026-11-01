@@ -226,7 +226,7 @@ page = st.sidebar.radio(
 
 
 # ---------------------------------------------------------
-# دوال طباعة PDF باللغة الألمانية حصراً مع حقول التوقيع
+# دوال طباعة PDF
 # ---------------------------------------------------------
 def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
   de_month = get_german_month(month_str)
@@ -466,6 +466,9 @@ if page == t["p1"]:
       }
   )
 
+  # الحل السحري لتفادي خطأ TypeError الخاص بالـ PyArrow
+  edited_df = edited_df.astype(object)
+
   total_sum_hours = 0.0
   for index, row in edited_df.iterrows():
     b_str = str(row["Beginn"]).strip()
@@ -558,6 +561,9 @@ elif page == t["p2"]:
           "Ort 3": st.column_config.SelectboxColumn("Ort 3", options=places_list),
       }
   )
+
+  # الحل السحري لتفادي خطأ TypeError الخاص بالـ PyArrow هنا أيضاً
+  edited_daily_df = edited_daily_df.astype(object)
 
   total_daily_sum = 0.0
   for index, row in edited_daily_df.iterrows():
