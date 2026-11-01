@@ -140,9 +140,17 @@ months_list_de = [
 ]
 years_list = [2024, 2025, 2026, 2027, 2028, 2029, 2030]
 
+# تحديد الشهر والسنة الحالية تلقائياً
+now = datetime.now()
+current_year_val = now.year
+current_month_de = months_list_de[now.month - 1]
+
+default_year_index = years_list.index(current_year_val) if current_year_val in years_list else 2
+default_month_index = months_list_de.index(current_month_de)
+
 
 # ---------------------------------------------------------
-# نظام لغة القائمة الجانبية (ألماني بالأساس، والأسماء تتغير للعربي عند الحاجة)
+# نظام لغة القائمة الجانبية
 # ---------------------------------------------------------
 st.sidebar.title("⚙️ Einstellungen")
 lang_choice = st.sidebar.radio("Sprache / اللغة:", ["Deutsch", "العربية"])
@@ -428,9 +436,9 @@ if page == t["p1"]:
   with col1:
     selected_employee = st.selectbox(t["emp_label"], employees_list, key="p1_emp")
   with col2:
-    selected_month = st.selectbox(t["month_label"], months_list_de, index=9, key="p1_month")
+    selected_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="p1_month")
   with col3:
-    selected_year = st.selectbox(t["year_label"], years_list, index=2, key="p1_year")
+    selected_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="p1_year")
 
   st.subheader(f"Arbeitszeiterfassung für: {selected_employee} ({selected_month} {selected_year})")
 
@@ -521,9 +529,9 @@ elif page == t["p2"]:
   with col1:
     daily_emp = st.selectbox(t["emp_label"], employees_list, key="daily_emp_select")
   with col2:
-    daily_month = st.selectbox(t["month_label"], months_list_de, index=9, key="daily_month_select")
+    daily_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="daily_month_select")
   with col3:
-    daily_year = st.selectbox(t["year_label"], years_list, index=2, key="daily_year_select")
+    daily_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="daily_year_select")
 
   st.subheader(f"Tägliche Stunden für: {daily_emp} ({daily_month} {daily_year})")
 
@@ -611,9 +619,9 @@ elif page == t["p3"]:
   with col1:
     selected_loc_place = st.selectbox(t["place_label"], places_list, key="loc_place_select") if places_list else st.warning("Kein Ort vorhanden")
   with col2:
-    loc_month = st.selectbox(t["month_label"], months_list_de, index=9, key="loc_month_select")
+    loc_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="loc_month_select")
   with col3:
-    loc_year = st.selectbox(t["year_label"], years_list, index=2, key="loc_year_select")
+    loc_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="loc_year_select")
 
   month_map = {
       "Januar": 1, "Februar": 2, "März": 3, "April": 4, "Mai": 5, "Juni": 6,
@@ -721,9 +729,9 @@ elif page == t["p4"]:
   with col1:
     selected_place = st.selectbox(t["place_label"], places_list, key="p4_place_select") if places_list else st.warning("Kein Ort vorhanden")
   with col2:
-    place_month = st.selectbox(t["month_label"], months_list_de, index=9, key="place_month_select")
+    place_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="place_month_select")
   with col3:
-    place_year = st.selectbox(t["year_label"], years_list, index=2, key="place_year_select")
+    place_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="place_year_select")
 
   if places_list:
     st.subheader(f"Mitarbeiter-Stunden für Ort: {selected_place} ({place_month} {place_year})")
@@ -771,7 +779,14 @@ elif page == t["p4"]:
             emp_place_hours += net_loc_hrs
       
       if emp_place_hours > 0:
-        place_data_rows.append({"Mitarbeiter": emp, "Stunden": round(emp_place_hours, 2)})
+        # تنظيف اسم الموظف لتوحيد العرض وتجنب أي تكرار
+        clean_emp_name = emp.strip()
+        # التحقق إذا كان الاسم مسجلاً مسبقاً لتفادي التكرار
+        existing_row = next((r for r in place_data_rows if r["Mitarbeiter"].strip().lower() == clean_emp_name.lower()), None)
+        if existing_row:
+          existing_row["Stunden"] = round(existing_row["Stunden"] + emp_place_hours, 2)
+        else:
+          place_data_rows.append({"Mitarbeiter": clean_emp_name, "Stunden": round(emp_place_hours, 2)})
 
     if not place_data_rows:
       place_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Stunden": 0.0}])
@@ -830,9 +845,9 @@ elif page == t["p6"]:
   
   col1, col2 = st.columns(2)
   with col1:
-    summary_month = st.selectbox(t["month_label"], months_list_de, index=9, key="summary_month_select")
+    summary_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="summary_month_select")
   with col2:
-    summary_year = st.selectbox(t["year_label"], years_list, index=2, key="summary_year_select")
+    summary_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="summary_year_select")
 
   all_month_files = [f for f in os.listdir(DATA_DIR) if f.startswith("daily_emp_") and f.endswith(f"_{summary_month}_{summary_year}.json")]
   active_emps = set(load_employees())
@@ -850,10 +865,16 @@ elif page == t["p6"]:
     emp_daily_df = load_daily_emp_hours(emp, summary_month, summary_year)
     emp_total = emp_daily_df["Gesamtstunden"].astype(float).sum() if "Gesamtstunden" in emp_daily_df.columns else 0.0
     if emp_total > 0:
-      summary_data.append({
-          "Mitarbeiter": emp,
-          "Gesamtstunden": f"{emp_total:.2f} St."
-      })
+      clean_emp_name = emp.strip()
+      existing_row = next((r for r in summary_data if r["Mitarbeiter"].strip().lower() == clean_emp_name.lower()), None)
+      if existing_row:
+        # دمج الساعات في حال وجود أي تكرار بالاسم
+        pass
+      else:
+        summary_data.append({
+            "Mitarbeiter": clean_emp_name,
+            "Gesamtstunden": f"{emp_total:.2f} St."
+        })
       total_company_hours += emp_total
 
   if not summary_data:
