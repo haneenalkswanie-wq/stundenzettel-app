@@ -2,6 +2,7 @@ from datetime import datetime
 import io
 import json
 import os
+import sqlite3
 import pandas as pd
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
@@ -14,62 +15,84 @@ st.set_page_config(
     page_title="Clean & Care - Stundenzettel", page_icon="📋", layout="wide"
 )
 
-# إنشاء مجلد آمن لحفظ البيانات بشكل دائم ومنع ضياعها
-DATA_DIR = "data"
-if not os.path.exists(DATA_DIR):
-  os.makedirs(DATA_DIR)
+# ---------------------------------------------------------
+# قاعدة البيانات المحلية الآمنة لضمان عدم ضياع أي بيانات نهائياً
+# ---------------------------------------------------------
+DB_FILE = "clean_care.db"
 
-EMPLOYEES_FILE = os.path.join(DATA_DIR, "employees_data.json")
-PLACES_FILE = os.path.join(DATA_DIR, "places_list.json")
+def init_db():
+  conn = sqlite3.connect(DB_FILE)
+  cursor = conn.cursor()
+  cursor.execute('''CREATE TABLE IF NOT EXISTS employees (name TEXT PRIMARY KEY)''')
+  cursor.execute('''CREATE TABLE IF NOT EXISTS places (name TEXT PRIMARY KEY)''')
+  cursor.execute('''CREATE TABLE IF NOT EXISTS monthly_hours (emp TEXT, month TEXT, year INT, content TEXT, PRIMARY KEY(emp, month, year))''')
+  cursor.execute('''CREATE TABLE IF NOT EXISTS daily_hours (emp TEXT, month TEXT, year INT, content TEXT, PRIMARY KEY(emp, month, year))''')
+  
+  # إدخال بيانات افتراضية إذا كانت قاعدة البيانات فارغة لأول مرة
+  cursor.execute("SELECT COUNT(*) FROM employees")
+  if cursor.fetchone()[0] == 0:
+    for emp in ["Sakleh Alsoudi", "Alaa Edin Ibrahim"]:
+      cursor.execute("INSERT OR IGNORE INTO employees (name) VALUES (?)", (emp,))
+      
+  cursor.execute("SELECT COUNT(*) FROM places")
+  if cursor.fetchone()[0] == 0:
+    for place in ["Limehome Salzburg", "Nespresso Store", "IKEA Wals", "Villach Hauptplatz"]:
+      cursor.execute("INSERT OR IGNORE INTO places (name) VALUES (?)", (place,))
+  conn.commit()
+  conn.close()
 
-
-def load_json_file(filename, default_val):
-  if os.path.exists(filename):
-    try:
-      with open(filename, "r", encoding="utf-8") as f:
-        return json.load(f)
-    except:
-      pass
-  return default_val
-
-
-def save_json_file(filename, data):
-  with open(filename, "w", encoding="utf-8") as f:
-    json.dump(data, f, ensure_ascii=False, indent=4)
+init_db()
 
 
 def load_employees():
-  emp_list = load_json_file(EMPLOYEES_FILE, ["Sakleh Alsoudi", "Alaa Edin Ibrahim"])
-  return sorted(emp_list)
+  conn = sqlite3.connect(DB_FILE)
+  cursor = conn.cursor()
+  cursor.execute("SELECT name FROM employees")
+  rows = cursor.fetchall()
+  conn.close()
+  return sorted([row[0] for row in rows])
 
 
 def save_employees(emp_list):
-  save_json_file(EMPLOYEES_FILE, sorted(emp_list))
+  conn = sqlite3.connect(DB_FILE)
+  cursor = conn.cursor()
+  cursor.execute("DELETE FROM employees")
+  for emp in emp_list:
+    cursor.execute("INSERT OR IGNORE INTO employees (name) VALUES (?)", (emp,))
+  conn.commit()
+  conn.close()
 
 
 def load_places():
-  places_list = load_json_file(PLACES_FILE, ["Limehome Salzburg", "Nespresso Store", "IKEA Wals", "Villach Hauptplatz"])
-  return sorted(places_list)
+  conn = sqlite3.connect(DB_FILE)
+  cursor = conn.cursor()
+  cursor.execute("SELECT name FROM places")
+  rows = cursor.fetchall()
+  conn.close()
+  return sorted([row[0] for row in rows])
 
 
 def save_places(places_list):
-  save_json_file(PLACES_FILE, sorted(places_list))
+  conn = sqlite3.connect(DB_FILE)
+  cursor = conn.cursor()
+  cursor.execute("DELETE FROM places")
+  for place in places_list:
+    cursor.execute("INSERT OR IGNORE INTO places (name) VALUES (?)", (place,))
+  conn.commit()
+  conn.close()
 
 
 # دوال حفظ وتحميل ساعات الموظف الشهرية الفردية
-def get_employee_month_file(emp_name, month_str, year_val):
-  safe_emp = "".join(c for c in emp_name if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
-  safe_month = "".join(c for c in month_str if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
-  return os.path.join(DATA_DIR, f"emp_{safe_emp}_{safe_month}_{year_val}.json")
-
-
 def load_employee_month_hours(emp_name, month_str, year_val):
-  filename = get_employee_month_file(emp_name, month_str, year_val)
-  if os.path.exists(filename):
+  conn = sqlite3.connect(DB_FILE)
+  cursor = conn.cursor()
+  cursor.execute("SELECT content FROM monthly_hours WHERE emp=? AND month=? AND year=?", (emp_name, month_str, year_val))
+  row = cursor.fetchone()
+  conn.close()
+  if row:
     try:
-      with open(filename, "r", encoding="utf-8") as f:
-        data = json.load(f)
-        return pd.DataFrame(data)
+      data = json.loads(row[0])
+      return pd.DataFrame(data)
     except:
       pass
   
@@ -89,28 +112,29 @@ def load_employee_month_hours(emp_name, month_str, year_val):
 
 
 def save_employee_month_hours(emp_name, month_str, year_val, df):
-  filename = get_employee_month_file(emp_name, month_str, year_val)
-  save_json_file(filename, df.to_dict(orient="list"))
+  conn = sqlite3.connect(DB_FILE)
+  cursor = conn.cursor()
+  content = json.dumps(df.to_dict(orient="list"), ensure_ascii=False)
+  cursor.execute("INSERT OR REPLACE INTO monthly_hours (emp, month, year, content) VALUES (?, ?, ?, ?)", (emp_name, month_str, year_val, content))
+  conn.commit()
+  conn.close()
 
 
 # دوال حفظ وتحميل الساعات اليومية (3 أماكن)
-def get_daily_emp_file(emp_name, month_str, year_val):
-  safe_emp = "".join(c for c in emp_name if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
-  safe_month = "".join(c for c in month_str if c.isalnum() or c in (' ', '_')).strip().replace(' ', '_')
-  return os.path.join(DATA_DIR, f"daily_emp_{safe_emp}_{safe_month}_{year_val}.json")
-
-
 def load_daily_emp_hours(emp_name, month_str, year_val):
-  filename = get_daily_emp_file(emp_name, month_str, year_val)
-  if os.path.exists(filename):
+  conn = sqlite3.connect(DB_FILE)
+  cursor = conn.cursor()
+  cursor.execute("SELECT content FROM daily_hours WHERE emp=? AND month=? AND year=?", (emp_name, month_str, year_val))
+  row = cursor.fetchone()
+  conn.close()
+  if row:
     try:
-      with open(filename, "r", encoding="utf-8") as f:
-        data = json.load(f)
-        df = pd.DataFrame(data)
-        for i in range(1, 4):
-          if f"Hrs{i}" not in df.columns:
-            df[f"Hrs{i}"] = ""
-        return df
+      data = json.loads(row[0])
+      df = pd.DataFrame(data)
+      for i in range(1, 4):
+        if f"Hrs{i}" not in df.columns:
+          df[f"Hrs{i}"] = ""
+      return df
     except:
       pass
   
@@ -130,8 +154,12 @@ def load_daily_emp_hours(emp_name, month_str, year_val):
 
 
 def save_daily_emp_hours(emp_name, month_str, year_val, df):
-  filename = get_daily_emp_file(emp_name, month_str, year_val)
-  save_json_file(filename, df.to_dict(orient="list"))
+  conn = sqlite3.connect(DB_FILE)
+  cursor = conn.cursor()
+  content = json.dumps(df.to_dict(orient="list"), ensure_ascii=False)
+  cursor.execute("INSERT OR REPLACE INTO daily_hours (emp, month, year, content) VALUES (?, ?, ?, ?)", (emp_name, month_str, year_val, content))
+  conn.commit()
+  conn.close()
 
 
 months_list_de = [
@@ -633,47 +661,51 @@ elif page == t["p3"]:
   if places_list:
     st.subheader(f"Objekt: {selected_loc_place} ({loc_month} {loc_year})")
 
-    all_emp_files = [f for f in os.listdir(DATA_DIR) if f.startswith("daily_emp_") and f.endswith(f"_{loc_month}_{loc_year}.json")]
+    # جلب الساعات مباشرة من قاعدة البيانات
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT content FROM daily_hours WHERE month=? AND year=?", (loc_month, loc_year))
+    rows = cursor.fetchall()
+    conn.close()
     
     loc_days_data = []
     for d in range(1, days_in_month + 1):
       day_sum = 0.0
-      for emp_file in all_emp_files:
+      for row in rows:
         try:
-          with open(os.path.join(DATA_DIR, emp_file), "r", encoding="utf-8") as f:
-            emp_data = json.load(f)
-            df_emp = pd.DataFrame(emp_data)
-            for _, r in df_emp.iterrows():
-              if str(r.get("Datum")) == str(d):
-                day_gross = 0.0
-                locs_in_day = []
-                for i in range(1, 4):
-                  loc_name = str(r.get(f"Ort {i}")).strip()
-                  b_str = str(r.get(f"Beginn {i}", "")).strip()
-                  e_str = str(r.get(f"Ende {i}", "")).strip()
-                  loc_hrs = 0.0
-                  if b_str and e_str and b_str != "nan" and e_str != "nan":
-                    for fmt in ("%H:%M", "%H.%M", "%H"):
-                      try:
-                        t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
-                        t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
-                        gh = (t2 - t1).total_seconds() / 3600
-                        if gh > 0:
-                          loc_hrs = gh
-                        break
-                      except:
-                        continue
-                  day_gross += loc_hrs
-                  locs_in_day.append((loc_name, loc_hrs))
+          emp_data = json.loads(row[0])
+          df_emp = pd.DataFrame(emp_data)
+          for _, r in df_emp.iterrows():
+            if str(r.get("Datum")) == str(d):
+              day_gross = 0.0
+              locs_in_day = []
+              for i in range(1, 4):
+                loc_name = str(r.get(f"Ort {i}")).strip()
+                b_str = str(r.get(f"Beginn {i}", "")).strip()
+                e_str = str(r.get(f"Ende {i}", "")).strip()
+                loc_hrs = 0.0
+                if b_str and e_str and b_str != "nan" and e_str != "nan":
+                  for fmt in ("%H:%M", "%H.%M", "%H"):
+                    try:
+                      t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
+                      t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
+                      gh = (t2 - t1).total_seconds() / 3600
+                      if gh > 0:
+                        loc_hrs = gh
+                      break
+                    except:
+                      continue
+                day_gross += loc_hrs
+                locs_in_day.append((loc_name, loc_hrs))
 
-                p_input = str(r.get("Pause", "")).strip()
-                break_val = float(p_input.replace(",", ".")) if p_input and p_input != "nan" and p_input != "" else 0.0
+              p_input = str(r.get("Pause", "")).strip()
+              break_val = float(p_input.replace(",", ".")) if p_input and p_input != "nan" and p_input != "" else 0.0
 
-                for loc_name, loc_hrs in locs_in_day:
-                  if loc_name.lower() == selected_loc_place.strip().lower() and loc_hrs > 0:
-                    ratio = (loc_hrs / day_gross) if day_gross > 0 else 0
-                    net_loc_hrs = max(0.0, loc_hrs - (break_val * ratio))
-                    day_sum += net_loc_hrs
+              for loc_name, loc_hrs in locs_in_day:
+                if loc_name.lower() == selected_loc_place.strip().lower() and loc_hrs > 0:
+                  ratio = (loc_hrs / day_gross) if day_gross > 0 else 0
+                  net_loc_hrs = max(0.0, loc_hrs - (break_val * ratio))
+                  day_sum += net_loc_hrs
         except:
           pass
       loc_days_data.append({"Tag": str(d), "Stunden": round(day_sum, 2)})
@@ -723,7 +755,6 @@ elif page == t["p4"]:
   st.title("🏢 Clean & Care GmbH - Orte & Mitarbeiter-Stunden")
 
   places_list = load_places()
-  employees_list = load_json_file(EMPLOYEES_FILE, [])
 
   col1, col2, col3 = st.columns(3)
   with col1:
@@ -736,57 +767,59 @@ elif page == t["p4"]:
   if places_list:
     st.subheader(f"Mitarbeiter-Stunden für Ort: {selected_place} ({place_month} {place_year})")
 
-    all_month_files = [f for f in os.listdir(DATA_DIR) if f.startswith("daily_emp_") and f.endswith(f"_{place_month}_{place_year}.json")]
-    active_emps = set(employees_list)
-    for f_name in all_month_files:
-      parts = f_name.replace("daily_emp_", "").replace(f"_{place_month}_{place_year}.json", "").split("_")
-      emp_recovered = " ".join(parts)
-      active_emps.add(emp_recovered)
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT emp, content FROM daily_hours WHERE month=? AND year=?", (place_month, place_year))
+    rows = cursor.fetchall()
+    conn.close()
 
     place_data_rows = []
-    for emp in sorted(list(active_emps)):
-      emp_daily_df = load_daily_emp_hours(emp, place_month, place_year)
-      emp_place_hours = 0.0
-      for _, row in emp_daily_df.iterrows():
-        day_gross = 0.0
-        locs_in_day = []
-        for i in range(1, 4):
-          loc_name = str(row.get(f"Ort {i}")).strip()
-          b_str = str(row.get(f"Beginn {i}", "")).strip()
-          e_str = str(row.get(f"Ende {i}", "")).strip()
-          loc_hrs = 0.0
-          if b_str and e_str and b_str != "nan" and e_str != "nan":
-            for fmt in ("%H:%M", "%H.%M", "%H"):
-              try:
-                t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
-                t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
-                gh = (t2 - t1).total_seconds() / 3600
-                if gh > 0:
-                  loc_hrs = gh
-                break
-              except:
-                continue
-          day_gross += loc_hrs
-          locs_in_day.append((loc_name, loc_hrs))
+    for row in rows:
+      emp = row[0]
+      try:
+        emp_data = json.loads(row[1])
+        emp_daily_df = pd.DataFrame(emp_data)
+        emp_place_hours = 0.0
+        for _, r in emp_daily_df.iterrows():
+          day_gross = 0.0
+          locs_in_day = []
+          for i in range(1, 4):
+            loc_name = str(r.get(f"Ort {i}")).strip()
+            b_str = str(r.get(f"Beginn {i}", "")).strip()
+            e_str = str(r.get(f"Ende {i}", "")).strip()
+            loc_hrs = 0.0
+            if b_str and e_str and b_str != "nan" and e_str != "nan":
+              for fmt in ("%H:%M", "%H.%M", "%H"):
+                try:
+                  t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
+                  t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
+                  gh = (t2 - t1).total_seconds() / 3600
+                  if gh > 0:
+                    loc_hrs = gh
+                  break
+                except:
+                  continue
+            day_gross += loc_hrs
+            locs_in_day.append((loc_name, loc_hrs))
 
-        p_input = str(row.get("Pause", "")).strip()
-        break_val = float(p_input.replace(",", ".")) if p_input and p_input != "nan" and p_input != "" else 0.0
+          p_input = str(r.get("Pause", "")).strip()
+          break_val = float(p_input.replace(",", ".")) if p_input and p_input != "nan" and p_input != "" else 0.0
 
-        for loc_name, loc_hrs in locs_in_day:
-          if loc_name.lower() == selected_place.strip().lower() and loc_hrs > 0:
-            ratio = (loc_hrs / day_gross) if day_gross > 0 else 0
-            net_loc_hrs = max(0.0, loc_hrs - (break_val * ratio))
-            emp_place_hours += net_loc_hrs
-      
-      if emp_place_hours > 0:
-        # تنظيف اسم الموظف لتوحيد العرض وتجنب أي تكرار
-        clean_emp_name = emp.strip()
-        # التحقق إذا كان الاسم مسجلاً مسبقاً لتفادي التكرار
-        existing_row = next((r for r in place_data_rows if r["Mitarbeiter"].strip().lower() == clean_emp_name.lower()), None)
-        if existing_row:
-          existing_row["Stunden"] = round(existing_row["Stunden"] + emp_place_hours, 2)
-        else:
-          place_data_rows.append({"Mitarbeiter": clean_emp_name, "Stunden": round(emp_place_hours, 2)})
+          for loc_name, loc_hrs in locs_in_day:
+            if loc_name.lower() == selected_place.strip().lower() and loc_hrs > 0:
+              ratio = (loc_hrs / day_gross) if day_gross > 0 else 0
+              net_loc_hrs = max(0.0, loc_hrs - (break_val * ratio))
+              emp_place_hours += net_loc_hrs
+        
+        if emp_place_hours > 0:
+          clean_emp_name = emp.strip()
+          existing_row = next((r for r in place_data_rows if r["Mitarbeiter"].strip().lower() == clean_emp_name.lower()), None)
+          if existing_row:
+            existing_row["Stunden"] = round(existing_row["Stunden"] + emp_place_hours, 2)
+          else:
+            place_data_rows.append({"Mitarbeiter": clean_emp_name, "Stunden": round(emp_place_hours, 2)})
+      except:
+        pass
 
     if not place_data_rows:
       place_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Stunden": 0.0}])
@@ -849,33 +882,36 @@ elif page == t["p6"]:
   with col2:
     summary_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="summary_year_select")
 
-  all_month_files = [f for f in os.listdir(DATA_DIR) if f.startswith("daily_emp_") and f.endswith(f"_{summary_month}_{summary_year}.json")]
-  active_emps = set(load_employees())
-  for f_name in all_month_files:
-    parts = f_name.replace("daily_emp_", "").replace(f"_{summary_month}_{summary_year}.json", "").split("_")
-    emp_recovered = " ".join(parts)
-    active_emps.add(emp_recovered)
+  conn = sqlite3.connect(DB_FILE)
+  cursor = conn.cursor()
+  cursor.execute("SELECT emp, content FROM daily_hours WHERE month=? AND year=?", (summary_month, summary_year))
+  rows = cursor.fetchall()
+  conn.close()
 
   st.subheader(f"📊 Gesamtstunden für: {summary_month} {summary_year}")
 
   summary_data = []
   total_company_hours = 0.0
 
-  for emp in sorted(list(active_emps)):
-    emp_daily_df = load_daily_emp_hours(emp, summary_month, summary_year)
-    emp_total = emp_daily_df["Gesamtstunden"].astype(float).sum() if "Gesamtstunden" in emp_daily_df.columns else 0.0
-    if emp_total > 0:
-      clean_emp_name = emp.strip()
-      existing_row = next((r for r in summary_data if r["Mitarbeiter"].strip().lower() == clean_emp_name.lower()), None)
-      if existing_row:
-        # دمج الساعات في حال وجود أي تكرار بالاسم
-        pass
-      else:
-        summary_data.append({
-            "Mitarbeiter": clean_emp_name,
-            "Gesamtstunden": f"{emp_total:.2f} St."
-        })
-      total_company_hours += emp_total
+  for row in rows:
+    emp = row[0]
+    try:
+      emp_data = json.loads(row[1])
+      emp_daily_df = pd.DataFrame(emp_data)
+      emp_total = emp_daily_df["Gesamtstunden"].astype(float).sum() if "Gesamtstunden" in emp_daily_df.columns else 0.0
+      if emp_total > 0:
+        clean_emp_name = emp.strip()
+        existing_row = next((r for r in summary_data if r["Mitarbeiter"].strip().lower() == clean_emp_name.lower()), None)
+        if existing_row:
+          pass
+        else:
+          summary_data.append({
+              "Mitarbeiter": clean_emp_name,
+              "Gesamtstunden": f"{emp_total:.2f} St."
+          })
+        total_company_hours += emp_total
+    except:
+      pass
 
   if not summary_data:
     summary_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Gesamtstunden": "0.00 St."}])
