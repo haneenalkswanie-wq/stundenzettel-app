@@ -250,12 +250,8 @@ def load_trains_data(emp_name, month_str, year_val):
       for i in range(1, 6):
         if f"Zug {i}" not in df.columns:
           df[f"Zug {i}"] = ""
-        if f"Beginn {i}" not in df.columns:
-          df[f"Beginn {i}"] = ""
-        if f"Ende {i}" not in df.columns:
-          df[f"Ende {i}"] = ""
-        if f"Verspätung {i} (Min.)" not in df.columns:
-          df[f"Verspätung {i} (Min.)"] = 0
+        if f"Verspätung {i}" not in df.columns:
+          df[f"Verspätung {i}"] = 0
       return df
     except:
       pass
@@ -272,9 +268,7 @@ def load_trains_data(emp_name, month_str, year_val):
     row_data = {"Datum": str(day)}
     for i in range(1, 6):
       row_data[f"Zug {i}"] = ""
-      row_data[f"Beginn {i}"] = ""
-      row_data[f"Ende {i}"] = ""
-      row_data[f"Verspätung {i} (Min.)"] = 0
+      row_data[f"Verspätung {i}"] = 0
     row_data["Gesamtstunden"] = 0.0
     trains_rows.append(row_data)
   return pd.DataFrame(trains_rows)
@@ -555,6 +549,93 @@ def generate_summary_pdf(month_str, year_val, df, total_hours):
   table_data.append(["Gesamtsumme:", f"{total_hours:.2f} St."])
   
   t_pdf = Table(table_data, colWidths=[250, 200])
+  t_pdf.setStyle(TableStyle([
+      ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
+      ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+      ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+      ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor("#666666")),
+      ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f0f0f0")),
+      ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+      ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
+  ]))
+  elements.append(t_pdf)
+  doc.build(elements)
+  buffer.seek(0)
+  return buffer.getvalue()
+
+
+def generate_trains_pdf(emp_name, month_str, year_val, df, total_hours):
+  buffer = io.BytesIO()
+  doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=30, bottomMargin=30)
+  elements = []
+  styles = getSampleStyleSheet()
+  title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
+  
+  elements.append(Paragraph("<b>CLEAN & CARE GmbH - Zug-Fahrten Bericht</b>", title_style))
+  elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
+  elements.append(Spacer(1, 10))
+  elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
+  elements.append(Spacer(1, 10))
+  
+  table_data = [["Tag", "Zug 1", "Versp. 1", "Zug 2", "Versp. 2", "Zug 3", "Versp. 3", "Zug 4", "Versp. 4", "Zug 5", "Versp. 5", "Gesamt"]]
+  for _, row in df.iterrows():
+    table_data.append([
+        str(row["Datum"]),
+        str(row.get("Zug 1", "")), str(row.get("Verspätung 1", "")),
+        str(row.get("Zug 2", "")), str(row.get("Verspätung 2", "")),
+        str(row.get("Zug 3", "")), str(row.get("Verspätung 3", "")),
+        str(row.get("Zug 4", "")), str(row.get("Verspätung 4", "")),
+        str(row.get("Zug 5", "")), str(row.get("Verspätung 5", "")),
+        str(row["Gesamtstunden"])
+    ])
+  table_data.append(["Summe:", "", "", "", "", "", "", "", "", "", "", f"{total_hours:.2f} St."])
+  
+  t_pdf = Table(table_data, colWidths=[35, 65, 50, 65, 50, 65, 50, 65, 50, 65, 50, 60])
+  t_pdf.setStyle(TableStyle([
+      ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
+      ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+      ('FONTSIZE', (0, 0), (-1, -1), 8),
+      ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
+      ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor("#666666")),
+      ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f0f0f0")),
+      ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+      ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
+  ]))
+  elements.append(t_pdf)
+  doc.build(elements)
+  buffer.seek(0)
+  return buffer.getvalue()
+
+
+def generate_tickets_pdf(month_str, year_val, df, total_hours):
+  buffer = io.BytesIO()
+  doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+  elements = []
+  styles = getSampleStyleSheet()
+  title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
+  
+  elements.append(Paragraph("<b>CLEAN & CARE GmbH - Einsatz-Tickets Bericht</b>", title_style))
+  elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
+  elements.append(Spacer(1, 15))
+  elements.append(Paragraph(f"<b>Monat:</b> {month_str} {year_val}", styles['Normal']))
+  elements.append(Spacer(1, 15))
+  
+  table_data = [["Datum", "Ort", "Ticket", "Beginn", "Ende", "Bemerkung", "Stunden"]]
+  for _, row in df.iterrows():
+    table_data.append([
+        str(row["Datum"]),
+        str(row["Ort"] if pd.notna(row["Ort"]) else ""),
+        str(row["Ticket-Nummer"] if pd.notna(row["Ticket-Nummer"]) else ""),
+        str(row["Beginn"] if pd.notna(row["Beginn"]) else ""),
+        str(row["Ende"] if pd.notna(row["Ende"]) else ""),
+        str(row["Bemerkung"] if pd.notna(row["Bemerkung"]) else ""),
+        str(row["Netto-Stunden"])
+    ])
+  table_data.append(["Summe:", "", "", "", "", "", f"{total_hours:.2f} St."])
+  
+  t_pdf = Table(table_data, colWidths=[40, 90, 70, 60, 60, 110, 70])
   t_pdf.setStyle(TableStyle([
       ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
       ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -1104,6 +1185,8 @@ elif page == t["p7"]:
   st.markdown("---")
   col_t1, col_t2 = st.columns([2, 1])
   with col_t1:
+    pdf_tickets_data = generate_tickets_pdf(ticket_month, ticket_year, edited_tickets_df, total_tickets_sum)
+    st.download_button(t["pdf_btn"], pdf_tickets_data, f"Tickets_{ticket_month}_{ticket_year}.pdf", "application/pdf", key="p7_pdf_btn")
     if st.button("💾 Speichern / حفظ", key="tickets_save_btn"):
       save_tickets_data(ticket_month, ticket_year, edited_tickets_df)
       st.success("Erfolgreich gespeichert! / تم الحفظ بنجاح")
@@ -1112,7 +1195,7 @@ elif page == t["p7"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - 5 قطارات بالعرض تماماً مثل الساعات اليومية
+# الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - بالعرض تماماً (5 قطارات لكل يوم في سطر واحد)
 # ---------------------------------------------------------
 elif page == t["p8"]:
   st.title("🚆 Clean & Care GmbH - Zug-Fahrten (Züge)")
@@ -1156,43 +1239,28 @@ elif page == t["p8"]:
     
     for i in range(1, 6):
       zug_val = str(row.get(f"Zug {i}", "")).strip()
-      b_val = ""
-      e_val = ""
       base_hrs = 0.0
 
       if zug_val == "Zug 1":
-        b_val = "09:30"
-        e_val = "10:30"
         base_hrs = 1.0
       elif zug_val == "Zug 2":
-        b_val = "13:30"
-        e_val = "14:30"
         base_hrs = 1.0
       elif zug_val == "Zug 3":
-        b_val = "17:30"
-        e_val = "18:30"
         base_hrs = 1.0
       elif zug_val == "Zug 4":
-        b_val = "19:30"
-        e_val = "21:00"
         base_hrs = 1.5
       elif zug_val == "Zug 5":
-        b_val = "20:30"
-        e_val = "23:00"
         base_hrs = 2.5
 
-      delay_input = row.get(f"Verspätung {i} (Min.)", 0)
+      delay_input = row.get(f"Verspätung {i}", 0)
       try:
         delay_min = float(delay_input)
       except:
         delay_min = 0.0
 
       delay_hrs = delay_min / 60.0
-      net_zug_hrs = max(0.0, base_hrs + delay_hrs) if base_hrs > 0 else 0.0
-
-      edited_trains_df.at[index, f"Beginn {i}"] = b_val
-      edited_trains_df.at[index, f"Ende {i}"] = e_val
-      day_total_hrs += net_zug_hrs
+      if base_hrs > 0:
+        day_total_hrs += max(0.0, base_hrs + delay_hrs)
 
     edited_trains_df.at[index, "Gesamtstunden"] = round(day_total_hrs, 2)
     total_trains_sum += day_total_hrs
@@ -1206,10 +1274,13 @@ elif page == t["p8"]:
     st.success("Bild erfolgreich hochgeladen! / تم رفع الصورة بنجاح")
 
   st.markdown("---")
-  col_tr1, col_tr2 = st.columns([2, 1])
+  col_tr1, col_tr2, col_tr3 = st.columns([2, 1, 1])
   with col_tr1:
-    if st.button("💾 Speichern / حفظ", key="trains_save_btn"):
-      save_trains_data(train_emp, train_month, train_year, edited_trains_df)
-      st.success("Erfolgreich gespeichert! / تم الحفظ بنجاح")
+    pdf_trains_data = generate_trains_pdf(train_emp, train_month, train_year, edited_trains_df, total_trains_sum)
+    st.download_button(t["pdf_btn"], pdf_trains_data, f"Zug_Fahrten_{train_emp}_{train_month}_{train_year}.pdf", "application/pdf", key="p8_pdf_btn")
   with col_tr2:
-    st.metric("Gesamtsumme:", f"{total_trains_sum:.2f} St.")
+    if st.button(t["save_btn"], key="trains_save_btn"):
+      save_trains_data(train_emp, train_month, train_year, edited_trains_df)
+      st.success(t["success_msg"])
+  with col_tr3:
+    st.metric(t["sum_label"], f"{total_trains_sum:.2f} St.")
