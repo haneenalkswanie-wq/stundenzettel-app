@@ -16,6 +16,45 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
+# نظام الحماية وتسجيل الدخول (Login System)
+# ---------------------------------------------------------
+def check_password():
+  """Returns True if the user logged in successfully."""
+  
+  def password_entered():
+    # اسم المستخدم وكلمة السر الخاصة بالإدارة والشركة
+    if st.session_state["username"] == "admin" and st.session_state["password"] == "clean2026":
+      st.session_state["password_correct"] = True
+      del st.session_state["password"]  # Don't store password
+      del st.session_state["username"]
+    else:
+      st.session_state["password_correct"] = False
+
+  if "password_correct" not in st.session_state:
+    # First run, show inputs for login.
+    st.markdown("## 🔐 Clean & Care GmbH - Login")
+    st.markdown("Bitte melden Sie sich an, um fortzufahren. / يرجى تسجيل الدخول للمتابعة.")
+    st.text_input("Benutzername (Username):", key="username")
+    st.text_input("Passwort (Password):", type="password", key="password")
+    st.button("Anmelden / دخول", on_click=password_entered)
+    return False
+  elif not st.session_state["password_correct"]:
+    # Password incorrect, show input + error.
+    st.markdown("## 🔐 Clean & Care GmbH - Login")
+    st.text_input("Benutzername (Username):", key="username")
+    st.text_input("Passwort (Password):", type="password", key="password")
+    st.button("Anmelden / دخول", on_click=password_entered)
+    st.error("😕 Benutzername oder Passwort ist falsch / اسم المستخدم أو كلمة السر غير صحيحة.")
+    return False
+  else:
+    # Password correct.
+    return True
+
+if not check_password():
+    st.stop()
+
+
+# ---------------------------------------------------------
 # قاعدة البيانات المحلية الآمنة لضمان عدم ضياع أي بيانات نهائياً
 # ---------------------------------------------------------
 DB_FILE = "clean_care.db"
@@ -28,7 +67,6 @@ def init_db():
   cursor.execute('''CREATE TABLE IF NOT EXISTS monthly_hours (emp TEXT, month TEXT, year INT, content TEXT, PRIMARY KEY(emp, month, year))''')
   cursor.execute('''CREATE TABLE IF NOT EXISTS daily_hours (emp TEXT, month TEXT, year INT, content TEXT, PRIMARY KEY(emp, month, year))''')
   
-  # إدخال بيانات افتراضية إذا كانت قاعدة البيانات فارغة لأول مرة
   cursor.execute("SELECT COUNT(*) FROM employees")
   if cursor.fetchone()[0] == 0:
     for emp in ["Sakleh Alsoudi", "Alaa Edin Ibrahim"]:
@@ -82,7 +120,6 @@ def save_places(places_list):
   conn.close()
 
 
-# دوال حفظ وتحميل ساعات الموظف الشهرية الفردية
 def load_employee_month_hours(emp_name, month_str, year_val):
   conn = sqlite3.connect(DB_FILE)
   cursor = conn.cursor()
@@ -120,7 +157,6 @@ def save_employee_month_hours(emp_name, month_str, year_val, df):
   conn.close()
 
 
-# دوال حفظ وتحميل الساعات اليومية (3 أماكن)
 def load_daily_emp_hours(emp_name, month_str, year_val):
   conn = sqlite3.connect(DB_FILE)
   cursor = conn.cursor()
@@ -168,7 +204,6 @@ months_list_de = [
 ]
 years_list = [2024, 2025, 2026, 2027, 2028, 2029, 2030]
 
-# تحديد الشهر والسنة الحالية تلقائياً
 now = datetime.now()
 current_year_val = now.year
 current_month_de = months_list_de[now.month - 1]
@@ -661,7 +696,6 @@ elif page == t["p3"]:
   if places_list:
     st.subheader(f"Objekt: {selected_loc_place} ({loc_month} {loc_year})")
 
-    # جلب الساعات مباشرة من قاعدة البيانات
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("SELECT content FROM daily_hours WHERE month=? AND year=?", (loc_month, loc_year))
