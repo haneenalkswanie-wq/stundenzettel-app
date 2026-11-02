@@ -19,19 +19,15 @@ st.set_page_config(
 # نظام الحماية وتسجيل الدخول (Login System)
 # ---------------------------------------------------------
 def check_password():
-  """Returns True if the user logged in successfully."""
-  
   def password_entered():
-    # اسم المستخدم وكلمة السر الخاصة بالإدارة والشركة
     if st.session_state["username"] == "admin" and st.session_state["password"] == "clean2026":
       st.session_state["password_correct"] = True
-      del st.session_state["password"]  # Don't store password
+      del st.session_state["password"]
       del st.session_state["username"]
     else:
       st.session_state["password_correct"] = False
 
   if "password_correct" not in st.session_state:
-    # First run, show inputs for login.
     st.markdown("## 🔐 Clean & Care GmbH - Login")
     st.markdown("Bitte melden Sie sich an, um fortzufahren. / يرجى تسجيل الدخول للمتابعة.")
     st.text_input("Benutzername (Username):", key="username")
@@ -39,7 +35,6 @@ def check_password():
     st.button("Anmelden / دخول", on_click=password_entered)
     return False
   elif not st.session_state["password_correct"]:
-    # Password incorrect, show input + error.
     st.markdown("## 🔐 Clean & Care GmbH - Login")
     st.text_input("Benutzername (Username):", key="username")
     st.text_input("Passwort (Password):", type="password", key="password")
@@ -47,7 +42,6 @@ def check_password():
     st.error("😕 Benutzername oder Passwort ist falsch / اسم المستخدم أو كلمة السر غير صحيحة.")
     return False
   else:
-    # Password correct.
     return True
 
 if not check_password():
@@ -66,6 +60,8 @@ def init_db():
   cursor.execute('''CREATE TABLE IF NOT EXISTS places (name TEXT PRIMARY KEY)''')
   cursor.execute('''CREATE TABLE IF NOT EXISTS monthly_hours (emp TEXT, month TEXT, year INT, content TEXT, PRIMARY KEY(emp, month, year))''')
   cursor.execute('''CREATE TABLE IF NOT EXISTS daily_hours (emp TEXT, month TEXT, year INT, content TEXT, PRIMARY KEY(emp, month, year))''')
+  cursor.execute('''CREATE TABLE IF NOT EXISTS tickets_data (emp TEXT, month TEXT, year INT, content TEXT, PRIMARY KEY(emp, month, year))''')
+  cursor.execute('''CREATE TABLE IF NOT EXISTS trains_data (emp TEXT, month TEXT, year INT, content TEXT, PRIMARY KEY(emp, month, year))''')
   
   cursor.execute("SELECT COUNT(*) FROM employees")
   if cursor.fetchone()[0] == 0:
@@ -108,8 +104,6 @@ def load_places():
   rows = cursor.fetchall()
   conn.close()
   return sorted([row[0] for row in rows])
-
-
 def save_places(places_list):
   conn = sqlite3.connect(DB_FILE)
   cursor = conn.cursor()
@@ -198,6 +192,77 @@ def save_daily_emp_hours(emp_name, month_str, year_val, df):
   conn.close()
 
 
+def load_tickets_data(emp_name, month_str, year_val):
+  conn = sqlite3.connect(DB_FILE)
+  cursor = conn.cursor()
+  cursor.execute("SELECT content FROM tickets_data WHERE emp=? AND month=? AND year=?", (emp_name, month_str, year_val))
+  row = cursor.fetchone()
+  conn.close()
+  if row:
+    try:
+      data = json.loads(row[0])
+      return pd.DataFrame(data)
+    except:
+      pass
+  
+  tickets_rows = []
+  for i in range(1, 16):
+    tickets_rows.append({
+        "Nr": str(i),
+        "Datum": "",
+        "Ort": "",
+        "Ticket-Nummer": "",
+        "Beginn": "",
+        "Ende": "",
+        "Bemerkung": "",
+        "Netto-Stunden": 0.0
+    })
+  return pd.DataFrame(tickets_rows)
+
+
+def save_tickets_data(emp_name, month_str, year_val, df):
+  conn = sqlite3.connect(DB_FILE)
+  cursor = conn.cursor()
+  content = json.dumps(df.to_dict(orient="list"), ensure_ascii=False)
+  cursor.execute("INSERT OR REPLACE INTO tickets_data (emp, month, year, content) VALUES (?, ?, ?, ?)", (emp_name, month_str, year_val, content))
+  conn.commit()
+  conn.close()
+
+
+def load_trains_data(emp_name, month_str, year_val):
+  conn = sqlite3.connect(DB_FILE)
+  cursor = conn.cursor()
+  cursor.execute("SELECT content FROM trains_data WHERE emp=? AND month=? AND year=?", (emp_name, month_str, year_val))
+row = cursor.fetchone()
+  conn.close()
+  if row:
+    try:
+      data = json.loads(row[0])
+      return pd.DataFrame(data)
+    except:
+      pass
+  
+  trains_rows = []
+  for i in range(1, 32):
+    trains_rows.append({
+        "Datum": str(i),
+        "Zug-Fahrt": "",
+        "Beginn": "",
+        "Ende": "",
+        "Netto-Stunden": 0.0
+    })
+  return pd.DataFrame(trains_rows)
+
+
+def save_trains_data(emp_name, month_str, year_val, df):
+  conn = sqlite3.connect(DB_FILE)
+  cursor = conn.cursor()
+  content = json.dumps(df.to_dict(orient="list"), ensure_ascii=False)
+  cursor.execute("INSERT OR REPLACE INTO trains_data (emp, month, year, content) VALUES (?, ?, ?, ?)", (emp_name, month_str, year_val, content))
+  conn.commit()
+  conn.close()
+
+
 months_list_de = [
     "Januar", "Februar", "März", "April", "Mai", "Juni",
     "Juli", "August", "September", "Oktober", "November", "Dezember"
@@ -228,6 +293,8 @@ if not is_arabic:
         "p4": "🏢 Orte & Mitarbeiter-Stunden",
         "p5": "👥 Mitarbeiterverwaltung",
         "p6": "📅 Monatsübersicht",
+        "p7": "🎫 Einsatz-Tickets",
+        "p8": "🚆 Zug-Fahrten (Züge)",
         "emp_label": "Mitarbeiter wählen:",
         "month_label": "Monat auswählen:",
         "year_label": "Jahr auswählen:",
@@ -252,6 +319,8 @@ else:
         "p4": "🏢 الأماكن وساعات العمال (Orte & Mitarbeiter)",
         "p5": "👥 إدارة العمال (Mitarbeiterverwaltung)",
         "p6": "📅 ملخص الأشهر (Monatsübersicht)",
+        "p7": "🎫 تذاكر المهام (Einsatz-Tickets)",
+        "p8": "🚆 جدول القطارات (Zug-Fahrten)",
         "emp_label": "Mitarbeiter wählen:",
         "month_label": "Monat auswählen:",
         "year_label": "Jahr auswählen:",
@@ -277,10 +346,10 @@ page = st.sidebar.radio(
         t["p4"],
         t["p5"],
         t["p6"],
+        t["p7"],
+        t["p8"],
     ],
 )
-
-
 # ---------------------------------------------------------
 # دوال طباعة PDF باللغة الألمانية حصراً
 # ---------------------------------------------------------
@@ -321,17 +390,6 @@ def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
       ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
   ]))
   elements.append(t_pdf)
-  elements.append(Spacer(1, 40))
-  
-  sig_data = [
-      ["__________________________________", "__________________________________"],
-      ["Unterschrift Arbeitnehmer", "Unterschrift Arbeitgeber / GF"],
-      ["Datum: ______________", "Datum: ______________"]
-  ]
-  sig_table = Table(sig_data, colWidths=[250, 250])
-  sig_table.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'LEFT'), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
-  elements.append(sig_table)
-  
   doc.build(elements)
   buffer.seek(0)
   return buffer.getvalue()
@@ -367,7 +425,7 @@ def generate_daily_pdf(emp_name, month_str, year_val, df, total_hours):
       ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
       ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
       ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-      ('FONTSIZE', (0, 0), (-1, -1), 7),
+('FONTSIZE', (0, 0), (-1, -1), 7),
       ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
       ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor("#666666")),
       ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f0f0f0")),
@@ -451,7 +509,7 @@ def generate_place_pdf(place_name, month_str, year_val, df, total_hours):
 
 
 def generate_summary_pdf(month_str, year_val, df, total_hours):
-  buffer = io.BytesIO()
+buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
   elements = []
   styles = getSampleStyleSheet()
@@ -490,7 +548,7 @@ def generate_summary_pdf(month_str, year_val, df, total_hours):
 # ---------------------------------------------------------
 if page == t["p1"]:
   st.title("📋 Clean & Care GmbH - Stundenzettel")
-  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
+  st.markdown("Am Messezentrum 6, 5020 Salzburg")
 
   employees_list = load_employees()
   places_list = [""] + load_places()
@@ -553,8 +611,7 @@ if page == t["p1"]:
 
     edited_df.at[index, "Arbeitszeit (abzgl. Pause)"] = round(hrs, 2)
     total_sum_hours += hrs
-
-  st.markdown("---")
+st.markdown("---")
   c1, c2, c3 = st.columns([2, 1, 1])
   with c1:
     pdf_data = generate_employee_pdf(selected_employee, selected_month, selected_year, edited_df, total_sum_hours)
@@ -569,13 +626,13 @@ if page == t["p1"]:
   st.markdown("---")
   sig_col1, sig_col2 = st.columns(2)
   with sig_col1:
-    st.text("__________________________________")
+    st.text("__________")
     st.text("Unterschrift Arbeitnehmer")
-    st.text("Datum: ______________")
+    st.text("Datum: ______")
   with sig_col2:
-    st.text("__________________________________")
+    st.text("__________")
     st.text("Unterschrift Arbeitgeber / GF")
-    st.text("Datum: ______________")
+    st.text("Datum: ______")
 
 
 # ---------------------------------------------------------
@@ -583,7 +640,7 @@ if page == t["p1"]:
 # ---------------------------------------------------------
 elif page == t["p2"]:
   st.title("📝 Clean & Care GmbH - Tägliche Stunden")
-  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
+  st.markdown("Am Messezentrum 6, 5020 Salzburg")
 
   employees_list = load_employees()
   places_list = [""] + load_places()
@@ -660,7 +717,7 @@ elif page == t["p2"]:
   col_d1, col_d2, col_d3 = st.columns([2, 1, 1])
   with col_d1:
     pdf_daily_data = generate_daily_pdf(daily_emp, daily_month, daily_year, edited_daily_df, total_daily_sum)
-    st.download_button(t["pdf_btn"], pdf_daily_data, f"Tägliche_Stunden_{daily_emp}_{daily_month}_{daily_year}.pdf", "application/pdf", key="p2_pdf")
+st.download_button(t["pdf_btn"], pdf_daily_data, f"Tägliche_Stunden_{daily_emp}_{daily_month}_{daily_year}.pdf", "application/pdf", key="p2_pdf")
   with col_d2:
     if st.button(t["save_btn"], key="p2_save"):
       save_daily_emp_hours(daily_emp, daily_month, daily_year, edited_daily_df)
@@ -674,7 +731,7 @@ elif page == t["p2"]:
 # ---------------------------------------------------------
 elif page == t["p3"]:
   st.title("🏢 Clean & Care GmbH - Objekt-Stundenübersicht")
-  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
+  st.markdown("Am Messezentrum 6, 5020 Salzburg")
 
   places_list = load_places()
 
@@ -750,7 +807,7 @@ elif page == t["p3"]:
     total_loc_sum = loc_df["Stunden"].astype(float).sum()
 
     st.markdown("---")
-    col_l1, col_l2 = st.columns([2, 1])
+col_l1, col_l2 = st.columns([2, 1])
     with col_l1:
       loc_pdf_data = generate_single_location_pdf(selected_loc_place, loc_month, loc_year, loc_df, total_loc_sum)
       st.download_button(t["pdf_btn"], loc_pdf_data, f"Objekt_{selected_loc_place}_{loc_month}_{loc_year}.pdf", "application/pdf", key="p3_pdf")
@@ -842,7 +899,7 @@ elif page == t["p4"]:
           for loc_name, loc_hrs in locs_in_day:
             if loc_name.lower() == selected_place.strip().lower() and loc_hrs > 0:
               ratio = (loc_hrs / day_gross) if day_gross > 0 else 0
-              net_loc_hrs = max(0.0, loc_hrs - (break_val * ratio))
+net_loc_hrs = max(0.0, loc_hrs - (break_val * ratio))
               emp_place_hours += net_loc_hrs
         
         if emp_place_hours > 0:
@@ -946,8 +1003,7 @@ elif page == t["p6"]:
         total_company_hours += emp_total
     except:
       pass
-
-  if not summary_data:
+if not summary_data:
     summary_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Gesamtstunden": "0.00 St."}])
   else:
     summary_df = pd.DataFrame(summary_data)
@@ -961,3 +1017,152 @@ elif page == t["p6"]:
     st.download_button(t["pdf_btn"], pdf_summary_data, f"Monatsübersicht_{summary_month}_{summary_year}.pdf", "application/pdf", key="p6_pdf")
   with col_s2:
     st.metric("Gesamtsumme:", f"{total_company_hours:.2f} St.")
+
+
+# ---------------------------------------------------------
+# الصفحة السابعة: تذاكر المهام (Einsatz-Tickets) - باللغة الألمانية
+# ---------------------------------------------------------
+elif page == t["p7"]:
+  st.title("🎫 Clean & Care GmbH - Einsatz-Tickets")
+  st.markdown("Am Messezentrum 6, 5020 Salzburg")
+
+  employees_list = load_employees()
+  places_list = [""] + load_places()
+
+  col1, col2, col3 = st.columns(3)
+  with col1:
+    ticket_emp = st.selectbox(t["emp_label"], employees_list, key="ticket_emp_select")
+  with col2:
+    ticket_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="ticket_month_select")
+  with col3:
+    ticket_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="ticket_year_select")
+
+  st.subheader(f"Tickets für: {ticket_emp} ({ticket_month} {ticket_year})")
+
+  tickets_df = load_tickets_data(ticket_emp, ticket_month, ticket_year)
+
+  edited_tickets_df = st.data_editor(
+      tickets_df,
+      num_rows="dynamic",
+      use_container_width=True,
+      key=f"tickets_table_{ticket_emp}_{ticket_month}_{ticket_year}",
+      column_config={
+          "Ort": st.column_config.SelectboxColumn("Ort", options=places_list),
+      }
+  )
+
+  edited_tickets_df = edited_tickets_df.astype(object)
+
+  total_tickets_sum = 0.0
+  for index, row in edited_tickets_df.iterrows():
+    b_str = str(row.get("Beginn", "")).strip()
+    e_str = str(row.get("Ende", "")).strip()
+    net_hrs = 0.0
+
+    if b_str and e_str and b_str != "nan" and e_str != "nan":
+      for fmt in ("%H:%M", "%H.%M", "%H"):
+        try:
+          t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
+          t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
+          gh = (t2 - t1).total_seconds() / 3600
+          if gh > 0:
+            net_hrs = gh
+          break
+        except:
+          continue
+
+    edited_tickets_df.at[index, "Netto-Stunden"] = round(net_hrs, 2)
+    total_tickets_sum += net_hrs
+
+  st.markdown("---")
+  col_t1, col_t2 = st.columns([2, 1])
+  with col_t1:
+    if st.button("💾 Speichern / حفظ", key="tickets_save_btn"):
+      save_tickets_data(ticket_emp, ticket_month, ticket_year, edited_tickets_df)
+      st.success("Erfolgreich gespeichert! / تم الحفظ بنجاح")
+  with col_t2:
+    st.metric("Gesamtsumme:", f"{total_tickets_sum:.2f} St.")
+
+
+# ---------------------------------------------------------
+# الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - باللغة الألمانية
+# ---------------------------------------------------------
+elif page == t["p8"]:
+  st.title("🚆 Clean & Care GmbH - Zug-Fahrten (Züge)")
+  st.markdown("Am Messezentrum 6, 5020 Salzburg")
+
+  employees_list = load_employees()
+
+  col1, col2, col3 = st.columns(3)
+  with col1:
+    train_emp = st.selectbox(t["emp_label"], employees_list, key="train_emp_select")
+  with col2:
+    train_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="train_month_select")
+  with col3:
+    train_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="train_year_select")
+
+  st.subheader(f"Zug-Fahrten für: {train_emp} ({train_month} {train_year})")
+
+  trains_options = [
+      "",
+      "Fahrt 1 (Tag: 09:30 - 10:30)",
+      "Fahrt 2 (Tag: 13:30 - 14:30)",
+      "Fahrt 3 (Tag: 17:30 - 18:30)",
+      "Fahrt 4 (Nacht: 19:30 - 21:00)",
+      "Fahrt 5 (Nacht: 20:30 - 23:00)"
+  ]
+
+trains_df = load_trains_data(train_emp, train_month, train_year)
+edited_trains_df = st.data_editor(
+      trains_df,
+      num_rows="fixed",
+      use_container_width=True,
+      key=f"trains_table_{train_emp}_{train_month}_{train_year}",
+      column_config={
+          "Zug-Fahrt": st.column_config.SelectboxColumn("Zug-Fahrt auswählen", options=trains_options),
+      }
+  )
+
+  edited_trains_df = edited_trains_df.astype(object)
+
+  total_trains_sum = 0.0
+  for index, row in edited_trains_df.iterrows():
+    fahrt = str(row.get("Zug-Fahrt", "")).strip()
+    b_val = ""
+    e_val = ""
+    net_hrs = 0.0
+
+    if "Fahrt 1" in fahrt:
+      b_val = "09:30"
+      e_val = "10:30"
+      net_hrs = 1.0
+    elif "Fahrt 2" in fahrt:
+      b_val = "13:30"
+      e_val = "14:30"
+      net_hrs = 1.0
+    elif "Fahrt 3" in fahrt:
+      b_val = "17:30"
+      e_val = "18:30"
+      net_hrs = 1.0
+    elif "Fahrt 4" in fahrt:
+      b_val = "19:30"
+      e_val = "21:00"
+      net_hrs = 1.5
+    elif "Fahrt 5" in fahrt:
+      b_val = "20:30"
+      e_val = "23:00"
+      net_hrs = 2.5
+
+    edited_trains_df.at[index, "Beginn"] = b_val
+    edited_trains_df.at[index, "Ende"] = e_val
+    edited_trains_df.at[index, "Netto-Stunden"] = round(net_hrs, 2)
+    total_trains_sum += net_hrs
+
+  st.markdown("---")
+  col_tr1, col_tr2 = st.columns([2, 1])
+  with col_tr1:
+    if st.button("💾 Speichern / حفظ", key="trains_save_btn"):
+      save_trains_data(train_emp, train_month, train_year, edited_trains_df)
+      st.success("Erfolgreich gespeichert! / تم الحفظ بنجاح")
+  with col_tr2:
+    st.metric("Gesamtsumme:", f"{total_trains_sum:.2f} St.")
