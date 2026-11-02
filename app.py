@@ -112,8 +112,6 @@ def save_places(places_list):
     cursor.execute("INSERT OR IGNORE INTO places (name) VALUES (?)", (place,))
   conn.commit()
   conn.close()
-
-
 def load_employee_month_hours(emp_name, month_str, year_val):
   conn = sqlite3.connect(DB_FILE)
   cursor = conn.cursor()
