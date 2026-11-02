@@ -104,6 +104,8 @@ def load_places():
   rows = cursor.fetchall()
   conn.close()
   return sorted([row[0] for row in rows])
+
+
 def save_places(places_list):
   conn = sqlite3.connect(DB_FILE)
   cursor = conn.cursor()
@@ -112,6 +114,8 @@ def save_places(places_list):
     cursor.execute("INSERT OR IGNORE INTO places (name) VALUES (?)", (place,))
   conn.commit()
   conn.close()
+
+
 def load_employee_month_hours(emp_name, month_str, year_val):
   conn = sqlite3.connect(DB_FILE)
   cursor = conn.cursor()
@@ -231,7 +235,7 @@ def load_trains_data(emp_name, month_str, year_val):
   conn = sqlite3.connect(DB_FILE)
   cursor = conn.cursor()
   cursor.execute("SELECT content FROM trains_data WHERE emp=? AND month=? AND year=?", (emp_name, month_str, year_val))
-row = cursor.fetchone()
+  row = cursor.fetchone()
   conn.close()
   if row:
     try:
@@ -348,6 +352,8 @@ page = st.sidebar.radio(
         t["p8"],
     ],
 )
+
+
 # ---------------------------------------------------------
 # دوال طباعة PDF باللغة الألمانية حصراً
 # ---------------------------------------------------------
@@ -423,7 +429,7 @@ def generate_daily_pdf(emp_name, month_str, year_val, df, total_hours):
       ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
       ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
       ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-('FONTSIZE', (0, 0), (-1, -1), 7),
+      ('FONTSIZE', (0, 0), (-1, -1), 7),
       ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
       ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor("#666666")),
       ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f0f0f0")),
@@ -507,7 +513,7 @@ def generate_place_pdf(place_name, month_str, year_val, df, total_hours):
 
 
 def generate_summary_pdf(month_str, year_val, df, total_hours):
-buffer = io.BytesIO()
+  buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
   elements = []
   styles = getSampleStyleSheet()
@@ -546,7 +552,7 @@ buffer = io.BytesIO()
 # ---------------------------------------------------------
 if page == t["p1"]:
   st.title("📋 Clean & Care GmbH - Stundenzettel")
-  st.markdown("Am Messezentrum 6, 5020 Salzburg")
+  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
   employees_list = load_employees()
   places_list = [""] + load_places()
@@ -609,7 +615,8 @@ if page == t["p1"]:
 
     edited_df.at[index, "Arbeitszeit (abzgl. Pause)"] = round(hrs, 2)
     total_sum_hours += hrs
-st.markdown("---")
+
+  st.markdown("---")
   c1, c2, c3 = st.columns([2, 1, 1])
   with c1:
     pdf_data = generate_employee_pdf(selected_employee, selected_month, selected_year, edited_df, total_sum_hours)
@@ -624,13 +631,13 @@ st.markdown("---")
   st.markdown("---")
   sig_col1, sig_col2 = st.columns(2)
   with sig_col1:
-    st.text("__________")
+    st.text("__________________________________")
     st.text("Unterschrift Arbeitnehmer")
-    st.text("Datum: ______")
+    st.text("Datum: ______________")
   with sig_col2:
-    st.text("__________")
+    st.text("__________________________________")
     st.text("Unterschrift Arbeitgeber / GF")
-    st.text("Datum: ______")
+    st.text("Datum: ______________")
 
 
 # ---------------------------------------------------------
@@ -638,7 +645,7 @@ st.markdown("---")
 # ---------------------------------------------------------
 elif page == t["p2"]:
   st.title("📝 Clean & Care GmbH - Tägliche Stunden")
-  st.markdown("Am Messezentrum 6, 5020 Salzburg")
+  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
   employees_list = load_employees()
   places_list = [""] + load_places()
@@ -715,7 +722,7 @@ elif page == t["p2"]:
   col_d1, col_d2, col_d3 = st.columns([2, 1, 1])
   with col_d1:
     pdf_daily_data = generate_daily_pdf(daily_emp, daily_month, daily_year, edited_daily_df, total_daily_sum)
-st.download_button(t["pdf_btn"], pdf_daily_data, f"Tägliche_Stunden_{daily_emp}_{daily_month}_{daily_year}.pdf", "application/pdf", key="p2_pdf")
+    st.download_button(t["pdf_btn"], pdf_daily_data, f"Tägliche_Stunden_{daily_emp}_{daily_month}_{daily_year}.pdf", "application/pdf", key="p2_pdf")
   with col_d2:
     if st.button(t["save_btn"], key="p2_save"):
       save_daily_emp_hours(daily_emp, daily_month, daily_year, edited_daily_df)
@@ -729,7 +736,7 @@ st.download_button(t["pdf_btn"], pdf_daily_data, f"Tägliche_Stunden_{daily_emp}
 # ---------------------------------------------------------
 elif page == t["p3"]:
   st.title("🏢 Clean & Care GmbH - Objekt-Stundenübersicht")
-  st.markdown("Am Messezentrum 6, 5020 Salzburg")
+  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
   places_list = load_places()
 
@@ -805,7 +812,7 @@ elif page == t["p3"]:
     total_loc_sum = loc_df["Stunden"].astype(float).sum()
 
     st.markdown("---")
-col_l1, col_l2 = st.columns([2, 1])
+    col_l1, col_l2 = st.columns([2, 1])
     with col_l1:
       loc_pdf_data = generate_single_location_pdf(selected_loc_place, loc_month, loc_year, loc_df, total_loc_sum)
       st.download_button(t["pdf_btn"], loc_pdf_data, f"Objekt_{selected_loc_place}_{loc_month}_{loc_year}.pdf", "application/pdf", key="p3_pdf")
@@ -897,7 +904,7 @@ elif page == t["p4"]:
           for loc_name, loc_hrs in locs_in_day:
             if loc_name.lower() == selected_place.strip().lower() and loc_hrs > 0:
               ratio = (loc_hrs / day_gross) if day_gross > 0 else 0
-net_loc_hrs = max(0.0, loc_hrs - (break_val * ratio))
+              net_loc_hrs = max(0.0, loc_hrs - (break_val * ratio))
               emp_place_hours += net_loc_hrs
         
         if emp_place_hours > 0:
@@ -1001,7 +1008,8 @@ elif page == t["p6"]:
         total_company_hours += emp_total
     except:
       pass
-if not summary_data:
+
+  if not summary_data:
     summary_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Gesamtstunden": "0.00 St."}])
   else:
     summary_df = pd.DataFrame(summary_data)
@@ -1022,7 +1030,7 @@ if not summary_data:
 # ---------------------------------------------------------
 elif page == t["p7"]:
   st.title("🎫 Clean & Care GmbH - Einsatz-Tickets")
-  st.markdown("Am Messezentrum 6, 5020 Salzburg")
+  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
   employees_list = load_employees()
   places_list = [""] + load_places()
@@ -1087,7 +1095,7 @@ elif page == t["p7"]:
 # ---------------------------------------------------------
 elif page == t["p8"]:
   st.title("🚆 Clean & Care GmbH - Zug-Fahrten (Züge)")
-  st.markdown("Am Messezentrum 6, 5020 Salzburg")
+  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
   employees_list = load_employees()
 
@@ -1110,8 +1118,9 @@ elif page == t["p8"]:
       "Fahrt 5 (Nacht: 20:30 - 23:00)"
   ]
 
-trains_df = load_trains_data(train_emp, train_month, train_year)
-edited_trains_df = st.data_editor(
+  trains_df = load_trains_data(train_emp, train_month, train_year)
+
+  edited_trains_df = st.data_editor(
       trains_df,
       num_rows="fixed",
       use_container_width=True,
