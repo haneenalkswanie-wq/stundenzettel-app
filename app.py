@@ -246,11 +246,18 @@ def load_trains_data(emp_name, month_str, year_val):
   if row:
     try:
       data = json.loads(row[0])
-      return pd.DataFrame(data)
+      df = pd.DataFrame(data)
+      for i in range(1, 6):
+        if f"Zug {i}" not in df.columns:
+          df[f"Zug {i}"] = ""
+        if f"Verspätung {i}" not in df.columns:
+          df[f"Verspätung {i}"] = 0
+        if f"Bild {i}" not in df.columns:
+          df[f"Bild {i}"] = ""
+      return df
     except:
       pass
   
-  trains_rows = []
   month_map = {
       "Januar": 1, "Februar": 2, "März": 3, "April": 4, "Mai": 5, "Juni": 6,
       "Juli": 7, "August": 8, "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
@@ -258,17 +265,15 @@ def load_trains_data(emp_name, month_str, year_val):
   m_num = month_map.get(month_str, 10)
   days_in_m = pd.Period(f"{year_val}-{m_num}").days_in_month
   
+  trains_rows = []
   for day in range(1, days_in_m + 1):
-    for f_idx in range(1, 6):
-      trains_rows.append({
-          "Datum": str(day),
-          "Zug-Fahrt": f"Zug {f_idx}",
-          "Beginn": "",
-          "Ende": "",
-          "Verspätung (Min.)": 0,
-          "Bild / Nachweis": "",
-          "Netto-Stunden": 0.0
-      })
+    row_data = {"Datum": str(day)}
+    for i in range(1, 6):
+      row_data[f"Zug {i}"] = ""
+      row_data[f"Verspätung {i}"] = 0
+      row_data[f"Bild {i}"] = ""
+    row_data["Gesamtstunden"] = 0.0
+    trains_rows.append(row_data)
   return pd.DataFrame(trains_rows)
 
 
@@ -1042,7 +1047,7 @@ elif page == t["p6"]:
 
 
 # ---------------------------------------------------------
-# الصفحة السابعة: تذاكر المهام (Einsatz-Tickets) - حسب أيام الشهر وبدون اسم عامل
+# الصفحة السابعة: تذاكر المهام (Einsatz-Tickets)
 # ---------------------------------------------------------
 elif page == t["p7"]:
   st.title("🎫 Clean & Care GmbH - Einsatz-Tickets")
@@ -1104,7 +1109,7 @@ elif page == t["p7"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - 5 قطارات لكل يوم مع التأخير وصورة التأخير
+# الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - بالعرض (5 قطارات لكل يوم في سطر واحد)
 # ---------------------------------------------------------
 elif page == t["p8"]:
   st.title("🚆 Clean & Care GmbH - Zug-Fahrten (Züge)")
@@ -1122,6 +1127,8 @@ elif page == t["p8"]:
 
   st.subheader(f"Zug-Fahrten für: {train_emp} ({train_month} {train_year})")
 
+  trains_options = ["", "Zug 1", "Zug 2", "Zug 3", "Zug 4", "Zug 5"]
+
   trains_df = load_trains_data(train_emp, train_month, train_year)
 
   edited_trains_df = st.data_editor(
@@ -1130,10 +1137,11 @@ elif page == t["p8"]:
       use_container_width=True,
       key=f"trains_table_{train_emp}_{train_month}_{train_year}",
       column_config={
-          "Zug-Fahrt": st.column_config.SelectboxColumn(
-              "Zug auswählen", 
-              options=["Zug 1", "Zug 2", "Zug 3", "Zug 4", "Zug 5"]
-          ),
+          "Zug 1": st.column_config.SelectboxColumn("Zug 1", options=trains_options),
+          "Zug 2": st.column_config.SelectboxColumn("Zug 2", options=trains_options),
+          "Zug 3": st.column_config.SelectboxColumn("Zug 3", options=trains_options),
+          "Zug 4": st.column_config.SelectboxColumn("Zug 4", options=trains_options),
+          "Zug 5": st.column_config.SelectboxColumn("Zug 5", options=trains_options),
       }
   )
 
@@ -1141,55 +1149,35 @@ elif page == t["p8"]:
 
   total_trains_sum = 0.0
   for index, row in edited_trains_df.iterrows():
-    fahrt = str(row.get("Zug-Fahrt", "")).strip()
-    b_val = ""
-    e_val = ""
-    base_hrs = 0.0
+    day_total_hrs = 0.0
+    
+    for i in range(1, 6):
+      zug_val = str(row.get(f"Zug {i}", "")).strip()
+      base_hrs = 0.0
 
-    # الأوقات الافتراضية للقطارات الخمسة
-    if "Zug 1" in fahrt:
-      b_val = "09:30"
-      e_val = "10:30"
-      base_hrs = 1.0
-    elif "Zug 2" in fahrt:
-      b_val = "13:30"
-      e_val = "14:30"
-      base_hrs = 1.0
-    elif "Zug 3" in fahrt:
-      b_val = "17:30"
-      e_val = "18:30"
-      base_hrs = 1.0
-    elif "Zug 4" in fahrt:
-      b_val = "19:30"
-      e_val = "21:00"
-      base_hrs = 1.5
-    elif "Zug 5" in fahrt:
-      b_val = "20:30"
-      e_val = "23:00"
-      base_hrs = 2.5
+      if zug_val == "Zug 1":
+        base_hrs = 1.0
+      elif zug_val == "Zug 2":
+        base_hrs = 1.0
+      elif zug_val == "Zug 3":
+        base_hrs = 1.0
+      elif zug_val == "Zug 4":
+        base_hrs = 1.5
+      elif zug_val == "Zug 5":
+        base_hrs = 2.5
 
-    # حساب دقائق التأخير وإضافتها للصافي
-    delay_input = row.get("Verspätung (Min.)", 0)
-    try:
-      delay_min = float(delay_input)
-    except:
-      delay_min = 0.0
+      delay_input = row.get(f"Verspätung {i}", 0)
+      try:
+        delay_min = float(delay_input)
+      except:
+        delay_min = 0.0
 
-    delay_hrs = delay_min / 60.0
-    net_hrs = max(0.0, base_hrs + delay_hrs)
+      delay_hrs = delay_min / 60.0
+      if base_hrs > 0:
+        day_total_hrs += max(0.0, base_hrs + delay_hrs)
 
-    edited_trains_df.at[index, "Beginn"] = b_val
-    edited_trains_df.at[index, "Ende"] = e_val
-    edited_trains_df.at[index, "Netto-Stunden"] = round(net_hrs, 2)
-    total_trains_sum += net_hrs
-
-  # خيار رفع صور أو إثباتات التأخير
-  st.markdown("---")
-  st.subheader("📷 Nachweis / Bild für Verspätung hochladen")
-  uploaded_file = st.file_uploader("Wählen Sie ein Bild aus (PNG, JPG):", type=["png", "jpg", "jpeg"], key="train_image_upload")
-  if uploaded_file is not None:
-    st.image(uploaded_file, caption="Hochgeladener Nachweis", width=300)
-    st.success("Bild erfolgreich hochgeladen! / تم رفع الصورة بنجاح")
+    edited_trains_df.at[index, "Gesamtstunden"] = round(day_total_hrs, 2)
+    total_trains_sum += day_total_hrs
 
   st.markdown("---")
   col_tr1, col_tr2 = st.columns([2, 1])
