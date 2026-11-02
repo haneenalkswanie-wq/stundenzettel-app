@@ -20,7 +20,7 @@ st.set_page_config(
 # ---------------------------------------------------------
 def check_password():
   def password_entered():
-    if st.session_state["username"] == "admin" and st.session_state["password"] == "clean2026":
+    if st.session_state["username"].strip() == "admin" and st.session_state["password"].strip() == "clean2026":
       st.session_state["password_correct"] = True
       del st.session_state["password"]
       del st.session_state["username"]
@@ -250,10 +250,12 @@ def load_trains_data(emp_name, month_str, year_val):
       for i in range(1, 6):
         if f"Zug {i}" not in df.columns:
           df[f"Zug {i}"] = ""
-        if f"Verspätung {i}" not in df.columns:
-          df[f"Verspätung {i}"] = 0
-        if f"Bild {i}" not in df.columns:
-          df[f"Bild {i}"] = ""
+        if f"Beginn {i}" not in df.columns:
+          df[f"Beginn {i}"] = ""
+        if f"Ende {i}" not in df.columns:
+          df[f"Ende {i}"] = ""
+        if f"Verspätung {i} (Min.)" not in df.columns:
+          df[f"Verspätung {i} (Min.)"] = 0
       return df
     except:
       pass
@@ -270,8 +272,9 @@ def load_trains_data(emp_name, month_str, year_val):
     row_data = {"Datum": str(day)}
     for i in range(1, 6):
       row_data[f"Zug {i}"] = ""
-      row_data[f"Verspätung {i}"] = 0
-      row_data[f"Bild {i}"] = ""
+      row_data[f"Beginn {i}"] = ""
+      row_data[f"Ende {i}"] = ""
+      row_data[f"Verspätung {i} (Min.)"] = 0
     row_data["Gesamtstunden"] = 0.0
     trains_rows.append(row_data)
   return pd.DataFrame(trains_rows)
@@ -1109,7 +1112,7 @@ elif page == t["p7"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - بالعرض (5 قطارات لكل يوم في سطر واحد)
+# الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - 5 قطارات بالعرض تماماً مثل الساعات اليومية
 # ---------------------------------------------------------
 elif page == t["p8"]:
   st.title("🚆 Clean & Care GmbH - Zug-Fahrten (Züge)")
@@ -1153,31 +1156,54 @@ elif page == t["p8"]:
     
     for i in range(1, 6):
       zug_val = str(row.get(f"Zug {i}", "")).strip()
+      b_val = ""
+      e_val = ""
       base_hrs = 0.0
 
       if zug_val == "Zug 1":
+        b_val = "09:30"
+        e_val = "10:30"
         base_hrs = 1.0
       elif zug_val == "Zug 2":
+        b_val = "13:30"
+        e_val = "14:30"
         base_hrs = 1.0
       elif zug_val == "Zug 3":
+        b_val = "17:30"
+        e_val = "18:30"
         base_hrs = 1.0
       elif zug_val == "Zug 4":
+        b_val = "19:30"
+        e_val = "21:00"
         base_hrs = 1.5
       elif zug_val == "Zug 5":
+        b_val = "20:30"
+        e_val = "23:00"
         base_hrs = 2.5
 
-      delay_input = row.get(f"Verspätung {i}", 0)
+      delay_input = row.get(f"Verspätung {i} (Min.)", 0)
       try:
         delay_min = float(delay_input)
       except:
         delay_min = 0.0
 
       delay_hrs = delay_min / 60.0
-      if base_hrs > 0:
-        day_total_hrs += max(0.0, base_hrs + delay_hrs)
+      net_zug_hrs = max(0.0, base_hrs + delay_hrs) if base_hrs > 0 else 0.0
+
+      edited_trains_df.at[index, f"Beginn {i}"] = b_val
+      edited_trains_df.at[index, f"Ende {i}"] = e_val
+      day_total_hrs += net_zug_hrs
 
     edited_trains_df.at[index, "Gesamtstunden"] = round(day_total_hrs, 2)
     total_trains_sum += day_total_hrs
+
+  # خيار رفع صور التأخير (من اللابتوب أو الموبايل)
+  st.markdown("---")
+  st.subheader("📷 Nachweis / Bild für Verspätung hochladen (إثبات التأخير)")
+  uploaded_train_image = st.file_uploader("Wählen Sie ein Bild aus (PNG, JPG):", type=["png", "jpg", "jpeg"], key="train_img_up")
+  if uploaded_train_image is not None:
+    st.image(uploaded_train_image, caption="Hochgeladener Nachweis", width=300)
+    st.success("Bild erfolgreich hochgeladen! / تم رفع الصورة بنجاح")
 
   st.markdown("---")
   col_tr1, col_tr2 = st.columns([2, 1])
