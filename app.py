@@ -60,7 +60,7 @@ def init_db():
   cursor.execute('''CREATE TABLE IF NOT EXISTS places (name TEXT PRIMARY KEY)''')
   cursor.execute('''CREATE TABLE IF NOT EXISTS monthly_hours (emp TEXT, month TEXT, year INT, content TEXT, PRIMARY KEY(emp, month, year))''')
   cursor.execute('''CREATE TABLE IF NOT EXISTS daily_hours (emp TEXT, month TEXT, year INT, content TEXT, PRIMARY KEY(emp, month, year))''')
-  cursor.execute('''CREATE TABLE IF NOT EXISTS tickets_data (emp TEXT, month TEXT, year INT, content TEXT, PRIMARY KEY(emp, month, year))''')
+  cursor.execute('''CREATE TABLE IF NOT EXISTS tickets_data (month TEXT, year INT, content TEXT, PRIMARY KEY(month, year))''')
   cursor.execute('''CREATE TABLE IF NOT EXISTS trains_data (emp TEXT, month TEXT, year INT, content TEXT, PRIMARY KEY(emp, month, year))''')
   
   cursor.execute("SELECT COUNT(*) FROM employees")
@@ -194,10 +194,10 @@ def save_daily_emp_hours(emp_name, month_str, year_val, df):
   conn.close()
 
 
-def load_tickets_data(emp_name, month_str, year_val):
+def load_tickets_data(month_str, year_val):
   conn = sqlite3.connect(DB_FILE)
   cursor = conn.cursor()
-  cursor.execute("SELECT content FROM tickets_data WHERE emp=? AND month=? AND year=?", (emp_name, month_str, year_val))
+  cursor.execute("SELECT content FROM tickets_data WHERE month=? AND year=?", (month_str, year_val))
   row = cursor.fetchone()
   conn.close()
   if row:
@@ -208,10 +208,16 @@ def load_tickets_data(emp_name, month_str, year_val):
       pass
   
   tickets_rows = []
-  for i in range(1, 16):
+  month_map = {
+      "Januar": 1, "Februar": 2, "März": 3, "April": 4, "Mai": 5, "Juni": 6,
+      "Juli": 7, "August": 8, "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
+  }
+  m_num = month_map.get(month_str, 10)
+  days_in_m = pd.Period(f"{year_val}-{m_num}").days_in_month
+  
+  for day in range(1, days_in_m + 1):
     tickets_rows.append({
-        "Nr": str(i),
-        "Datum": "",
+        "Datum": str(day),
         "Ort": "",
         "Ticket-Nummer": "",
         "Beginn": "",
@@ -222,11 +228,11 @@ def load_tickets_data(emp_name, month_str, year_val):
   return pd.DataFrame(tickets_rows)
 
 
-def save_tickets_data(emp_name, month_str, year_val, df):
+def save_tickets_data(month_str, year_val, df):
   conn = sqlite3.connect(DB_FILE)
   cursor = conn.cursor()
   content = json.dumps(df.to_dict(orient="list"), ensure_ascii=False)
-  cursor.execute("INSERT OR REPLACE INTO tickets_data (emp, month, year, content) VALUES (?, ?, ?, ?)", (emp_name, month_str, year_val, content))
+  cursor.execute("INSERT OR REPLACE INTO tickets_data (month, year, content) VALUES (?, ?, ?)", (month_str, year_val, content))
   conn.commit()
   conn.close()
 
@@ -245,14 +251,24 @@ def load_trains_data(emp_name, month_str, year_val):
       pass
   
   trains_rows = []
-  for i in range(1, 32):
-    trains_rows.append({
-        "Datum": str(i),
-        "Zug-Fahrt": "",
-        "Beginn": "",
-        "Ende": "",
-        "Netto-Stunden": 0.0
-    })
+  month_map = {
+      "Januar": 1, "Februar": 2, "März": 3, "April": 4, "Mai": 5, "Juni": 6,
+      "Juli": 7, "August": 8, "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
+  }
+  m_num = month_map.get(month_str, 10)
+  days_in_m = pd.Period(f"{year_val}-{m_num}").days_in_month
+  
+  for day in range(1, days_in_m + 1):
+    for f_idx in range(1, 6):
+      trains_rows.append({
+          "Datum": str(day),
+          "Zug-Fahrt": f"Zug {f_idx}",
+          "Beginn": "",
+          "Ende": "",
+          "Verspätung (Min.)": 0,
+          "Bild / Nachweis": "",
+          "Netto-Stunden": 0.0
+      })
   return pd.DataFrame(trains_rows)
 
 
@@ -1026,32 +1042,29 @@ elif page == t["p6"]:
 
 
 # ---------------------------------------------------------
-# الصفحة السابعة: تذاكر المهام (Einsatz-Tickets) - باللغة الألمانية
+# الصفحة السابعة: تذاكر المهام (Einsatz-Tickets) - حسب أيام الشهر وبدون اسم عامل
 # ---------------------------------------------------------
 elif page == t["p7"]:
   st.title("🎫 Clean & Care GmbH - Einsatz-Tickets")
   st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
-  employees_list = load_employees()
   places_list = [""] + load_places()
 
-  col1, col2, col3 = st.columns(3)
+  col1, col2 = st.columns(2)
   with col1:
-    ticket_emp = st.selectbox(t["emp_label"], employees_list, key="ticket_emp_select")
-  with col2:
     ticket_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="ticket_month_select")
-  with col3:
+  with col2:
     ticket_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="ticket_year_select")
 
-  st.subheader(f"Tickets für: {ticket_emp} ({ticket_month} {ticket_year})")
+  st.subheader(f"Monats-Tickets ({ticket_month} {ticket_year})")
 
-  tickets_df = load_tickets_data(ticket_emp, ticket_month, ticket_year)
+  tickets_df = load_tickets_data(ticket_month, ticket_year)
 
   edited_tickets_df = st.data_editor(
       tickets_df,
-      num_rows="dynamic",
+      num_rows="fixed",
       use_container_width=True,
-      key=f"tickets_table_{ticket_emp}_{ticket_month}_{ticket_year}",
+      key=f"tickets_table_{ticket_month}_{ticket_year}",
       column_config={
           "Ort": st.column_config.SelectboxColumn("Ort", options=places_list),
       }
@@ -1084,14 +1097,14 @@ elif page == t["p7"]:
   col_t1, col_t2 = st.columns([2, 1])
   with col_t1:
     if st.button("💾 Speichern / حفظ", key="tickets_save_btn"):
-      save_tickets_data(ticket_emp, ticket_month, ticket_year, edited_tickets_df)
+      save_tickets_data(ticket_month, ticket_year, edited_tickets_df)
       st.success("Erfolgreich gespeichert! / تم الحفظ بنجاح")
   with col_t2:
     st.metric("Gesamtsumme:", f"{total_tickets_sum:.2f} St.")
 
 
 # ---------------------------------------------------------
-# الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - باللغة الألمانية
+# الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - 5 قطارات لكل يوم مع التأخير وصورة التأخير
 # ---------------------------------------------------------
 elif page == t["p8"]:
   st.title("🚆 Clean & Care GmbH - Zug-Fahrten (Züge)")
@@ -1109,15 +1122,6 @@ elif page == t["p8"]:
 
   st.subheader(f"Zug-Fahrten für: {train_emp} ({train_month} {train_year})")
 
-  trains_options = [
-      "",
-      "Fahrt 1 (Tag: 09:30 - 10:30)",
-      "Fahrt 2 (Tag: 13:30 - 14:30)",
-      "Fahrt 3 (Tag: 17:30 - 18:30)",
-      "Fahrt 4 (Nacht: 19:30 - 21:00)",
-      "Fahrt 5 (Nacht: 20:30 - 23:00)"
-  ]
-
   trains_df = load_trains_data(train_emp, train_month, train_year)
 
   edited_trains_df = st.data_editor(
@@ -1126,7 +1130,10 @@ elif page == t["p8"]:
       use_container_width=True,
       key=f"trains_table_{train_emp}_{train_month}_{train_year}",
       column_config={
-          "Zug-Fahrt": st.column_config.SelectboxColumn("Zug-Fahrt auswählen", options=trains_options),
+          "Zug-Fahrt": st.column_config.SelectboxColumn(
+              "Zug auswählen", 
+              options=["Zug 1", "Zug 2", "Zug 3", "Zug 4", "Zug 5"]
+          ),
       }
   )
 
@@ -1137,33 +1144,52 @@ elif page == t["p8"]:
     fahrt = str(row.get("Zug-Fahrt", "")).strip()
     b_val = ""
     e_val = ""
-    net_hrs = 0.0
+    base_hrs = 0.0
 
-    if "Fahrt 1" in fahrt:
+    # الأوقات الافتراضية للقطارات الخمسة
+    if "Zug 1" in fahrt:
       b_val = "09:30"
       e_val = "10:30"
-      net_hrs = 1.0
-    elif "Fahrt 2" in fahrt:
+      base_hrs = 1.0
+    elif "Zug 2" in fahrt:
       b_val = "13:30"
       e_val = "14:30"
-      net_hrs = 1.0
-    elif "Fahrt 3" in fahrt:
+      base_hrs = 1.0
+    elif "Zug 3" in fahrt:
       b_val = "17:30"
       e_val = "18:30"
-      net_hrs = 1.0
-    elif "Fahrt 4" in fahrt:
+      base_hrs = 1.0
+    elif "Zug 4" in fahrt:
       b_val = "19:30"
       e_val = "21:00"
-      net_hrs = 1.5
-    elif "Fahrt 5" in fahrt:
+      base_hrs = 1.5
+    elif "Zug 5" in fahrt:
       b_val = "20:30"
       e_val = "23:00"
-      net_hrs = 2.5
+      base_hrs = 2.5
+
+    # حساب دقائق التأخير وإضافتها للصافي
+    delay_input = row.get("Verspätung (Min.)", 0)
+    try:
+      delay_min = float(delay_input)
+    except:
+      delay_min = 0.0
+
+    delay_hrs = delay_min / 60.0
+    net_hrs = max(0.0, base_hrs + delay_hrs)
 
     edited_trains_df.at[index, "Beginn"] = b_val
     edited_trains_df.at[index, "Ende"] = e_val
     edited_trains_df.at[index, "Netto-Stunden"] = round(net_hrs, 2)
     total_trains_sum += net_hrs
+
+  # خيار رفع صور أو إثباتات التأخير
+  st.markdown("---")
+  st.subheader("📷 Nachweis / Bild für Verspätung hochladen")
+  uploaded_file = st.file_uploader("Wählen Sie ein Bild aus (PNG, JPG):", type=["png", "jpg", "jpeg"], key="train_image_upload")
+  if uploaded_file is not None:
+    st.image(uploaded_file, caption="Hochgeladener Nachweis", width=300)
+    st.success("Bild erfolgreich hochgeladen! / تم رفع الصورة بنجاح")
 
   st.markdown("---")
   col_tr1, col_tr2 = st.columns([2, 1])
