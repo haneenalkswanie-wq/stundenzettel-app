@@ -67,21 +67,19 @@ def load_employees():
 
 def save_employees(emp_list):
     try:
-        # جلب السجلات الحالية وحذفها لتجنب التكرار
-        existing = supabase.table("employees").select("id").execute()
-        if existing.data:
-            for row in existing.data:
-                supabase.table("employees").delete().eq("id", row["id"]).execute()
+        # مسح السجلات القديمة أولاً
+        supabase.table("employees").delete().neq("id", 0).execute()
         
-        # إدراج الأسماء الجديدة
+        # إضافة الأسماء الجديدة
         for emp in emp_list:
-            if emp and str(emp).strip():
-                supabase.table("employees").insert({"name": str(emp).strip()}).execute()
-        st.success("تم تحديث الموظفين في السحابة بنجاح!")
+            clean_name = str(emp).strip()
+            if clean_name:
+                supabase.table("employees").insert({"name": clean_name}).execute()
+        
+        st.success("تم تحديث الموظفين وحفظهم بنجاح!")
         st.rerun()
     except Exception as e:
         st.error(f"خطأ في حفظ الموظفين: {e}")
-
 def load_places():
     try:
         res = supabase.table("places").select("name").execute()
@@ -93,17 +91,16 @@ def load_places():
 
 def save_places(places_list):
     try:
-        # جلب الأماكن الحالية وحذفها لتجنب التكرار
-        existing = supabase.table("places").select("id").execute()
-        if existing.data:
-            for row in existing.data:
-                supabase.table("places").delete().eq("id", row["id"]).execute()
+        # مسح السجلات القديمة أولاً
+        supabase.table("places").delete().neq("id", 0).execute()
         
-        # إدراج الأماكن الجديدة
+        # إضافة الأماكن الجديدة
         for place in places_list:
-            if place and str(place).strip():
-                supabase.table("places").insert({"name": str(place).strip()}).execute()
-        st.success("تم تحديث الأماكن في السحابة بنجاح!")
+            clean_place = str(place).strip()
+            if clean_place:
+                supabase.table("places").insert({"name": clean_place}).execute()
+        
+        st.success("تم تحديث الأماكن وحفظها بنجاح!")
         st.rerun()
     except Exception as e:
         st.error(f"خطأ في حفظ الأماكن: {e}")
