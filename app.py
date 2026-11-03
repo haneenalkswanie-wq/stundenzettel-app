@@ -71,8 +71,9 @@ def save_employees(emp_list):
         for emp in emp_list:
             if emp and str(emp).strip():
                 supabase.table("employees").insert({"name": str(emp).strip()}).execute()
+        st.success("تم حفظ الموظفين بنجاح!")
     except Exception as e:
-        print(f"Error saving employees: {e}")
+        st.error(f"خطأ في حفظ الموظفين: {e}")
 
 def load_places():
     try:
@@ -89,8 +90,9 @@ def save_places(places_list):
         for place in places_list:
             if place and str(place).strip():
                 supabase.table("places").insert({"name": str(place).strip()}).execute()
+        st.success("تم حفظ الأماكن بنجاح!")
     except Exception as e:
-        print(f"Error saving places: {e}")
+        st.error(f"خطأ في حفظ الأماكن: {e}")
 
 def load_employee_month_hours(emp_name, month_str, year_val):
     try:
