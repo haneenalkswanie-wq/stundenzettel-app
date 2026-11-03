@@ -66,9 +66,13 @@ def load_employees():
     return ["Sakleh Alsoudi", "Alaa Edin Ibrahim"]
 
 def save_employees(emp_list):
-    supabase.table("employees").delete().neq("name", "").execute()
-    for emp in emp_list:
-        supabase.table("employees").insert({"name": emp}).execute()
+    try:
+        supabase.table("employees").delete().neq("name", "").execute()
+        for emp in emp_list:
+            if emp and str(emp).strip():
+                supabase.table("employees").insert({"name": str(emp).strip()}).execute()
+    except Exception as e:
+        print(f"Error saving employees: {e}")
 
 def load_places():
     try:
@@ -80,9 +84,13 @@ def load_places():
     return ["Limehome Salzburg", "Nespresso Store", "IKEA Wals", "Villach Hauptplatz"]
 
 def save_places(places_list):
-    supabase.table("places").delete().neq("name", "").execute()
-    for place in places_list:
-        supabase.table("places").insert({"name": place}).execute()
+    try:
+        supabase.table("places").delete().neq("name", "").execute()
+        for place in places_list:
+            if place and str(place).strip():
+                supabase.table("places").insert({"name": str(place).strip()}).execute()
+    except Exception as e:
+        print(f"Error saving places: {e}")
 
 def load_employee_month_hours(emp_name, month_str, year_val):
     try:
