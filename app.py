@@ -590,26 +590,27 @@ def generate_trains_pdf(emp_name, month_str, year_val, df, total_hours):
   elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 10))
   
-  table_data = [["Tag", "Zug 1", "Versp. 1", "Zug 2", "Versp. 2", "Zug 3", "Versp. 3", "Zug 4", "Versp. 4", "Zug 5", "Versp. 5", "Gesamt"]]
+  # أعمدة الجدول الجديد للقطارات
+  table_data = [["Tag", "Zug 1", "Von", "Bis", "Zug 2", "Von", "Bis", "Zug 3", "Von", "Bis", "Zug 4", "Von", "Bis", "Zug 5", "Von", "Bis", "Gesamt"]]
   for _, row in df.iterrows():
     table_data.append([
         str(row["Datum"]),
-        str(row.get("Zug 1", "")), str(row.get("Verspätung 1", "")),
-        str(row.get("Zug 2", "")), str(row.get("Verspätung 2", "")),
-        str(row.get("Zug 3", "")), str(row.get("Verspätung 3", "")),
-        str(row.get("Zug 4", "")), str(row.get("Verspätung 4", "")),
-        str(row.get("Zug 5", "")), str(row.get("Verspätung 5", "")),
+        str(row.get("Zug 1", "")), str(row.get("Von 1", "")), str(row.get("Bis 1", "")),
+        str(row.get("Zug 2", "")), str(row.get("Von 2", "")), str(row.get("Bis 2", "")),
+        str(row.get("Zug 3", "")), str(row.get("Von 3", "")), str(row.get("Bis 3", "")),
+        str(row.get("Zug 4", "")), str(row.get("Von 4", "")), str(row.get("Bis 4", "")),
+        str(row.get("Zug 5", "")), str(row.get("Von 5", "")), str(row.get("Bis 5", "")),
         str(row["Gesamtstunden"])
     ])
-  table_data.append(["Summe:", "", "", "", "", "", "", "", "", "", "", f"{total_hours:.2f} St."])
+  table_data.append(["Summe:", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", f"{total_hours:.2f} St."])
   
-  t_pdf = Table(table_data, colWidths=[35, 65, 50, 65, 50, 65, 50, 65, 50, 65, 50, 60])
+  t_pdf = Table(table_data, colWidths=[28, 50, 38, 38, 50, 38, 38, 50, 38, 38, 50, 38, 38, 50, 38, 38, 45])
   t_pdf.setStyle(TableStyle([
       ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
       ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
       ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-      ('FONTSIZE', (0, 0), (-1, -1), 8),
-      ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
+      ('FONTSIZE', (0, 0), (-1, -1), 7),
+      ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
       ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor("#666666")),
       ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f0f0f0")),
       ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
@@ -1210,8 +1211,11 @@ elif page == t["p7"]:
 # ---------------------------------------------------------
 # الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - بالعرض تماماً (5 قطارات لكل يوم في سطر واحد)
 # ---------------------------------------------------------
+# ---------------------------------------------------------
+# الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - 5 قطارات (رقم، بداية، نهاية) مع جمع الساعات
+# ---------------------------------------------------------
 elif page == t["p8"]:
-  st.title("🚆 Clean & Care GmbH - Zug-Fahrten (Züge)")
+  st.title("🚆 Clean & Care GmbH - Zug-Fahrten")
   st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
   employees_list = load_employees()
@@ -1226,15 +1230,40 @@ elif page == t["p8"]:
 
   st.subheader(f"Zug-Fahrten für: {train_emp} ({train_month} {train_year})")
 
+  # خيارات أرقام القطارات
   trains_options = ["", "Zug 1", "Zug 2", "Zug 3", "Zug 4", "Zug 5"]
 
-  trains_df = load_trains_data(train_emp, train_month, train_year)
+  # إعداد الأعمدة لـ 5 قطارات (كل قطار: رقم، بداية، نهاية)
+  import calendar
+  months_map_de = {
+      "Januar": 1, "Februar": 2, "März": 3, "April": 4, 
+      "Mai": 5, "Juni": 6, "Juli": 7, "August": 8, 
+      "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
+  }
+  m_num = months_map_de.get(train_month, 10)
+  try:
+      days_count = calendar.monthrange(int(train_year), m_num)[1]
+  except:
+      days_count = 31
+
+  # تحميل أو إنشاء جدول القطارات الجديد
+  trains_data_rows = []
+  for day in range(1, days_count + 1):
+      row_data = {"Datum": str(day)}
+      for i in range(1, 6):
+          row_data[f"Zug {i}"] = ""
+          row_data[f"Von {i}"] = ""
+          row_data[f"Bis {i}"] = ""
+      row_data["Gesamtstunden"] = 0.0
+      trains_data_rows.append(row_data)
+  
+  default_trains_df = pd.DataFrame(trains_data_rows)
 
   edited_trains_df = st.data_editor(
-      trains_df,
+      default_trains_df,
       num_rows="fixed",
       use_container_width=True,
-      key=f"trains_table_{train_emp}_{train_month}_{train_year}",
+      key=f"trains_table_new_{train_emp}_{train_month}_{train_year}",
       column_config={
           "Zug 1": st.column_config.SelectboxColumn("Zug 1", options=trains_options),
           "Zug 2": st.column_config.SelectboxColumn("Zug 2", options=trains_options),
@@ -1246,42 +1275,34 @@ elif page == t["p8"]:
 
   edited_trains_df = edited_trains_df.astype(object)
 
+  # حساب إجمالي الساعات لكل قطار بناءً على وقت البداية والنهاية
   total_trains_sum = 0.0
   for index, row in edited_trains_df.iterrows():
     day_total_hrs = 0.0
     
     for i in range(1, 6):
-      zug_val = str(row.get(f"Zug {i}", "")).strip()
-      base_hrs = 0.0
+      v_str = str(row.get(f"Von {i}", "")).strip()
+      b_str = str(row.get(f"Bis {i}", "")).strip()
 
-      if zug_val == "Zug 1":
-        base_hrs = 1.0
-      elif zug_val == "Zug 2":
-        base_hrs = 1.0
-      elif zug_val == "Zug 3":
-        base_hrs = 1.0
-      elif zug_val == "Zug 4":
-        base_hrs = 1.5
-      elif zug_val == "Zug 5":
-        base_hrs = 2.5
-
-      delay_input = row.get(f"Verspätung {i}", 0)
-      try:
-        delay_min = float(delay_input)
-      except:
-        delay_min = 0.0
-
-      delay_hrs = delay_min / 60.0
-      if base_hrs > 0:
-        day_total_hrs += max(0.0, base_hrs + delay_hrs)
+      if v_str and b_str and v_str != "nan" and b_str != "nan":
+        for fmt in ("%H:%M", "%H.%M", "%H"):
+          try:
+            t1 = datetime.strptime(v_str.replace(".", ":"), fmt)
+            t2 = datetime.strptime(b_str.replace(".", ":"), fmt)
+            diff = (t2 - t1).total_seconds() / 3600.0
+            if diff > 0:
+              day_total_hrs += diff
+            break
+          except:
+            continue
 
     edited_trains_df.at[index, "Gesamtstunden"] = round(day_total_hrs, 2)
     total_trains_sum += day_total_hrs
 
- 
   st.markdown("---")
   col_tr1, col_tr2, col_tr3 = st.columns([2, 1, 1])
   with col_tr1:
+    # زر طباعة تقرير القطارات الجديد
     pdf_trains_data = generate_trains_pdf(train_emp, train_month, train_year, edited_trains_df, total_trains_sum)
     st.download_button(t["pdf_btn"], pdf_trains_data, f"Zug_Fahrten_{train_emp}_{train_month}_{train_year}.pdf", "application/pdf", key="p8_pdf_btn")
   with col_tr2:
