@@ -18,7 +18,7 @@ st.set_page_config(
 # بيانات الاتصال بقاعدة البيانات السحابية (Supabase)
 # ---------------------------------------------------------
 SUPABASE_URL = "https://knzrtbjwqqhxghtfasvy.supabase.co"
-SUPABASE_KEY = "ضعي_المفتاح_الكامل_الظاهر_في_الشاشة_هنا"
+SUPABASE_KEY = "sb_publishable_ysniK3ivMLdaey5PrzzLeQ_-aDMUojK"
 
 @st.cache_resource
 def get_supabase_client() -> Client:
@@ -54,9 +54,8 @@ if not check_password():
     st.stop()
 
 # ---------------------------------------------------------
-# دوال التعامل مع السحاب (Supabase Cloud)
+# دوال التعامل مع السحاب (Supabase Cloud) - النسخة المستقرة
 # ---------------------------------------------------------
-# --- دوال تحميل وحفظ الموظفين والأماكن ---
 def load_employees():
     try:
         res = supabase.table("employees").select("name").execute()
@@ -77,9 +76,14 @@ def load_places():
 
 def save_employees(emp_list):
     try:
-        # مسح السجلات القديمة ثم إدخال القائمة المحدثة نظيفة
-        supabase.table("employees").delete().neq("id", 0).execute()
+        # جلب البيانات الحالية من الجدول لحذفها بشكل آمن
+        existing = supabase.table("employees").select("name").execute()
+        if existing.data:
+            for row in existing.data:
+                if row.get("name"):
+                    supabase.table("employees").delete().eq("name", row["name"]).execute()
         
+        # إدخال القائمة الجديدة المحدثة
         for emp in emp_list:
             name_clean = str(emp).strip()
             if name_clean:
@@ -88,22 +92,18 @@ def save_employees(emp_list):
         st.success("تم حفظ قائمة الموظفين بنجاح في السحابة!")
         st.rerun()
     except Exception as e:
-        # في حال التعارض، استخدام طريقة التحديث المباشر
-        try:
-            for emp in emp_list:
-                name_clean = str(emp).strip()
-                if name_clean:
-                    supabase.table("employees").upsert({"name": name_clean}, on_conflict="name").execute()
-            st.success("تم حفظ قائمة الموظفين بنجاح!")
-            st.rerun()
-        except Exception as err:
-            st.error(f"خطأ في حفظ الموظفين: {err}")
+        st.error(f"خطأ في حفظ الموظفين: {e}")
 
 def save_places(places_list):
     try:
-        # مسح السجلات القديمة ثم إدخال الأماكن المحدثة نظيفة
-        supabase.table("places").delete().neq("id", 0).execute()
+        # جلب البيانات الحالية من الجدول لحذفها بشكل آمن
+        existing = supabase.table("places").select("name").execute()
+        if existing.data:
+            for row in existing.data:
+                if row.get("name"):
+                    supabase.table("places").delete().eq("name", row["name"]).execute()
         
+        # إدخال الأماكن الجديدة المحدثة
         for place in places_list:
             place_clean = str(place).strip()
             if place_clean:
@@ -112,15 +112,7 @@ def save_places(places_list):
         st.success("تم حفظ قائمة الأماكن بنجاح في السحابة!")
         st.rerun()
     except Exception as e:
-        try:
-            for place in places_list:
-                place_clean = str(place).strip()
-                if place_clean:
-                    supabase.table("places").upsert({"name": place_clean}, on_conflict="name").execute()
-            st.success("تم حفظ قائمة الأماكن بنجاح!")
-            st.rerun()
-        except Exception as err:
-            st.error(f"خطأ في حفظ الأماكن: {err}")
+        st.error(f"خطأ في حفظ الأماكن: {e}")
 
 # --- دوال تحميل وحفظ الساعات الشهرية واليومية ---
 def load_employee_month_hours(emp_name, month_str, year_val):
@@ -366,12 +358,12 @@ def generate_daily_pdf(emp_name, month_str, year_val, df, total_hours):
   table_data = [["Tag", "Ort 1", "Std 1", "Ort 2", "Std 2", "Ort 3", "Std 3", "Pause", "Gesamt"]]
   for _, row in df.iterrows():
     table_data.append([
-        str(row["Tag"]),
-        str(row["Ort 1"] if pd.notna(row["Ort 1"]) else ""), str(row.get("Hrs1", "")),
-        str(row["Ort 2"] if pd.notna(row["Ort 2"]) else ""), str(row.get("Hrs2", "")),
-        str(row["Ort 3"] if pd.notna(row["Ort 3"]) else ""), str(row.get("Hrs3", "")),
-        str(row["Pause"] if pd.notna(row["Pause"]) else ""),
-        str(row["Gesamtstunden"])
+str(row.get("Tag", "")),
+str(row.get("Ort 1", "") if pd.notna(row.get("Ort 1")) else ""), str(row.get("Hrs1", "")),
+str(row.get("Ort 2", "") if pd.notna(row.get("Ort 2")) else ""), str(row.get("Hrs2", "")),
+str(row.get("Ort 3", "") if pd.notna(row.get("Ort 3")) else ""), str(row.get("Hrs3", "")),
+str(row.get("Pause", "") if pd.notna(row.get("Pause")) else ""),
+str(row.get("Gesamtstunden", 0.0))
     ])
   table_data.append(["Summe:", "", "", "", "", "", "", "", f"{total_hours:.2f} St."])
   
@@ -509,7 +501,7 @@ def generate_trains_pdf(emp_name, month_str, year_val, df, total_hours):
     table_data = [["Tag", "Nr.1", "B1", "E1", "V1", "Nr.2", "B2", "E2", "V2", "Nr.3", "B3", "E3", "V3", "Nr.4", "B4", "E4", "V4", "Nr.5", "B5", "E5", "V5", "Gesamt"]]
     for _, row in df.iterrows():
         table_data.append([
-            str(row["Tag"]),
+            str(row.get("Datum", row.get("Tag", ""))),
             str(row.get("Zug-Nr 1", "")), str(row.get("Beginn 1", "")), str(row.get("Ende 1", "")), str(row.get("Verspätung 1", "")),
             str(row.get("Zug-Nr 2", "")), str(row.get("Beginn 2", "")), str(row.get("Ende 2", "")), str(row.get("Verspätung 2", "")),
             str(row.get("Zug-Nr 3", "")), str(row.get("Beginn 3", "")), str(row.get("Ende 3", "")), str(row.get("Verspätung 3", "")),
@@ -562,13 +554,13 @@ def generate_tickets_pdf(month_str, year_val, df, total_hours):
     table_data = [["Tag", "Ort", "Ticket-Nr.", "Beginn", "Ende", "Bemerkung", "Netto-Stunden"]]
     for _, row in df.iterrows():
         table_data.append([
-            str(row["Tag"]),
-            str(row.get("Ort", "")),
-            str(row.get("Ticket-Nummer", "")),
-            str(row.get("Beginn", "")),
-            str(row.get("Ende", "")),
-            str(row.get("Bemerkung", "")),
-            str(row.get("Netto-Stunden", ""))
+str(row.get("Tag", "")),
+str(row.get("Ort", "")),
+str(row.get("Ticket-Nummer", "")),
+str(row.get("Beginn", "")),
+str(row.get("Ende", "")),
+str(row.get("Bemerkung", "")),
+str(row.get("Netto-Stunden", 0.0))
         ])
     table_data.append(["Summe:", "", "", "", "", "", f"{total_hours:.2f} St."])
     
