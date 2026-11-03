@@ -416,7 +416,7 @@ def generate_stundenzettel_pdf(emp_name, month_str, year_val, df_to_print):
     elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
     elements.append(Spacer(1, 10))
     
-    elements.append(Paragraph(<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}, styles['Normal']))
+    elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
     elements.append(Spacer(1, 10))
     
     # إعداد جدول الاستمارة المستقلة
