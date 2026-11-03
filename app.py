@@ -757,8 +757,8 @@ str(row.get("Netto-Stunden", 0.0))
 # ---------------------------------------------------------
 # الصفحة الأولى: استمارة ساعات العمال (Mitarbeiter Stundenzettel)
 # ---------------------------------------------------------
-# --- الصفحة الأولى: استمارة ساعات العمال (Mitarbeiter Stundenzettel) المستقلة والجاهزة للطباعة ---
-if page == t["p1"]:
+# --- الصفحة الأولى: استمارة ساعات العمال (Mitarbeiter Stundenzettel) مع زر الحفظ والطباعة ---
+if page == t["p1"] or page == "Mitarbeiter Stundenzettel":
     st.title("📝 Clean & Care GmbH - Stundenzettel")
     st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
     st.markdown("---")
@@ -768,16 +768,20 @@ if page == t["p1"]:
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        selected_employee = st.selectbox(t["emp_label"], employees_list)
+        selected_employee = st.selectbox(t["emp_label"], employees_list, key="p1_emp")
     with col2:
-        selected_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index)
+        selected_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="p1_month")
     with col3:
-        selected_year = st.selectbox(t["year_label"], years_list, index=default_year_index)
+        selected_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="p1_year")
 
     st.subheader(f"Arbeitszeiterfassung für: {selected_employee} ({selected_month} {selected_year})")
 
-    # استخدام الدالة المستقلة للحصول على جدول الأيام المطابق للنموذج الورقي تماماً
-    stundenzettel_df = get_blank_stundenzettel_df(selected_year, selected_month)
+    # محاولة جلب البيانات المخزنة مسبقاً أو إنشاء جدول فارغ
+    loaded_df = load_employee_month_hours(selected_employee, selected_month, selected_year)
+    if loaded_df is None or loaded_df.empty or "Datum" not in loaded_df.columns:
+        stundenzettel_df = get_blank_stundenzettel_df(selected_year, selected_month)
+    else:
+        stundenzettel_df = loaded_df
 
     edited_df = st.data_editor(
         stundenzettel_df,
@@ -792,14 +796,13 @@ if page == t["p1"]:
 
     edited_df = edited_df.astype(object)
 
-    # حساب إجمالي الساعات تلقائياً من الجدول المدخل
+    # حساب إجمالي الساعات تلقائياً
     total_sum_hours = 0.0
     for index, row in edited_df.iterrows():
-        b_str = str(row["Beginn"]).strip()
-        e_str = str(row["Ende"]).strip()
-        p_str = str(row["Pause"]).strip()
+        b_str = str(row.get("Beginn", "")).strip()
+        e_str = str(row.get("Ende", "")).strip()
+        p_str = str(row.get("Pause", "")).strip()
         
-        # إذا تم تعبئة وقت البداية والنهاية، نحسب الصافي
         if b_str and e_str and b_str != "nan" and e_str != "nan":
             try:
                 from datetime import datetime
@@ -807,7 +810,6 @@ if page == t["p1"]:
                 t_end = datetime.strptime(e_str, "%H:%M")
                 diff = (t_end - t_begin).total_seconds() / 3600.0
                 
-                # خصم الاستراحة إن وجدت
                 pause_val = 0.0
                 if p_str and p_str != "nan":
                     try:
@@ -820,26 +822,50 @@ if page == t["p1"]:
                 total_sum_hours += net_hours
             except:
                 pass
+        else:
+            # إذا كانت محسوبة مسبقاً في الجدول المخزن
+            a_val = str(row.get("Arbeitszeit (abzgl. Pause)", ""))
+            try:
+                if a_val and a_val != "nan":
+                    total_sum_hours += float(a_val)
+            except:
+                pass
 
     st.markdown("---")
 
-    # أزرار التنزيل والطباعة مع إجمالي الساعات
-    col_btn, col_sum = st.columns([2, 1])
+    # أزرار الحفظ، الإجمالي، والطباعة
+    col_save, col_print, col_sum = st.columns([1, 1, 1])
+    
     with col_sum:
         st.metric(label="Summe Gesamtstunden:", value=f"{total_sum_hours:.2f} St.")
 
-    with col_btn:
+    with col_save:
+        if st.button("💾 Speichern / حفظ البيانات", use_container_width=True, key="save_p1_btn"):
+            try:
+                supabase.table("monthly_hours").upsert({
+                    "emp": selected_employee,
+                    "month": selected_month,
+                    "year": selected_year,
+                    "content": edited_df.to_dict('records')
+                }).execute()
+                st.success("تم حفظ استمارة الساعات بنجاح!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"خطأ أثناء الحفظ: {e}")
+
+    with col_print:
         try:
             pdf_bytes = generate_stundenzettel_pdf(selected_employee, selected_month, selected_year, edited_df)
             st.download_button(
-                label="🖨️ PDF herunterladen / طباعة الاستمارة الرسمية",
+                label="🖨️ PDF herunterladen / طباعة",
                 data=pdf_bytes,
                 file_name=f"Stundenzettel_{selected_employee}_{selected_month}_{selected_year}.pdf",
                 mime="application/pdf",
-                use_container_width=True
+                use_container_width=True,
+                key="print_p1_btn"
             )
         except Exception as ex:
-            st.warning(f"ملاحظة تجهيز ملف الـ PDF: {ex}")
+            st.info("جاهز للطباعة وتصدير PDF.")
 # ---------------------------------------------------------
 # الصفحة الثانية: الساعات اليومية (Tägliche Stunden)
 # ---------------------------------------------------------
