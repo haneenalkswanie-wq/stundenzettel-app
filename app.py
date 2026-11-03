@@ -57,6 +57,7 @@ if not check_password():
 # ---------------------------------------------------------
 # دوال التعامل مع السحاب (Supabase Cloud) - النسخة المستقرة
 # ---------------------------------------------------------
+@st.cache_data(ttl=60)
 def load_employees():
     try:
         res = supabase.table("employees").select("name").execute()
@@ -66,6 +67,7 @@ def load_employees():
         pass
     return []
 
+@st.cache_data(ttl=60)
 def load_places():
     try:
         res = supabase.table("places").select("name").execute()
@@ -75,6 +77,7 @@ def load_places():
         pass
     return []
 
+@st.cache_data(ttl=60)
 def save_employees(emp_list):
     try:
         # جلب البيانات الحالية من الجدول لحذفها بشكل آمن
@@ -95,6 +98,7 @@ def save_employees(emp_list):
     except Exception as e:
         st.error(f"خطأ في حفظ الموظفين: {e}")
 
+@st.cache_data(ttl=60)
 def save_places(places_list):
     try:
         # جلب البيانات الحالية من الجدول لحذفها بشكل آمن
@@ -116,6 +120,7 @@ def save_places(places_list):
         st.error(f"خطأ في حفظ الأماكن: {e}")
 
 # --- دوال تحميل وحفظ الساعات الشهرية واليومية ---
+@st.cache_data(ttl=60)
 def load_employee_month_hours(emp_name, month_str, year_val):
     try:
         res = supabase.table("monthly_hours").select("content").eq("emp", emp_name).eq("month", month_str).eq("year", year_val).execute()
@@ -128,6 +133,7 @@ def load_employee_month_hours(emp_name, month_str, year_val):
         days_data.append({"Tag": str(day), "Ort": "", "Beginn": "", "Ende": "", "Pause": "", "Arbeitszeit (abzgl. Pause)": 0.0})
     return pd.DataFrame(days_data)
 
+@st.cache_data(ttl=60)
 def save_employee_month_hours(emp_name, month_str, year_val, df):
     try:
         records = df.to_dict(orient="records") if hasattr(df, 'to_dict') else list(df)
@@ -144,6 +150,7 @@ def save_employee_month_hours(emp_name, month_str, year_val, df):
     except Exception as e:
         st.error(f"خطأ في حفظ الساعات الشهرية: {e}")
 
+@st.cache_data(ttl=60)
 def load_daily_emp_hours(emp_name, month_str, year_val):
     try:
         res = supabase.table("daily_hours").select("content").eq("emp", emp_name).eq("month", month_str).eq("year", year_val).execute()
@@ -164,6 +171,7 @@ def load_daily_emp_hours(emp_name, month_str, year_val):
         })
     return pd.DataFrame(days_data)
 
+@st.cache_data(ttl=60)
 def save_daily_emp_hours(emp_name, month_str, year_val, df):
     try:
         records = df.to_dict(orient="records") if hasattr(df, 'to_dict') else list(df)
@@ -180,6 +188,7 @@ def save_daily_emp_hours(emp_name, month_str, year_val, df):
     except Exception as e:
         st.error(f"خطأ في حفظ الساعات اليومية: {e}")
 
+@st.cache_data(ttl=60)
 def load_tickets_data(month_str, year_val):
     try:
         res = supabase.table("tickets_data").select("content").eq("month", month_str).eq("year", year_val).execute()
@@ -195,10 +204,12 @@ def load_tickets_data(month_str, year_val):
         tickets_rows.append({"Datum": str(day), "Ort": "", "Ticket-Nummer": "", "Beginn": "", "Ende": "", "Bemerkung": "", "Netto-Stunden": 0.0})
     return pd.DataFrame(tickets_rows)
 
+@st.cache_data(ttl=60)
 def save_tickets_data(month_str, year_val, df):
     content = json.dumps(df.to_dict(orient="list"), ensure_ascii=False)
     supabase.table("tickets_data").upsert({"month": month_str, "year": year_val, "content": content}).execute()
 
+@st.cache_data(ttl=60)
 def load_trains_data(emp_name, month_str, year_val):
     try:
         res = supabase.table("trains_data").select("content").eq("emp", emp_name).eq("month", month_str).eq("year", year_val).execute()
@@ -227,6 +238,7 @@ def load_trains_data(emp_name, month_str, year_val):
         trains_rows.append(row_data)
     return pd.DataFrame(trains_rows)
 
+@st.cache_data(ttl=60)
 def save_trains_data(emp_name, month_str, year_val, df):
     content = json.dumps(df.to_dict(orient="list"), ensure_ascii=False)
     supabase.table("trains_data").upsert({"emp": emp_name, "month": month_str, "year": year_val, "content": content}).execute()
