@@ -18,7 +18,8 @@ st.set_page_config(
 # بيانات الاتصال بقاعدة البيانات السحابية (Supabase)
 # ---------------------------------------------------------
 SUPABASE_URL = "https://knzrtbjwqqhxghtfasvy.supabase.co"
-SUPABASE_KEY = "sb_secret_hy1-ww5IGm6SEuoIvToUzw_zqnDEXxN"
+# قراءة المفتاح بأمان من إعدادات السحابة التي وضعناها قبل قليل
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
 @st.cache_resource
 def get_supabase_client() -> Client:
