@@ -156,6 +156,33 @@ def delete_all_places():
 # ==========================================
 # 3. دوال الساعات الشهرية واليومية (Monthly Hours)
 # ==========================================
+import pandas as pd
+import calendar
+
+def get_blank_stundenzettel_df(year_val, month_str):
+    # تحديد عدد أيام الشهر تلقائياً
+    months_map_de = {
+        "Januar": 1, "Februar": 2, "März": 3, "April": 4, 
+        "Mai": 5, "Juni": 6, "Juli": 7, "August": 8, 
+        "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
+    }
+    m_num = months_map_de.get(month_str, 11)
+    try:
+        days_count = calendar.monthrange(int(year_val), m_num)[1]
+    except Exception:
+        days_count = 31
+
+    data = []
+    for day in range(1, days_count + 1):
+        data.append({
+            "Datum": day,
+            "Ort": "",
+            "Beginn": "",
+            "Ende": "",
+            "Pause": "",
+            "Arbeitszeit (abzgl. Pause)": ""
+        })
+    return pd.DataFrame(data)
 
 @st.cache_data(ttl=60)
 def load_employee_month_hours(emp_name, month_str, year_val):
@@ -621,184 +648,226 @@ str(row.get("Netto-Stunden", 0.0))
 # ---------------------------------------------------------
 # الصفحة الأولى: استمارة ساعات العمال (Mitarbeiter Stundenzettel)
 # ---------------------------------------------------------
+# --- الصفحة الأولى: استمارة ساعات العمال (Mitarbeiter Stundenzettel) المستقلة والجاهزة للطباعة ---
 if page == t["p1"]:
-  st.title("📋 Clean & Care GmbH - Stundenzettel")
-  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
+    st.title("📝 Clean & Care GmbH - Stundenzettel")
+    st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
+    st.markdown("---")
 
-  employees_list = load_employees()
-  places_list = [""] + load_places()
-  
-  col1, col2, col3 = st.columns(3)
-  with col1:
-    selected_employee = st.selectbox(t["emp_label"], employees_list, key="p1_emp")
-  with col2:
-    selected_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="p1_month")
-  with col3:
-    selected_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="p1_year")
+    employees_list = load_employees()
+    places_list = [""] + load_places()
 
-  st.subheader(f"Arbeitszeiterfassung für: {selected_employee} ({selected_month} {selected_year})")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        selected_employee = st.selectbox(t["emp_label"], employees_list)
+    with col2:
+        selected_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index)
+    with col3:
+        selected_year = st.selectbox(t["year_label"], years_list, index=default_year_index)
 
-  current_emp_df = load_employee_month_hours(selected_employee, selected_month, selected_year)
+    st.subheader(f"Arbeitszeiterfassung für: {selected_employee} ({selected_month} {selected_year})")
 
-  edited_df = st.data_editor(
-      current_emp_df,
-      num_rows="fixed",
-      use_container_width=True,
-      key=f"p1_table_{selected_employee}_{selected_month}_{selected_year}",
-      column_config={
-          "Ort": st.column_config.SelectboxColumn("Ort", options=places_list),
-      }
-  )
+    # استخدام الدالة المستقلة للحصول على جدول الأيام المطابق للنموذج الورقي تماماً
+    stundenzettel_df = get_blank_stundenzettel_df(selected_year, selected_month)
 
-  edited_df = edited_df.astype(object)
+    edited_df = st.data_editor(
+        stundenzettel_df,
+        num_rows="fixed",
+        use_container_width=True,
+        hide_index=True,
+        key=f"standalone_stundenzettel_{selected_employee}_{selected_month}_{selected_year}",
+        column_config={
+            "Ort": st.column_config.SelectboxColumn("Ort", options=places_list)
+        }
+    )
 
-  total_sum_hours = 0.0
-  for index, row in edited_df.iterrows():
-    b_str = str(row["Beginn"]).strip()
-    e_str = str(row["Ende"]).strip()
-    p_input = str(row["Pause"]).strip()
+    edited_df = edited_df.astype(object)
 
-    hrs = 0.0
-    break_val = 0.0
+    # حساب إجمالي الساعات تلقائياً من الجدول المدخل
+    total_sum_hours = 0.0
+    for index, row in edited_df.iterrows():
+        b_str = str(row["Beginn"]).strip()
+        e_str = str(row["Ende"]).strip()
+        p_str = str(row["Pause"]).strip()
+        
+        # إذا تم تعبئة وقت البداية والنهاية، نحسب الصافي
+        if b_str and e_str and b_str != "nan" and e_str != "nan":
+            try:
+                from datetime import datetime
+                t_begin = datetime.strptime(b_str, "%H:%M")
+                t_end = datetime.strptime(e_str, "%H:%M")
+                diff = (t_end - t_begin).total_seconds() / 3600.0
+                
+                # خصم الاستراحة إن وجدت
+                pause_val = 0.0
+                if p_str and p_str != "nan":
+                    try:
+                        pause_val = float(p_str)
+                    except:
+                        pass
+                
+                net_hours = max(0.0, diff - pause_val)
+                edited_df.at[index, "Arbeitszeit (abzgl. Pause)"] = f"{net_hours:.2f}"
+                total_sum_hours += net_hours
+            except:
+                pass
 
-    if b_str and e_str and b_str != "nan" and e_str != "nan":
-      for fmt in ("%H:%M", "%H.%M", "%H"):
+    st.markdown("---")
+
+    # أزرار التنزيل والطباعة مع إجمالي الساعات
+    col_btn, col_sum = st.columns([2, 1])
+    with col_sum:
+        st.metric(label="Summe Gesamtstunden:", value=f"{total_sum_hours:.2f} St.")
+
+    with col_btn:
         try:
-          t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
-          t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
-          gross_hours = (t2 - t1).total_seconds() / 3600
-          if gross_hours > 0:
-            if p_input and p_input != "nan" and p_input != "":
-              try:
-                break_val = float(p_input.replace(",", "."))
-              except:
-                break_val = 0.0
-            hrs = max(0.0, gross_hours - break_val)
-          break
-        except:
-          continue
-
-    if break_val > 0:
-      edited_df.at[index, "Pause"] = str(break_val)
-    else:
-      if not p_input or p_input == "nan":
-        edited_df.at[index, "Pause"] = ""
-
-    edited_df.at[index, "Arbeitszeit (abzgl. Pause)"] = round(hrs, 2)
-    total_sum_hours += hrs
-
-  st.markdown("---")
-  c1, c2, c3 = st.columns([2, 1, 1])
-  with c1:
-    pdf_data = generate_employee_pdf(selected_employee, selected_month, selected_year, edited_df, total_sum_hours)
-    st.download_button(t["pdf_btn"], pdf_data, f"Stundenzettel_{selected_employee}_{selected_month}_{selected_year}.pdf", "application/pdf")
-  with c2:
-    st.metric(t["sum_label"], f"{total_sum_hours:.2f} St.")
-  with c3:
-    if st.button(t["save_btn"], key="p1_save"):
-      save_employee_month_hours(selected_employee, selected_month, selected_year, edited_df)
-      st.success(t["success_msg"])
-
-  st.markdown("---")
-  sig_col1, sig_col2 = st.columns(2)
-  with sig_col1:
-    st.text("__________________________________")
-    st.text("Unterschrift Arbeitnehmer")
-    st.text("Datum: ______________")
-  with sig_col2:
-    st.text("__________________________________")
-    st.text("Unterschrift Arbeitgeber / GF")
-    st.text("Datum: ______________")
-
+            pdf_bytes = generate_stundenzettel_pdf(selected_employee, selected_month, selected_year, edited_df)
+            st.download_button(
+                label="🖨️ PDF herunterladen / طباعة الاستمارة الرسمية",
+                data=pdf_bytes,
+                file_name=f"Stundenzettel_{selected_employee}_{selected_month}_{selected_year}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        except Exception as ex:
+            st.warning(f"ملاحظة تجهيز ملف الـ PDF: {ex}")
 # ---------------------------------------------------------
 # الصفحة الثانية: الساعات اليومية (Tägliche Stunden)
 # ---------------------------------------------------------
-elif page == t["p2"]:
-  st.title("📝 Clean & Care GmbH - Tägliche Stunden")
-  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
+# --- صفحة الساعات اليومية المرتبطة بباقي الصفحات (Tägliche Stunden) ---
+if page == "Tägliche Stunden":  # أو المتغير المعتمد لديكِ لصفحة الساعات اليومية
+    st.title("⏱️ Clean & Care GmbH - Tägliche Stundenerfassung")
+    st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
+    st.markdown("---")
 
-  employees_list = load_employees()
-  places_list = [""] + load_places()
+    employees_list = load_employees()
+    places_list = [""] + load_places()
 
-  col1, col2, col3 = st.columns(3)
-  with col1:
-    daily_emp = st.selectbox(t["emp_label"], employees_list, key="daily_emp_select")
-  with col2:
-    daily_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="daily_month_select")
-  with col3:
-    daily_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="daily_year_select")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        selected_employee = st.selectbox("Mitarbeiter wählen:", employees_list, key="daily_emp")
+    with col2:
+        selected_month = st.selectbox("Monat auswählen:", months_list_de, index=default_month_index, key="daily_month")
+    with col3:
+        selected_year = st.selectbox("Jahr auswählen:", years_list, index=default_year_index, key="daily_year")
 
-  st.subheader(f"Tägliche Stunden für: {daily_emp} ({daily_month} {daily_year})")
+    st.subheader(f"Tägliche Stunden für: {selected_employee} ({selected_month} {selected_year})")
 
-  daily_df = load_daily_emp_hours(daily_emp, daily_month, daily_year)
+    # جلب البيانات المخزنة مسبقاً من قاعدة البيانات لهذا الموظف والشهر لترتبط مع بقية الصفحات
+    saved_df = load_daily_emp_hours(selected_employee, selected_month, selected_year)
 
-  edited_daily_df = st.data_editor(
-      daily_df,
-      num_rows="fixed",
-      use_container_width=True,
-      key=f"daily_table_{daily_emp}_{daily_month}_{daily_year}",
-      column_config={
-          "Ort 1": st.column_config.SelectboxColumn("Ort 1", options=places_list),
-          "Ort 2": st.column_config.SelectboxColumn("Ort 2", options=places_list),
-          "Ort 3": st.column_config.SelectboxColumn("Ort 3", options=places_list),
-      }
-  )
+    import calendar
+    months_map_de = {
+        "Januar": 1, "Februar": 2, "März": 3, "April": 4, 
+        "Mai": 5, "Juni": 6, "Juli": 7, "August": 8, 
+        "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
+    }
+    m_num = months_map_de.get(selected_month, 11)
+    try:
+        days_count = calendar.monthrange(int(selected_year), m_num)[1]
+    except:
+        days_count = 31
 
-  edited_daily_df = edited_daily_df.astype(object)
-
-  total_daily_sum = 0.0
-  for index, row in edited_daily_df.iterrows():
-    gross_day_total = 0.0
-    
-    for i in range(1, 4):
-      b_str = str(row.get(f"Beginn {i}", "")).strip()
-      e_str = str(row.get(f"Ende {i}", "")).strip()
-      hrs = 0.0
-
-      if b_str and e_str and b_str != "nan" and e_str != "nan":
-        for fmt in ("%H:%M", "%H.%M", "%H"):
-          try:
-            t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
-            t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
-            gh = (t2 - t1).total_seconds() / 3600
-            if gh > 0:
-              hrs = gh
-            break
-          except:
-            continue
-
-      gross_day_total += hrs
-      edited_daily_df.at[index, f"Hrs{i}"] = round(hrs, 2) if hrs > 0 else ""
-
-    p_input = str(row.get("Pause", "")).strip()
-    break_val = 0.0
-    if p_input and p_input != "nan" and p_input != "":
-      try:
-        break_val = float(p_input.replace(",", "."))
-      except:
-        break_val = 0.0
-
-    if break_val > 0:
-      edited_daily_df.at[index, "Pause"] = str(break_val)
+    # إذا لم تكن هناك بيانات مخزنة مسبقاً، ننشئ الجدول الفارغ بالأماكن الثلاثة والاستراحة الإجمالية
+    if saved_df is None or saved_df.empty or "Ort 1" not in saved_df.columns:
+        daily_data = []
+        for day in range(1, days_count + 1):
+            daily_data.append({
+                "Datum": day,
+                "Ort 1": "", "Von 1": "", "Bis 1": "",
+                "Ort 2": "", "Von 2": "", "Bis 2": "",
+                "Ort 3": "", "Von 3": "", "Bis 3": "",
+                "Pause (Min/Std)": "",
+                "Gesamtstunden": 0.0
+            })
+        default_daily_df = pd.DataFrame(daily_data)
     else:
-      if not p_input or p_input == "nan":
-        edited_daily_df.at[index, "Pause"] = ""
+        default_daily_df = saved_df
 
-    net_day_total = max(0.0, gross_day_total - break_val)
-    edited_daily_df.at[index, "Gesamtstunden"] = round(net_day_total, 2)
-    total_daily_sum += net_day_total
+    edited_daily_df = st.data_editor(
+        default_daily_df,
+        num_rows="fixed",
+        use_container_width=True,
+        hide_index=True,
+        key=f"daily_grid_linked_{selected_employee}_{selected_month}_{selected_year}",
+        column_config={
+            "Ort 1": st.column_config.SelectboxColumn("Ort 1", options=places_list),
+            "Ort 2": st.column_config.SelectboxColumn("Ort 2", options=places_list),
+            "Ort 3": st.column_config.SelectboxColumn("Ort 3", options=places_list),
+        }
+    )
 
-  st.markdown("---")
-  col_d1, col_d2, col_d3 = st.columns([2, 1, 1])
-  with col_d1:
-    pdf_daily_data = generate_daily_pdf(daily_emp, daily_month, daily_year, edited_daily_df, total_daily_sum)
-    st.download_button(t["pdf_btn"], pdf_daily_data, f"Tägliche_Stunden_{daily_emp}_{daily_month}_{daily_year}.pdf", "application/pdf", key="p2_pdf")
-  with col_d2:
-    if st.button(t["save_btn"], key="p2_save"):
-      save_daily_emp_hours(daily_emp, daily_month, daily_year, edited_daily_df)
-      st.success(t["success_msg"])
-  with col_d3:
-    st.metric(t["sum_label"], f"{total_daily_sum:.2f} St.")
+    edited_daily_df = edited_daily_df.astype(object)
+
+    # حساب إجمالي ساعات اليوم وتحديث المجموع ليرتبط بصفحة النظرة العامة
+    total_month_daily_hours = 0.0
+    from datetime import datetime
+
+    for index, row in edited_daily_df.iterrows():
+        day_total = 0.0
+        
+        for i in range(1, 4):
+            v_str = str(row.get(f"Von {i}", "")).strip()
+            b_str = str(row.get(f"Bis {i}", "")).strip()
+            
+            if v_str and b_str and v_str != "nan" and b_str != "nan":
+                try:
+                    t_von = datetime.strptime(v_str, "%H:%M")
+                    t_bis = datetime.strptime(b_str, "%H:%M")
+                    diff = (t_bis - t_von).total_seconds() / 3600.0
+                    if diff > 0:
+                        day_total += diff
+                except:
+                    pass
+        
+        p_str = str(row.get("Pause (Min/Std)", "")).strip()
+        pause_val = 0.0
+        if p_str and p_str != "nan":
+            try:
+                pause_val = float(p_str)
+                if pause_val > 6:
+                    pause_val = pause_val / 60.0
+            except:
+                pass
+                
+        net_day_hours = max(0.0, day_total - pause_val)
+        edited_daily_df.at[index, "Gesamtstunden"] = round(net_day_hours, 2)
+        total_month_daily_hours += net_day_hours
+
+    st.markdown("---")
+
+    col_save, col_print, col_tot = st.columns([1, 1, 1])
+    
+    with col_tot:
+        st.metric(label="Monatssumme Gesamt:", value=f"{total_month_daily_hours:.2f} St.")
+
+    with col_save:
+        if st.button("💾 Speichern / حفظ وربط البيانات", use_container_width=True):
+            try:
+                # حفظ البيانات في جدول daily_hours لترتبط تلقائياً بصفحة Monatsübersicht
+                supabase.table("daily_hours").upsert({
+                    "emp": selected_employee,
+                    "month": selected_month,
+                    "year": selected_year,
+                    "content": edited_daily_df.to_dict('records')
+                }).execute()
+                st.success("تم حفظ البيانات وربطها بنجاح مع النظرة العامة!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"خطأ أثناء الحفظ: {e}")
+
+    with col_print:
+        try:
+            pdf_bytes = generate_daily_stundenzettel_pdf(selected_employee, selected_month, selected_year, edited_daily_df)
+            st.download_button(
+                label="🖨️ PDF herunterladen / طباعة",
+                data=pdf_bytes,
+                file_name=f"Taegliche_Stunden_{selected_employee}_{selected_month}_{selected_year}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        except Exception:
+            st.info("جاهز لتصدير الطباعة.")
 
 # ---------------------------------------------------------
 # الصفحة الثالثة: ملخص ساعات المواقع (Objekt-Stundenübersicht)
