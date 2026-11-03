@@ -477,6 +477,58 @@ def generate_trains_pdf(emp_name, month_str, year_val, df, total_hours):
     doc.build(elements)
     buffer.seek(0)
     return buffer.getvalue()
+def generate_tickets_pdf(month_str, year_val, df, total_hours):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    elements = []
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
+    
+    elements.append(Paragraph("<b>CLEAN & CARE GmbH - Einsatz-Tickets</b>", title_style))
+    elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
+    elements.append(Spacer(1, 15))
+    elements.append(Paragraph(f"<b>Monat:</b> {month_str} {year_val}", styles['Normal']))
+    elements.append(Spacer(1, 15))
+    
+    table_data = [["Datum", "Ort", "Ticket-Nr.", "Beginn", "Ende", "Bemerkung", "Netto-Stunden"]]
+    for _, row in df.iterrows():
+        table_data.append([
+            str(row["Datum"]),
+            str(row.get("Ort", "")),
+            str(row.get("Ticket-Nummer", "")),
+            str(row.get("Beginn", "")),
+            str(row.get("Ende", "")),
+            str(row.get("Bemerkung", "")),
+            str(row.get("Netto-Stunden", ""))
+        ])
+    table_data.append(["Summe:", "", "", "", "", "", f"{total_hours:.2f} St."])
+    
+    t_pdf = Table(table_data, colWidths=[35, 90, 70, 55, 55, 120, 75])
+    t_pdf.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#666666"))
+    ]))
+    elements.append(t_pdf)
+    elements.append(Spacer(1, 20))
+    
+    sig_data = [
+        ["Unterschrift Mitarbeiter:", "Unterschrift Firma (Clean & Care GmbH):"],
+        ["\n___________________________", "\n___________________________"]
+    ]
+    t_sig = Table(sig_data, colWidths=[250, 254])
+    t_sig.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+    ]))
+    elements.append(t_sig)
+    
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer.getvalue()
 
 # ---------------------------------------------------------
 # الصفحة الأولى: استمارة ساعات العمال (Mitarbeiter Stundenzettel)
@@ -949,6 +1001,9 @@ elif page == t["p7"]:
 
   st.markdown("---")
   col_t1, col_t2, col_t3 = st.columns([2, 1, 1])
+  with col_t1:
+      pdf_tickets_data = generate_tickets_pdf(month_str, year_val, edited_tickets, tot_t_hrs)
+      st.download_button(t["pdf_btn"], pdf_tickets_data, f"Einsatz_Tickets_{month_str}_{year_val}.pdf", "application/pdf", key="p7_pdf_btn")
   with col_t2:
       if st.button(t["save_btn"], key="p7_save"):
           save_tickets_data(month_str, year_val, edited_tickets)
