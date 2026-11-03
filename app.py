@@ -397,98 +397,155 @@ page = st.sidebar.radio(
 # ---------------------------------------------------------
 # دوال طباعة PDF الألمانية مع التوقيعات
 # ---------------------------------------------------------
-def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
-  buffer = io.BytesIO()
-  doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
-  elements = []
-  styles = getSampleStyleSheet()
-  title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
-  
-  elements.append(Paragraph("<b>CLEAN & CARE GmbH</b>", title_style))
-  elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
-  elements.append(Spacer(1, 15))
-  elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
-  elements.append(Spacer(1, 15))
-  
-  table_data = [["Tag", "Ort", "Beginn", "Ende", "Pause", "Arbeitszeit (abzgl. Pause)"]]
-  for _, row in df.iterrows():
-    table_data.append([
-        str(row["Tag"]),
-        str(row["Ort"] if pd.notna(row["Ort"]) else ""),
-        str(row["Beginn"] if pd.notna(row["Beginn"]) else ""),
-        str(row["Ende"] if pd.notna(row["Ende"]) else ""),
-        str(row["Pause"] if pd.notna(row["Pause"]) else ""),
-        str(row["Arbeitszeit (abzgl. Pause)"])
-    ])
-  table_data.append(["Summe:", "", "", "", "", f"{total_hours:.2f} St."])
-  
-  t_pdf = Table(table_data, colWidths=[50, 100, 70, 70, 70, 180])
-  t_pdf.setStyle(TableStyle([
-      ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
-      ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-      ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-      ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor("#666666")),
-      ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f0f0f0")),
-      ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-      ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
-  ]))
-  elements.append(t_pdf)
-  elements.append(Spacer(1, 30))
-  
-  sig_data = [
-      ["Unterschrift Mitarbeiter / توقيع الموظف:", "Unterschrift Firma (Clean & Care GmbH) / توقيع الشركة:"],
-      ["\n\n___________________________", "\n\n___________________________"]
-  ]
-  sig_table = Table(sig_data, colWidths=[250, 254])
-  sig_table.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'LEFT'), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 8)]))
-  elements.append(sig_table)
-  
-  doc.build(elements)
-  buffer.seek(0)
-  return buffer.getvalue()
+import io
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
 
-def generate_daily_pdf(emp_name, month_str, year_val, df, total_hours):
-  buffer = io.BytesIO()
-  doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=20, leftMargin=20, topMargin=30, bottomMargin=30)
-  elements = []
-  styles = getSampleStyleSheet()
-  title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=13, leading=16, textColor=colors.HexColor("#111111"))
-  
-  elements.append(Paragraph("<b>CLEAN & CARE GmbH - Tägliche Arbeitszeiten</b>", title_style))
-  elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
-  elements.append(Spacer(1, 10))
-  elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
-  elements.append(Spacer(1, 10))
-  
-  table_data = [["Tag", "Ort 1", "Std 1", "Ort 2", "Std 2", "Ort 3", "Std 3", "Pause", "Gesamt"]]
-  for _, row in df.iterrows():
-    table_data.append([
-str(row.get("Tag", "")),
-str(row.get("Ort 1", "") if pd.notna(row.get("Ort 1")) else ""), str(row.get("Hrs1", "")),
-str(row.get("Ort 2", "") if pd.notna(row.get("Ort 2")) else ""), str(row.get("Hrs2", "")),
-str(row.get("Ort 3", "") if pd.notna(row.get("Ort 3")) else ""), str(row.get("Hrs3", "")),
-str(row.get("Pause", "") if pd.notna(row.get("Pause")) else ""),
-str(row.get("Gesamtstunden", 0.0))
-    ])
-  table_data.append(["Summe:", "", "", "", "", "", "", "", f"{total_hours:.2f} St."])
-  
-  t_pdf = Table(table_data, colWidths=[25, 85, 40, 85, 40, 85, 40, 45, 55])
-  t_pdf.setStyle(TableStyle([
-      ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
-      ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-      ('FONTSIZE', (0, 0), (-1, -1), 7),
-      ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
-      ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor("#666666")),
-      ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f0f0f0")),
-      ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-      ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
-  ]))
-  elements.append(t_pdf)
-  doc.build(elements)
-  buffer.seek(0)
-  return buffer.getvalue()
+def generate_stundenzettel_pdf(emp_name, month_str, year_val, df_to_print):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    elements = []
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor('#111111'))
+    
+    # الترويسة الرسمية للشركة
+    elements.append(Paragraph("<b>CLEAN & CARE GmbH</b>", title_style))
+    elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
+    elements.append(Spacer(1, 10))
+    
+    elements.append(Paragraph(<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}, styles['Normal']))
+    elements.append(Spacer(1, 10))
+    
+    # إعداد جدول الاستمارة المستقلة
+    table_data = [["Datum", "Ort", "Beginn", "Ende", "Pause", "Arbeitszeit (abzgl. Pause)"]]
+    
+    total_hours = 0.0
+    for index, row in df_to_print.iterrows():
+        b_val = str(row.get("Beginn", ""))
+        e_val = str(row.get("Ende", ""))
+        p_val = str(row.get("Pause", ""))
+        a_val = str(row.get("Arbeitszeit (abzgl. Pause)", ""))
+        
+        table_data.append([
+            str(row.get("Datum", "")),
+            str(row.get("Ort", "")),
+            b_val if b_val != "nan" else "",
+            e_val if e_val != "nan" else "",
+            p_val if p_val != "nan" else "",
+            a_val if a_val != "nan" else ""
+        ])
+        
+        # محاولة جمع الإجمالي إن وجدت أرقام صالحة
+        try:
+            if a_val and a_val != "nan":
+                total_hours += float(a_val)
+        except:
+            pass
+
+    # صف إجمالي الساعات
+    table_data.append(["Summe", "", "", "", "", f"{total_hours:.2f} St."])
+
+    # بناء جدول ReportLab بتنسيق مرتب
+    t = Table(table_data, colWidths=[40, 120, 55, 55, 55, 120])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e6e6e6')),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('ALIGN', (1, 1), (1, -1), 'LEFT'),  # محاذاة مكان العمل لليسار
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#666666')),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#f0f0f0')),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+    ]))
+    
+    elements.append(t)
+    elements.append(Spacer(1, 20))
+    
+    # أسطر التوقيع والتاريخ في الأسفل تماماً مثل الورقة الرسمية
+    sig_data = [
+        ["Unterschrift Arbeitnehmer / توقيع العامل:", "Unterschrift Arbeitgeber / توقيع صاحب العمل:"],
+        ["\n\nDatum: ........................................", "\n\nDatum: ........................................"]
+    ]
+    sig_table = Table(sig_data, colWidths=[225, 224])
+    sig_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+    ]))
+    elements.append(sig_table)
+    
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer.getvalue()
+import io
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+
+def generate_daily_stundenzettel_pdf(emp_name, month_str, year_val, df_to_print):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=20, leftMargin=20, topMargin=30, bottomMargin=30)
+    elements = []
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=12, leading=14, textColor=colors.HexColor('#111111'))
+    
+    # الترويسة الرسمية للشركة
+    elements.append(Paragraph("<b>CLEAN & CARE GmbH - Tägliche Arbeitszeiten</b>", title_style))
+    elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
+    elements.append(Spacer(1, 10))
+    
+    elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
+    elements.append(Spacer(1, 10))
+    
+    # إعداد جدول الساعات اليومية (الأماكن الثلاثة والاستراحة والمجموع)
+    table_data = [["Tag", "Ort 1", "V1", "B1", "Ort 2", "V2", "B2", "Ort 3", "V3", "B3", "Pause", "Gesamt"]]
+    
+    for index, row in df_to_print.iterrows():
+        table_data.append([
+            str(row.get("Datum", "")),
+            str(row.get("Ort 1", "")), str(row.get("Von 1", "")), str(row.get("Bis 1", "")),
+            str(row.get("Ort 2", "")), str(row.get("Von 2", "")), str(row.get("Bis 2", "")),
+            str(row.get("Ort 3", "")), str(row.get("Von 3", "")), str(row.get("Bis 3", "")),
+            str(row.get("Pause (Min/Std)", "")),
+            str(row.get("Gesamtstunden", ""))
+        ])
+    
+    # بناء جدول ReportLab بتنسيق أنيق ومناسب لصفحة A4
+    t = Table(table_data, colWidths=[22, 42, 32, 32, 42, 32, 32, 42, 32, 32, 35, 40])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e6e6e6')),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#666666')),
+    ]))
+    
+    elements.append(t)
+    elements.append(Spacer(1, 15))
+    
+    # أسطر التوقيع في الأسفل تماماً مثل النموذج الورقي
+    sig_data = [
+        ["Unterschrift Mitarbeiter / التوقيع:", "Unterschrift Firma (Clean & Care GmbH) / توقيع الشركة:"],
+        ["\n\n___________________________________", "\n\n___________________________________"]
+    ]
+    sig_table = Table(sig_data, colWidths=[250, 254])
+    sig_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+    ]))
+    elements.append(sig_table)
+    
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer.getvalue()
 
 def generate_single_location_pdf(place_name, month_str, year_val, df, total_hours):
   buffer = io.BytesIO()
