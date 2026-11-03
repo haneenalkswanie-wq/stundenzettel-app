@@ -15,7 +15,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# بيانات الاتصال بقاعدة البيانات السحابية المدفوعة (Supabase)
+# بيانات الاتصال بقاعدة البيانات السحابية (Supabase)
 # ---------------------------------------------------------
 SUPABASE_URL = "https://knzrtbjwqqhxghtfasvy.supabase.co"
 SUPABASE_KEY = "ضعي_المفتاح_الكامل_الظاهر_في_الشاشة_هنا"
@@ -77,10 +77,8 @@ def load_places():
 
 def save_employees(emp_list):
     try:
-        res = supabase.table("employees").select("id").execute()
-        if res.data:
-            for row in res.data:
-                supabase.table("employees").delete().eq("id", row["id"]).execute()
+        # مسح السجلات القديمة ثم إدخال القائمة المحدثة نظيفة
+        supabase.table("employees").delete().neq("id", 0).execute()
         
         for emp in emp_list:
             name_clean = str(emp).strip()
@@ -90,13 +88,21 @@ def save_employees(emp_list):
         st.success("تم حفظ قائمة الموظفين بنجاح في السحابة!")
         st.rerun()
     except Exception as e:
-        st.error(f"خطأ في حفظ الموظفين: {e}")
+        # في حال التعارض، استخدام طريقة التحديث المباشر
+        try:
+            for emp in emp_list:
+                name_clean = str(emp).strip()
+                if name_clean:
+                    supabase.table("employees").upsert({"name": name_clean}, on_conflict="name").execute()
+            st.success("تم حفظ قائمة الموظفين بنجاح!")
+            st.rerun()
+        except Exception as err:
+            st.error(f"خطأ في حفظ الموظفين: {err}")
+
 def save_places(places_list):
     try:
-        res = supabase.table("places").select("id").execute()
-        if res.data:
-            for row in res.data:
-                supabase.table("places").delete().eq("id", row["id"]).execute()
+        # مسح السجلات القديمة ثم إدخال الأماكن المحدثة نظيفة
+        supabase.table("places").delete().neq("id", 0).execute()
         
         for place in places_list:
             place_clean = str(place).strip()
@@ -106,7 +112,15 @@ def save_places(places_list):
         st.success("تم حفظ قائمة الأماكن بنجاح في السحابة!")
         st.rerun()
     except Exception as e:
-        st.error(f"خطأ في حفظ الأماكن: {e}")
+        try:
+            for place in places_list:
+                place_clean = str(place).strip()
+                if place_clean:
+                    supabase.table("places").upsert({"name": place_clean}, on_conflict="name").execute()
+            st.success("تم حفظ قائمة الأماكن بنجاح!")
+            st.rerun()
+        except Exception as err:
+            st.error(f"خطأ في حفظ الأماكن: {err}")
 
 # --- دوال تحميل وحفظ الساعات الشهرية واليومية ---
 def load_employee_month_hours(emp_name, month_str, year_val):
@@ -172,7 +186,6 @@ def save_daily_emp_hours(emp_name, month_str, year_val, df):
         st.rerun()
     except Exception as e:
         st.error(f"خطأ في حفظ الساعات اليومية: {e}")
-
 
 def load_tickets_data(month_str, year_val):
     try:
@@ -532,6 +545,7 @@ def generate_trains_pdf(emp_name, month_str, year_val, df, total_hours):
     doc.build(elements)
     buffer.seek(0)
     return buffer.getvalue()
+
 def generate_tickets_pdf(month_str, year_val, df, total_hours):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
