@@ -77,11 +77,16 @@ def load_places():
 
 def save_employees(emp_list):
     try:
-        supabase.table("employees").delete().neq("id", 0).execute()
+        existing = supabase.table("employees").select("id").execute()
+        if existing.data:
+            for row in existing.data:
+                supabase.table("employees").delete().eq("id", row["id"]).execute()
+        
         for emp in emp_list:
             name_clean = str(emp).strip()
             if name_clean:
                 supabase.table("employees").insert({"name": name_clean}).execute()
+        
         st.success("تم حفظ قائمة الموظفين بنجاح في السحابة!")
         st.rerun()
     except Exception as e:
@@ -89,11 +94,16 @@ def save_employees(emp_list):
 
 def save_places(places_list):
     try:
-        supabase.table("places").delete().neq("id", 0).execute()
+        existing = supabase.table("places").select("id").execute()
+        if existing.data:
+            for row in existing.data:
+                supabase.table("places").delete().eq("id", row["id"]).execute()
+        
         for place in places_list:
             place_clean = str(place).strip()
             if place_clean:
                 supabase.table("places").insert({"name": place_clean}).execute()
+        
         st.success("تم حفظ قائمة الأماكن بنجاح في السحابة!")
         st.rerun()
     except Exception as e:
