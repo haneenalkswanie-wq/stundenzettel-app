@@ -188,40 +188,83 @@ default_year_index = years_list.index(now.year) if now.year in years_list else 2
 default_month_index = now.month - 1
 
 st.sidebar.title("⚙️ Einstellungen")
-lang_choice = st.sidebar.radio("Sprache / اللغة:", ["Deutsch", "العربية"])
-is_arabic = (lang_choice == "العربية")
 
 t = {
-    "menu": "📌 القائمة الرئيسية (Hauptmenü)" if is_arabic else "📌 Hauptmenü",
-    "p1": "📋 استمارة ساعات العمال (Mitarbeiter Stundenzettel)" if is_arabic else "📋 Mitarbeiter Stundenzettel",
-    "p2": "📝 الساعات اليومية (Tägliche Stunden)" if is_arabic else "📝 Tägliche Stunden",
-    "p3": "🏢 ملخص ساعات المواقع (Objekt-Stundenübersicht)" if is_arabic else "🏢 Objekt-Stundenübersicht",
-    "p4": "🏢 الأماكن وساعات العمال (Orte & Mitarbeiter)" if is_arabic else "🏢 Orte & Mitarbeiter-Stunden",
-    "p5": "👥 إدارة العمال (Mitarbeiterverwaltung)" if is_arabic else "👥 Mitarbeiterverwaltung",
-    "p6": "📅 ملخص الأشهر (Monatsübersicht)" if is_arabic else "📅 Monatsübersicht",
-    "p7": "🎫 تذاكر المهام (Einsatz-Tickets)" if is_arabic else "🎫 Einsatz-Tickets",
-    "p8": "🚆 جدول القطارات (Zug-Fahrten)" if is_arabic else "🚆 Zug-Fahrten (Züge)",
+    "menu": "📌 القائمة الرئيسية",
+    "p1": "📋 استمارة ساعات العمال (Stundenzettel)",
+    "p2": "📝 الساعات اليومية (Tägliche Stunden)",
+    "p3": "🏢 ملخص ساعات المواقع (Objekt-Übersicht)",
+    "p4": "🏢 الأماكن وساعات العمال (Orte & Mitarbeiter)",
+    "p5": "👥 إدارة العمال والمواقع (Mitarbeiterverwaltung)",
+    "p6": "📅 ملخص الأشهر (Monatsübersicht)",
+    "p7": "🎫 تذاكر المهام (Einsatz-Tickets)",
+    "p8": "🚆 جدول القطارات (Zug-Fahrten)",
     "emp_label": "Mitarbeiter wählen:", "month_label": "Monat auswählen:", "year_label": "Jahr auswählen:",
-    "save_btn": "💾 Speichern / حفظ", "success_msg": "Erfolgreich auf Cloud gespeichert! / تم الحفظ بالسحاب بنجاح 🔒",
+    "save_btn": "💾 Speichern", "success_msg": "Erfolgreich auf Cloud gespeichert! 🔒",
     "pdf_btn": "📥 PDF herunterladen", "sum_label": "Summe:"
 }
 
 page = st.sidebar.radio(t["menu"], [t["p1"], t["p2"], t["p3"], t["p4"], t["p5"], t["p6"], t["p7"], t["p8"]])
 
 # ---------------------------------------------------------
-# دوال طباعة PDF للقطارات
+# دوال طباعة PDF مع مكان التوقيع
 # ---------------------------------------------------------
+def generate_pdf(emp_name, month_str, year_val, df, total_hours):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    elements = []
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=16, textColor=colors.HexColor("#111111"))
+    elements.append(Paragraph("<b>CLEAN & CARE GmbH - Monats-Stundenzettel</b>", title_style))
+    elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
+    elements.append(Spacer(1, 8))
+    elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
+    elements.append(Spacer(1, 8))
+    
+    table_data = [["Tag", "Ort", "Beginn", "Ende", "Pause (Min)", "Arbeitszeit (St.)"]]
+    for _, row in df.iterrows():
+        table_data.append([str(row["Datum"]), str(row.get("Ort", "")), str(row.get("Beginn", "")), str(row.get("Ende", "")), str(row.get("Pause", "")), str(row["Arbeitszeit (abzgl. Pause)"])])
+    table_data.append(["Summe:", "", "", "", "", f"{total_hours:.2f} St."])
+    
+    t_pdf = Table(table_data, colWidths=[35, 145, 60, 60, 75, 79])
+    t_pdf.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#666666"))
+    ]))
+    elements.append(t_pdf)
+    elements.append(Spacer(1, 20))
+    
+    # حقل التوقيع في نهاية الـ PDF
+    sig_data = [
+        ["Unterschrift Mitarbeiter / توقيع الموظف:", "Unterschrift Firma (Clean & Care GmbH) / توقيع الشركة:"],
+        ["\n\n___________________________", "\n\n___________________________"]
+    ]
+    t_sig = Table(sig_data, colWidths=[250, 254])
+    t_sig.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+    ]))
+    elements.append(t_sig)
+    
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer.getvalue()
+
 def generate_trains_pdf(emp_name, month_str, year_val, df, total_hours):
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=15, leftMargin=15, topMargin=25, bottomMargin=25)
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=15, leftMargin=15, topMargin=20, bottomMargin=20)
     elements = []
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=12, leading=15, textColor=colors.HexColor("#111111"))
     elements.append(Paragraph("<b>CLEAN & CARE GmbH - Zug-Fahrten Bericht</b>", title_style))
     elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
-    elements.append(Spacer(1, 8))
+    elements.append(Spacer(1, 6))
     elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
-    elements.append(Spacer(1, 8))
+    elements.append(Spacer(1, 6))
     
     table_data = [["Tag", "Nr.1", "B1", "E1", "V1", "Nr.2", "B2", "E2", "V2", "Nr.3", "B3", "E3", "V3", "Nr.4", "B4", "E4", "V4", "Nr.5", "B5", "E5", "V5", "Gesamt"]]
     for _, row in df.iterrows():
@@ -245,16 +288,317 @@ def generate_trains_pdf(emp_name, month_str, year_val, df, total_hours):
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#666666"))
     ]))
     elements.append(t_pdf)
+    elements.append(Spacer(1, 15))
+    
+    sig_data = [
+        ["Unterschrift Mitarbeiter:", "Unterschrift Firma (Clean & Care GmbH):"],
+        ["\n___________________________", "\n___________________________"]
+    ]
+    t_sig = Table(sig_data, colWidths=[350, 394])
+    t_sig.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 7),
+    ]))
+    elements.append(t_sig)
+    
     doc.build(elements)
     buffer.seek(0)
     return buffer.getvalue()
 
 # ---------------------------------------------------------
-# الصفحة الثامنة: جدول القطارات (رقم القطار، البداية، النهاية، التأخير لـ 5 قطارات)
+# الصفحة الأولى: استمارة ساعات العمال
 # ---------------------------------------------------------
-if page == t["p8"]:
-    st.title("🚆 Clean & Care GmbH - Zug-Fahrten (Züge)")
-    st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
+if page == t["p1"]:
+    st.title("📋 Mitarbeiter Stundenzettel")
+    st.markdown("**Clean & Care GmbH - Am Messezentrum 6, 5020 Salzburg**")
+    
+    employees_list = load_employees()
+    places_list = load_places()
+    
+    col1, col2, col3 = st.columns(3)
+    with col1: emp_name = st.selectbox(t["emp_label"], employees_list, key="p1_emp")
+    with col2: month_str = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="p1_m")
+    with col3: year_val = st.selectbox(t["year_label"], years_list, index=default_year_index, key="p1_y")
+    
+    df_hours = load_employee_month_hours(emp_name, month_str, year_val)
+    
+    edited_df = st.data_editor(
+        df_hours, num_rows="fixed", use_container_width=True, key=f"p1_editor_{emp_name}_{month_str}_{year_val}",
+        column_config={"Ort": st.column_config.SelectboxColumn("Ort", options=[""] + places_list)}
+    )
+    
+    total_m_hrs = 0.0
+    for idx, row in edited_df.iterrows():
+        b, e, p = str(row.get("Beginn", "")).strip(), str(row.get("Ende", "")).strip(), str(row.get("Pause", "")).strip()
+        hrs = 0.0
+        if b and e:
+            try:
+                t1 = datetime.strptime(b.replace(".", ":"), "%H:%M")
+                t2 = datetime.strptime(e.replace(".", ":"), "%H:%M")
+                diff = (t2 - t1).total_seconds() / 3600
+                p_val = float(p) if p else 0.0
+                hrs = max(0.0, diff - (p_val / 60.0))
+            except:
+                pass
+        edited_df.at[idx, "Arbeitszeit (abzgl. Pause)"] = round(hrs, 2)
+        total_m_hrs += hrs
+
+    st.markdown("---")
+    col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
+    with col_s1:
+        pdf_data = generate_pdf(emp_name, month_str, year_val, edited_df, total_m_hrs)
+        st.download_button(t["pdf_btn"], pdf_data, f"Stundenzettel_{emp_name}_{month_str}_{year_val}.pdf", "application/pdf", key="p1_pdf")
+    with col_s2:
+        if st.button(t["save_btn"], key="p1_save"):
+            save_employee_month_hours(emp_name, month_str, year_val, edited_df)
+            st.success(t["success_msg"])
+    with col_s3:
+        st.metric(t["sum_label"], f"{total_m_hrs:.2f} St.")
+
+# ---------------------------------------------------------
+# الصفحة الثانية: الساعات اليومية
+# ---------------------------------------------------------
+elif page == t["p2"]:
+    st.title("📝 Tägliche Stunden (Multi-Objekt)")
+    st.markdown("**Clean & Care GmbH - Salzburg**")
+    
+    employees_list = load_employees()
+    places_list = load_places()
+    
+    col1, col2, col3 = st.columns(3)
+    with col1: emp_name = st.selectbox(t["emp_label"], employees_list, key="p2_emp")
+    with col2: month_str = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="p2_m")
+    with col3: year_val = st.selectbox(t["year_label"], years_list, index=default_year_index, key="p2_y")
+    
+    df_daily = load_daily_emp_hours(emp_name, month_str, year_val)
+    
+    edited_daily = st.data_editor(
+        df_daily, num_rows="fixed", use_container_width=True, key=f"p2_editor_{emp_name}_{month_str}_{year_val}",
+        column_config={
+            "Ort 1": st.column_config.SelectboxColumn("Ort 1", options=[""] + places_list),
+            "Ort 2": st.column_config.SelectboxColumn("Ort 2", options=[""] + places_list),
+            "Ort 3": st.column_config.SelectboxColumn("Ort 3", options=[""] + places_list),
+        }
+    )
+    
+    total_d_sum = 0.0
+    for idx, row in edited_daily.iterrows():
+        day_sum = 0.0
+        for i in range(1, 4):
+            b, e = str(row.get(f"Beginn {i}", "")).strip(), str(row.get(f"Ende {i}", "")).strip()
+            h = 0.0
+            if b and e:
+                try:
+                    t1 = datetime.strptime(b.replace(".", ":"), "%H:%M")
+                    t2 = datetime.strptime(e.replace(".", ":"), "%H:%M")
+                    h = max(0.0, (t2 - t1).total_seconds() / 3600)
+                except:
+                    pass
+            edited_daily.at[idx, f"Hrs{i}"] = round(h, 2) if h > 0 else ""
+            day_sum += h
+        p_val = float(row.get("Pause", 0)) if str(row.get("Pause", "")).strip() else 0.0
+        net_day = max(0.0, day_sum - (p_val / 60.0))
+        edited_daily.at[idx, "Gesamtstunden"] = round(net_day, 2)
+        total_d_sum += net_day
+
+    st.markdown("---")
+    col_d1, col_d2, col_d3 = st.columns([2, 1, 1])
+    with col_d2:
+        if st.button(t["save_btn"], key="p2_save"):
+            save_daily_emp_hours(emp_name, month_str, year_val, edited_daily)
+            st.success(t["success_msg"])
+    with col_d3:
+        st.metric(t["sum_label"], f"{total_d_sum:.2f} St.")
+
+# ---------------------------------------------------------
+# الصفحة الثالثة: ملخص ساعات المواقع
+# ---------------------------------------------------------
+elif page == t["p3"]:
+    st.title("🏢 Objekt-Stundenübersicht")
+    st.markdown("**Clean & Care GmbH - Salzburg**")
+    
+    col1, col2 = st.columns(2)
+    with col1: month_str = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="p3_m")
+    with col2: year_val = st.selectbox(t["year_label"], years_list, index=default_year_index, key="p3_y")
+    
+    places_list = load_places()
+    employees_list = load_employees()
+    
+    obj_totals = {p: 0.0 for p in places_list}
+    for emp in employees_list:
+        df_h = load_employee_month_hours(emp, month_str, year_val)
+        for _, row in df_h.iterrows():
+            o = str(row.get("Ort", "")).strip()
+            try: hrs = float(row.get("Arbeitszeit (abzgl. Pause)", 0))
+            except: hrs = 0.0
+            if o in obj_totals: obj_totals[o] += hrs
+        
+        df_d = load_daily_emp_hours(emp, month_str, year_val)
+        for _, row in df_d.iterrows():
+            for i in range(1, 4):
+                o = str(row.get(f"Ort {i}", "")).strip()
+                try: hrs = float(row.get(f"Hrs{i}", 0))
+                except: hrs = 0.0
+                if o in obj_totals: obj_totals[o] += hrs
+
+    res_df = pd.DataFrame(list(obj_totals.items()), columns=["Objekt / Ort", "Gesamtstunden"])
+    st.dataframe(res_df, use_container_width=True)
+    st.metric("Gesamtstunden aller Objekte", f"{res_df['Gesamtstunden'].sum():.2f} St.")
+
+# ---------------------------------------------------------
+# الصفحة الرابعة: الأماكن وساعات العمال
+# ---------------------------------------------------------
+elif page == t["p4"]:
+    st.title("🏢 Orte & Mitarbeiter-Stunden")
+    st.markdown("**Clean & Care GmbH - Salzburg**")
+    
+    col1, col2 = st.columns(2)
+    with col1: month_str = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="p4_m")
+    with col2: year_val = st.selectbox(t["year_label"], years_list, index=default_year_index, key="p4_y")
+    
+    places_list = load_places()
+    employees_list = load_employees()
+    
+    matrix_data = []
+    for p in places_list:
+        row_dict = {"Objekt": p}
+        p_total = 0.0
+        for emp in employees_list:
+            emp_obj_hrs = 0.0
+            df_h = load_employee_month_hours(emp, month_str, year_val)
+            for _, r in df_h.iterrows():
+                if str(r.get("Ort", "")).strip() == p:
+                    try: emp_obj_hrs += float(r.get("Arbeitszeit (abzgl. Pause)", 0))
+                    except: pass
+            df_d = load_daily_emp_hours(emp, month_str, year_val)
+            for _, r in df_d.iterrows():
+                for i in range(1, 4):
+                    if str(r.get(f"Ort {i}", "")).strip() == p:
+                        try: emp_obj_hrs += float(r.get(f"Hrs{i}", 0))
+                        except: pass
+            row_dict[emp] = round(emp_obj_hrs, 2)
+            p_total += emp_obj_hrs
+        row_dict["Summe"] = round(p_total, 2)
+        matrix_data.append(row_dict)
+    
+    st.dataframe(pd.DataFrame(matrix_data), use_container_width=True)
+
+# ---------------------------------------------------------
+# الصفحة الخامسة: إدارة العمال والمواقع
+# ---------------------------------------------------------
+elif page == t["p5"]:
+    st.title("👥 Mitarbeiterverwaltung & Orte")
+    st.markdown("**Clean & Care GmbH - Salzburg**")
+    
+    employees_list = load_employees()
+    places_list = load_places()
+    
+    st.subheader("Mitarbeiter")
+    new_emp = st.text_input("Neuen Mitarbeiter hinzufügen:")
+    if st.button("Mitarbeiter hinzufügen"):
+        if new_emp and new_emp not in employees_list:
+            employees_list.append(new_emp)
+            save_employees(employees_list)
+            st.success("Erfolgreich hinzugefügt!")
+            st.rerun()
+            
+    selected_emp_del = st.selectbox("Mitarbeiter löschen:", [""] + employees_list)
+    if st.button("Mitarbeiter löschen"):
+        if selected_emp_del in employees_list:
+            employees_list.remove(selected_emp_del)
+            save_employees(employees_list)
+            st.success("Gelöscht!")
+            st.rerun()
+            
+    st.markdown("---")
+    st.subheader("Objekte / Orte")
+    new_place = st.text_input("Neues Objekt hinzufügen:")
+    if st.button("Objekt hinzufügen"):
+        if new_place and new_place not in places_list:
+            places_list.append(new_place)
+            save_places(places_list)
+            st.success("Objekt hinzugefügt!")
+            st.rerun()
+            
+    selected_place_del = st.selectbox("Objekt löschen:", [""] + places_list)
+    if st.button("Objekt löschen"):
+        if selected_place_del in places_list:
+            places_list.remove(selected_place_del)
+            save_places(places_list)
+            st.success("Objekt gelöscht!")
+            st.rerun()
+
+# ---------------------------------------------------------
+# الصفحة السادسة: ملخص الأشهر السنوي
+# ---------------------------------------------------------
+elif page == t["p6"]:
+    st.title("📅 Monatsübersicht (Jahres-Gesamt)")
+    st.markdown("**Clean & Care GmbH - Salzburg**")
+    
+    year_val = st.selectbox(t["year_label"], years_list, index=default_year_index, key="p6_y")
+    employees_list = load_employees()
+    
+    m_summary = []
+    for m in months_list_de:
+        m_tot = 0.0
+        for emp in employees_list:
+            df_h = load_employee_month_hours(emp, m, year_val)
+            m_tot += df_h["Arbeitszeit (abzgl. Pause)"].sum()
+            df_d = load_daily_emp_hours(emp, m, year_val)
+            m_tot += df_d["Gesamtstunden"].sum()
+        m_summary.append({"Monat": m, "Gesamtstunden": round(m_tot, 2)})
+    
+    st.dataframe(pd.DataFrame(m_summary), use_container_width=True)
+
+# ---------------------------------------------------------
+# الصفحة السابعة: تذاكر المهام
+# ---------------------------------------------------------
+elif page == t["p7"]:
+    st.title("🎫 Einsatz-Tickets")
+    st.markdown("**Clean & Care GmbH - Salzburg**")
+    
+    col1, col2 = st.columns(2)
+    with col1: month_str = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="p7_m")
+    with col2: year_val = st.selectbox(t["year_label"], years_list, index=default_year_index, key="p7_y")
+    
+    places_list = load_places()
+    df_tickets = load_tickets_data(month_str, year_val)
+    
+    edited_tickets = st.data_editor(
+        df_tickets, num_rows="fixed", use_container_width=True, key=f"p7_editor_{month_str}_{year_val}",
+        column_config={"Ort": st.column_config.SelectboxColumn("Ort", options=[""] + places_list)}
+    )
+    
+    tot_t_hrs = 0.0
+    for idx, row in edited_tickets.iterrows():
+        b, e = str(row.get("Beginn", "")).strip(), str(row.get("Ende", "")).strip()
+        h = 0.0
+        if b and e:
+            try:
+                t1 = datetime.strptime(b.replace(".", ":"), "%H:%M")
+                t2 = datetime.strptime(e.replace(".", ":"), "%H:%M")
+                h = max(0.0, (t2 - t1).total_seconds() / 3600)
+            except:
+                pass
+        edited_tickets.at[idx, "Netto-Stunden"] = round(h, 2)
+        tot_t_hrs += h
+
+    st.markdown("---")
+    col_t1, col_t2, col_t3 = st.columns([2, 1, 1])
+    with col_t2:
+        if st.button(t["save_btn"], key="p7_save"):
+            save_tickets_data(month_str, year_val, edited_tickets)
+            st.success(t["success_msg"])
+    with col_t3:
+        st.metric(t["sum_label"], f"{tot_t_hrs:.2f} St.")
+
+# ---------------------------------------------------------
+# الصفحة الثامنة: جدول القطارات
+# ---------------------------------------------------------
+elif page == t["p8"]:
+    st.title("🚆 Zug-Fahrten (Züge)")
+    st.markdown("**Clean & Care GmbH - Am Messezentrum 6, 5020 Salzburg**")
 
     employees_list = load_employees()
 
@@ -337,260 +681,3 @@ if page == t["p8"]:
             st.success(t["success_msg"])
     with col_tr3:
         st.metric(t["sum_label"], f"{total_trains_sum:.2f} St.")
-
-# ---------------------------------------------------------
-# الأقسام الأخرى (1 إلى 7): استمارات العمال، الساعات، التذاكر، إلخ
-# ---------------------------------------------------------
-elif page == t["p1"]:
-    st.title("📋 Mitarbeiter Stundenzettel")
-    st.markdown("**Clean & Care GmbH - Am Messezentrum 6, 5020 Salzburg**")
-    employees_list = load_employees()
-    col1, col2, col3 = st.columns(3)
-    with col1: emp_name = st.selectbox(t["emp_label"], employees_list, key="p1_emp")
-    with col2: month_str = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="p1_m")
-    with col3: year_val = st.selectbox(t["year_label"], years_list, index=default_year_index, key="p1_y")
-    
-    places_list = load_places()
-    df_hours = load_employee_month_hours(emp_name, month_str, year_val)
-    
-    edited_df = st.data_editor(
-        df_hours, num_rows="fixed", use_container_width=True, key=f"p1_editor_{emp_name}_{month_str}_{year_val}",
-        column_config={"Ort": st.column_config.SelectboxColumn("Ort", options=[""] + places_list)}
-    )
-    
-    total_m_hrs = 0.0
-    for idx, row in edited_df.iterrows():
-        b, e, p = str(row.get("Beginn", "")).strip(), str(row.get("Ende", "")).strip(), str(row.get("Pause", "")).strip()
-        hrs = 0.0
-        if b and e:
-            try:
-                t1 = datetime.strptime(b.replace(".", ":"), "%H:%M")
-                t2 = datetime.strptime(e.replace(".", ":"), "%H:%M")
-                diff = (t2 - t1).total_seconds() / 3600
-                p_val = float(p) if p else 0.0
-                hrs = max(0.0, diff - (p_val / 60.0))
-            except:
-                pass
-        edited_df.at[idx, "Arbeitszeit (abzgl. Pause)"] = round(hrs, 2)
-        total_m_hrs += hrs
-
-    st.markdown("---")
-    col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
-    with col_s2:
-        if st.button(t["save_btn"], key="p1_save"):
-            save_employee_month_hours(emp_name, month_str, year_val, edited_df)
-            st.success(t["success_msg"])
-    with col_s3:
-        st.metric(t["sum_label"], f"{total_m_hrs:.2f} St.")
-
-elif page == t["p2"]:
-    st.title("📝 Tägliche Stunden (Multi-Objekt)")
-    st.markdown("**Clean & Care GmbH - Salzburg**")
-    employees_list = load_employees()
-    col1, col2, col3 = st.columns(3)
-    with col1: emp_name = st.selectbox(t["emp_label"], employees_list, key="p2_emp")
-    with col2: month_str = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="p2_m")
-    with col3: year_val = st.selectbox(t["year_label"], years_list, index=default_year_index, key="p2_y")
-    
-    places_list = load_places()
-    df_daily = load_daily_emp_hours(emp_name, month_str, year_val)
-    
-    edited_daily = st.data_editor(
-        df_daily, num_rows="fixed", use_container_width=True, key=f"p2_editor_{emp_name}_{month_str}_{year_val}",
-        column_config={
-            "Ort 1": st.column_config.SelectboxColumn("Ort 1", options=[""] + places_list),
-            "Ort 2": st.column_config.SelectboxColumn("Ort 2", options=[""] + places_list),
-            "Ort 3": st.column_config.SelectboxColumn("Ort 3", options=[""] + places_list),
-        }
-    )
-    
-    total_d_sum = 0.0
-    for idx, row in edited_daily.iterrows():
-        day_sum = 0.0
-        for i in range(1, 4):
-            b, e = str(row.get(f"Beginn {i}", "")).strip(), str(row.get(f"Ende {i}", "")).strip()
-            h = 0.0
-            if b and e:
-                try:
-                    t1 = datetime.strptime(b.replace(".", ":"), "%H:%M")
-                    t2 = datetime.strptime(e.replace(".", ":"), "%H:%M")
-                    h = max(0.0, (t2 - t1).total_seconds() / 3600)
-                except:
-                    pass
-            edited_daily.at[idx, f"Hrs{i}"] = round(h, 2) if h > 0 else ""
-            day_sum += h
-        p_val = float(row.get("Pause", 0)) if str(row.get("Pause", "")).strip() else 0.0
-        net_day = max(0.0, day_sum - (p_val / 60.0))
-        edited_daily.at[idx, "Gesamtstunden"] = round(net_day, 2)
-        total_d_sum += net_day
-
-    st.markdown("---")
-    col_d1, col_d2, col_d3 = st.columns([2, 1, 1])
-    with col_d2:
-        if st.button(t["save_btn"], key="p2_save"):
-            save_daily_emp_hours(emp_name, month_str, year_val, edited_daily)
-            st.success(t["success_msg"])
-    with col_d3:
-        st.metric(t["sum_label"], f"{total_d_sum:.2f} St.")
-
-elif page == t["p3"]:
-    st.title("🏢 Objekt-Stundenübersicht")
-    st.markdown("**Clean & Care GmbH - Salzburg**")
-    month_str = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="p3_m")
-    year_val = st.selectbox(t["year_label"], years_list, index=default_year_index, key="p3_y")
-    places_list = load_places()
-    employees_list = load_employees()
-    
-    obj_totals = {p: 0.0 for p in places_list}
-    for emp in employees_list:
-        df_h = load_employee_month_hours(emp, month_str, year_val)
-        for _, row in df_h.iterrows():
-            o = str(row.get("Ort", "")).strip()
-            try:
-                hrs = float(row.get("Arbeitszeit (abzgl. Pause)", 0))
-            except:
-                hrs = 0.0
-            if o in obj_totals:
-                obj_totals[o] += hrs
-        
-        df_d = load_daily_emp_hours(emp, month_str, year_val)
-        for _, row in df_d.iterrows():
-            for i in range(1, 4):
-                o = str(row.get(f"Ort {i}", "")).strip()
-                try:
-                    hrs = float(row.get(f"Hrs{i}", 0))
-                except:
-                    hrs = 0.0
-                if o in obj_totals:
-                    obj_totals[o] += hrs
-
-    res_df = pd.DataFrame(list(obj_totals.items()), columns=["Objekt / Ort", "Gesamtstunden"])
-    st.dataframe(res_df, use_container_width=True)
-    st.metric("Gesamtstunden aller Objekte", f"{res_df['Gesamtstunden'].sum():.2f} St.")
-
-elif page == t["p4"]:
-    st.title("🏢 Orte & Mitarbeiter-Stunden")
-    st.markdown("**Clean & Care GmbH - Salzburg**")
-    month_str = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="p4_m")
-    year_val = st.selectbox(t["year_label"], years_list, index=default_year_index, key="p4_y")
-    places_list = load_places()
-    employees_list = load_employees()
-    
-    matrix_data = []
-    for p in places_list:
-        row_dict = {"Objekt": p}
-        p_total = 0.0
-        for emp in employees_list:
-            emp_obj_hrs = 0.0
-            df_h = load_employee_month_hours(emp, month_str, year_val)
-            for _, r in df_h.iterrows():
-                if str(r.get("Ort", "")).strip() == p:
-                    try: emp_obj_hrs += float(r.get("Arbeitszeit (abzgl. Pause)", 0))
-                    except: pass
-            df_d = load_daily_emp_hours(emp, month_str, year_val)
-            for _, r in df_d.iterrows():
-                for i in range(1, 4):
-                    if str(r.get(f"Ort {i}", "")).strip() == p:
-                        try: emp_obj_hrs += float(r.get(f"Hrs{i}", 0))
-                        except: pass
-            row_dict[emp] = round(emp_obj_hrs, 2)
-            p_total += emp_obj_hrs
-        row_dict["Summe"] = round(p_total, 2)
-        matrix_data.append(row_dict)
-    
-    st.dataframe(pd.DataFrame(matrix_data), use_container_width=True)
-
-elif page == t["p5"]:
-    st.title("👥 Mitarbeiterverwaltung & Orte")
-    st.markdown("**Clean & Care GmbH - Salzburg**")
-    employees_list = load_employees()
-    places_list = load_places()
-    
-    st.subheader("Mitarbeiter (العمال)")
-    new_emp = st.text_input("Neuen Mitarbeiter hinzufügen:")
-    if st.button("Mitarbeiter hinzufügen"):
-        if new_emp and new_emp not in employees_list:
-            employees_list.append(new_emp)
-            save_employees(employees_list)
-            st.success("Erfolgreich hinzugefügt!")
-            st.rerun()
-            
-    selected_emp_del = st.selectbox("Mitarbeiter löschen:", [""] + employees_list)
-    if st.button("Mitarbeiter löschen"):
-        if selected_emp_del in employees_list:
-            employees_list.remove(selected_emp_del)
-            save_employees(employees_list)
-            st.success("Gelöscht!")
-            st.rerun()
-            
-    st.markdown("---")
-    st.subheader("Objekte / Orte (الأماكن والمواقع)")
-    new_place = st.text_input("Neues Objekt hinzufügen:")
-    if st.button("Objekt hinzufügen"):
-        if new_place and new_place not in places_list:
-            places_list.append(new_place)
-            save_places(places_list)
-            st.success("Objekt hinzugefügt!")
-            st.rerun()
-            
-    selected_place_del = st.selectbox("Objekt löschen:", [""] + places_list)
-    if st.button("Objekt löschen"):
-        if selected_place_del in places_list:
-            places_list.remove(selected_place_del)
-            save_places(places_list)
-            st.success("Objekt gelöscht!")
-            st.rerun()
-
-elif page == t["p6"]:
-    st.title("📅 Monatsübersicht (Jahres-Gesamt)")
-    st.markdown("**Clean & Care GmbH - Salzburg**")
-    year_val = st.selectbox(t["year_label"], years_list, index=default_year_index, key="p6_y")
-    employees_list = load_employees()
-    
-    m_summary = []
-    for m in months_list_de:
-        m_tot = 0.0
-        for emp in employees_list:
-            df_h = load_employee_month_hours(emp, m, year_val)
-            m_tot += df_h["Arbeitszeit (abzgl. Pause)"].sum()
-            df_d = load_daily_emp_hours(emp, m, year_val)
-            m_tot += df_d["Gesamtstunden"].sum()
-        m_summary.append({"Monat": m, "Gesamtstunden": round(m_tot, 2)})
-    
-    st.dataframe(pd.DataFrame(m_summary), use_container_width=True)
-
-elif page == t["p7"]:
-    st.title("🎫 Einsatz-Tickets (تذاكر المهام)")
-    st.markdown("**Clean & Care GmbH - Salzburg**")
-    month_str = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="p7_m")
-    year_val = st.selectbox(t["year_label"], years_list, index=default_year_index, key="p7_y")
-    places_list = load_places()
-    
-    df_tickets = load_tickets_data(month_str, year_val)
-    edited_tickets = st.data_editor(
-        df_tickets, num_rows="fixed", use_container_width=True, key=f"p7_editor_{month_str}_{year_val}",
-        column_config={"Ort": st.column_config.SelectboxColumn("Ort", options=[""] + places_list)}
-    )
-    
-    tot_t_hrs = 0.0
-    for idx, row in edited_tickets.iterrows():
-        b, e = str(row.get("Beginn", "")).strip(), str(row.get("Ende", "")).strip()
-        h = 0.0
-        if b and e:
-            try:
-                t1 = datetime.strptime(b.replace(".", ":"), "%H:%M")
-                t2 = datetime.strptime(e.replace(".", ":"), "%H:%M")
-                h = max(0.0, (t2 - t1).total_seconds() / 3600)
-            except:
-                pass
-        edited_tickets.at[idx, "Netto-Stunden"] = round(h, 2)
-        tot_t_hrs += h
-
-    st.markdown("---")
-    col_t1, col_t2, col_t3 = st.columns([2, 1, 1])
-    with col_t2:
-        if st.button(t["save_btn"], key="p7_save"):
-            save_tickets_data(month_str, year_val, edited_tickets)
-            st.success(t["success_msg"])
-    with col_t3:
-        st.metric(t["sum_label"], f"{tot_t_hrs:.2f} St.")
