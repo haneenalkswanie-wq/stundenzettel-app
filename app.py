@@ -193,6 +193,16 @@ def delete_employee_month_hours(emp_name, month_str, year_val):
         st.error(f"خطأ في مسح الساعات: {e}")
 
 @st.cache_data(ttl=60)
+def load_daily_emp_hours(emp_name, month_str, year_val):
+    try:
+        res = supabase.table("daily_hours").select("*").eq("emp", emp_name).eq("month", month_str).eq("year", year_val).execute()
+        if res.data:
+            return pd.DataFrame(res.data)
+    except Exception:
+        pass
+    return pd.DataFrame()
+
+@st.cache_data(ttl=60)
 def load_tickets_data(month_str, year_val):
     try:
         res = supabase.table("tickets_data").select("content").eq("month", month_str).eq("year", year_val).execute()
@@ -1017,10 +1027,15 @@ elif page == t["p6"]:
   total_company_hours = 0.0
 
   for emp in employees_list:
+emp_tot = 0.0
+    
     df_h = load_employee_month_hours(emp, summary_month, summary_year)
-    emp_tot = df_h["Arbeitszeit (abzgl. Pause)"].sum()
+    if isinstance(df_h, pd.DataFrame) and not df_h.empty and "Arbeitszeit (abzgl. Pause)" in df_h.columns:
+        emp_tot += df_h["Arbeitszeit (abzgl. Pause)"].sum()
+        
     df_d = load_daily_emp_hours(emp, summary_month, summary_year)
-    emp_tot += df_d["Gesamtstunden"].sum()
+    if isinstance(df_d, pd.DataFrame) and not df_d.empty and "Gesamtstunden" in df_d.columns:
+        emp_tot += df_d["Gesamtstunden"].sum()
 
     if emp_tot > 0:
       summary_data.append({
