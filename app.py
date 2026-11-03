@@ -57,6 +57,58 @@ if not check_password():
 # ---------------------------------------------------------
 # دوال التعامل مع السحاب (Supabase Cloud) - النسخة المستقرة
 # ---------------------------------------------------------
+from fpdf import FPDF
+
+def generate_stundenzettel_pdf(emp_name, month_str, year_val, df_to_print):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    
+    # رأس الصفحة والترويسة لشركة Clean & Care GmbH
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 8, "Clean & Care GmbH - Stundenzettel", 0, 1, "L")
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(0, 6, "Am Messezentrum 6, 5020 Salzburg", 0, 1, "L")
+    pdf.ln(5)
+    
+    # معلومات الموظف والشهر
+    pdf.set_font("Arial", "B", 11)
+    pdf.cell(0, 6, f"Name: {emp_name}    |    Monat: {month_str} {year_val}", 0, 1, "L")
+    pdf.ln(5)
+    
+    # جدول البيانات (رؤوس الأعمدة)
+    pdf.set_font("Arial", "B", 9)
+    pdf.set_fill_color(230, 230, 230)
+    
+    col_widths = [15, 45, 25, 25, 25, 55]
+    headers = ["Datum", "Ort", "Beginn", "Ende", "Pause", "Arbeitszeit (abzgl. Pause)"]
+    
+    for i, h in enumerate(headers):
+        pdf.cell(col_widths[i], 8, h, 1, 0, "C", True)
+    pdf.ln()
+    
+    # تعبئة صفوف الجدول
+    pdf.set_font("Arial", "", 9)
+    for index, row in df_to_print.iterrows():
+        pdf.cell(col_widths[0], 7, str(row.get("Datum", "")), 1, 0, "C")
+        pdf.cell(col_widths[1], 7, str(row.get("Ort", "")), 1, 0, "L")
+        pdf.cell(col_widths[2], 7, str(row.get("Beginn", "")), 1, 0, "C")
+        pdf.cell(col_widths[3], 7, str(row.get("Ende", "")), 1, 0, "C")
+        pdf.cell(col_widths[4], 7, str(row.get("Pause", "")), 1, 0, "C")
+        pdf.cell(col_widths[5], 7, str(row.get("Arbeitszeit (abzgl. Pause)", "")), 1, 1, "C")
+        
+    pdf.ln(10)
+    
+    # خانات التوقيع والتاريخ في الأسفل تماماً مثل الورقة الرسمية
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(95, 8, "Unterschrift Arbeitnehmer", 0, 0, "L")
+    pdf.cell(95, 8, "Unterschrift Arbeitgeber / GF", 0, 1, "L")
+    
+    pdf.set_font("Arial", "", 9)
+    pdf.cell(95, 8, "Datum: ........................................", 0, 0, "L")
+    pdf.cell(95, 8, "Datum: ........................................", 0, 1, "L")
+    
+    return bytes(pdf.output())
 # ==========================================
 # 1. دوال الموظفين (Employees)
 # ==========================================
@@ -734,8 +786,8 @@ if page == t["p1"]:
 # ---------------------------------------------------------
 # الصفحة الثانية: الساعات اليومية (Tägliche Stunden)
 # ---------------------------------------------------------
-# --- صفحة الساعات اليومية المرتبطة بباقي الصفحات (Tägliche Stunden) ---
-if page == "Tägliche Stunden":  # أو المتغير المعتمد لديكِ لصفحة الساعات اليومية
+# --- صفحة الساعات اليومية (Tägliche Stunden) المرتبطة بقاعدة البيانات وباقي الصفحات ---
+if page == t["p2"] or page == "Tägliche Stunden":  # للتأكد من تطابق اسم الصفحة مع القائمة الجانبية
     st.title("⏱️ Clean & Care GmbH - Tägliche Stundenerfassung")
     st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
     st.markdown("---")
@@ -745,15 +797,15 @@ if page == "Tägliche Stunden":  # أو المتغير المعتمد لديكِ
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        selected_employee = st.selectbox("Mitarbeiter wählen:", employees_list, key="daily_emp")
+        selected_employee = st.selectbox(t["emp_label"], employees_list, key="daily_emp_p2")
     with col2:
-        selected_month = st.selectbox("Monat auswählen:", months_list_de, index=default_month_index, key="daily_month")
+        selected_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="daily_month_p2")
     with col3:
-        selected_year = st.selectbox("Jahr auswählen:", years_list, index=default_year_index, key="daily_year")
+        selected_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="daily_year_p2")
 
     st.subheader(f"Tägliche Stunden für: {selected_employee} ({selected_month} {selected_year})")
 
-    # جلب البيانات المخزنة مسبقاً من قاعدة البيانات لهذا الموظف والشهر لترتبط مع بقية الصفحات
+    # جلب البيانات المخزنة مسبقاً لترتبط مع صفحة النظرة العامة وبقية الصفحات
     saved_df = load_daily_emp_hours(selected_employee, selected_month, selected_year)
 
     import calendar
@@ -768,7 +820,6 @@ if page == "Tägliche Stunden":  # أو المتغير المعتمد لديكِ
     except:
         days_count = 31
 
-    # إذا لم تكن هناك بيانات مخزنة مسبقاً، ننشئ الجدول الفارغ بالأماكن الثلاثة والاستراحة الإجمالية
     if saved_df is None or saved_df.empty or "Ort 1" not in saved_df.columns:
         daily_data = []
         for day in range(1, days_count + 1):
@@ -789,7 +840,7 @@ if page == "Tägliche Stunden":  # أو المتغير المعتمد لديكِ
         num_rows="fixed",
         use_container_width=True,
         hide_index=True,
-        key=f"daily_grid_linked_{selected_employee}_{selected_month}_{selected_year}",
+        key=f"daily_grid_{selected_employee}_{selected_month}_{selected_year}",
         column_config={
             "Ort 1": st.column_config.SelectboxColumn("Ort 1", options=places_list),
             "Ort 2": st.column_config.SelectboxColumn("Ort 2", options=places_list),
@@ -799,7 +850,7 @@ if page == "Tägliche Stunden":  # أو المتغير المعتمد لديكِ
 
     edited_daily_df = edited_daily_df.astype(object)
 
-    # حساب إجمالي ساعات اليوم وتحديث المجموع ليرتبط بصفحة النظرة العامة
+    # حساب إجمالي الساعات وتحديثها لترتبط بصفحة النظرة العامة تلقائياً
     total_month_daily_hours = 0.0
     from datetime import datetime
 
@@ -842,16 +893,15 @@ if page == "Tägliche Stunden":  # أو المتغير المعتمد لديكِ
         st.metric(label="Monatssumme Gesamt:", value=f"{total_month_daily_hours:.2f} St.")
 
     with col_save:
-        if st.button("💾 Speichern / حفظ وربط البيانات", use_container_width=True):
+        if st.button("💾 Speichern / حفظ وربط البيانات", use_container_width=True, key="save_daily_btn"):
             try:
-                # حفظ البيانات في جدول daily_hours لترتبط تلقائياً بصفحة Monatsübersicht
                 supabase.table("daily_hours").upsert({
                     "emp": selected_employee,
                     "month": selected_month,
                     "year": selected_year,
                     "content": edited_daily_df.to_dict('records')
                 }).execute()
-                st.success("تم حفظ البيانات وربطها بنجاح مع النظرة العامة!")
+                st.success("تم حفظ الساعات اليومية وربطها بنجاح مع النظرة العامة!")
                 st.rerun()
             except Exception as e:
                 st.error(f"خطأ أثناء الحفظ: {e}")
@@ -864,10 +914,11 @@ if page == "Tägliche Stunden":  # أو المتغير المعتمد لديكِ
                 data=pdf_bytes,
                 file_name=f"Taegliche_Stunden_{selected_employee}_{selected_month}_{selected_year}.pdf",
                 mime="application/pdf",
-                use_container_width=True
+                use_container_width=True,
+                key="print_daily_btn"
             )
         except Exception:
-            st.info("جاهز لتصدير الطباعة.")
+            st.info("جاهز لتصدير الطباعة الفورية.")
 
 # ---------------------------------------------------------
 # الصفحة الثالثة: ملخص ساعات المواقع (Objekt-Stundenübersicht)
