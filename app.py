@@ -77,9 +77,9 @@ def load_places():
 
 def save_employees(emp_list):
     try:
-        existing = supabase.table("employees").select("id").execute()
-        if existing.data:
-            for row in existing.data:
+        res = supabase.table("employees").select("id").execute()
+        if res.data:
+            for row in res.data:
                 supabase.table("employees").delete().eq("id", row["id"]).execute()
         
         for emp in emp_list:
@@ -91,12 +91,11 @@ def save_employees(emp_list):
         st.rerun()
     except Exception as e:
         st.error(f"خطأ في حفظ الموظفين: {e}")
-
 def save_places(places_list):
     try:
-        existing = supabase.table("places").select("id").execute()
-        if existing.data:
-            for row in existing.data:
+        res = supabase.table("places").select("id").execute()
+        if res.data:
+            for row in res.data:
                 supabase.table("places").delete().eq("id", row["id"]).execute()
         
         for place in places_list:
@@ -300,10 +299,10 @@ def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
   elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 15))
   
-  table_data = [["Datum", "Ort", "Beginn", "Ende", "Pause", "Arbeitszeit (abzgl. Pause)"]]
+  table_data = [["Tag", "Ort", "Beginn", "Ende", "Pause", "Arbeitszeit (abzgl. Pause)"]]
   for _, row in df.iterrows():
     table_data.append([
-        str(row["Datum"]),
+        str(row["Tag"]),
         str(row["Ort"] if pd.notna(row["Ort"]) else ""),
         str(row["Beginn"] if pd.notna(row["Beginn"]) else ""),
         str(row["Ende"] if pd.notna(row["Ende"]) else ""),
@@ -354,7 +353,7 @@ def generate_daily_pdf(emp_name, month_str, year_val, df, total_hours):
   table_data = [["Tag", "Ort 1", "Std 1", "Ort 2", "Std 2", "Ort 3", "Std 3", "Pause", "Gesamt"]]
   for _, row in df.iterrows():
     table_data.append([
-        str(row["Datum"]),
+        str(row["Tag"]),
         str(row["Ort 1"] if pd.notna(row["Ort 1"]) else ""), str(row.get("Hrs1", "")),
         str(row["Ort 2"] if pd.notna(row["Ort 2"]) else ""), str(row.get("Hrs2", "")),
         str(row["Ort 3"] if pd.notna(row["Ort 3"]) else ""), str(row.get("Hrs3", "")),
@@ -393,7 +392,7 @@ def generate_single_location_pdf(place_name, month_str, year_val, df, total_hour
   elements.append(Paragraph(f"<b>Objekt / Ort:</b> {place_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 15))
   
-  table_data = [["Tag (Datum)", "Stunden"]]
+  table_data = [["Tag (Tag)", "Stunden"]]
   for _, row in df.iterrows():
     table_data.append([str(row["Tag"]), str(row["Stunden"])])
   table_data.append(["Gesamtsumme:", f"{total_hours:.2f} St."])
@@ -497,7 +496,7 @@ def generate_trains_pdf(emp_name, month_str, year_val, df, total_hours):
     table_data = [["Tag", "Nr.1", "B1", "E1", "V1", "Nr.2", "B2", "E2", "V2", "Nr.3", "B3", "E3", "V3", "Nr.4", "B4", "E4", "V4", "Nr.5", "B5", "E5", "V5", "Gesamt"]]
     for _, row in df.iterrows():
         table_data.append([
-            str(row["Datum"]),
+            str(row["Tag"]),
             str(row.get("Zug-Nr 1", "")), str(row.get("Beginn 1", "")), str(row.get("Ende 1", "")), str(row.get("Verspätung 1", "")),
             str(row.get("Zug-Nr 2", "")), str(row.get("Beginn 2", "")), str(row.get("Ende 2", "")), str(row.get("Verspätung 2", "")),
             str(row.get("Zug-Nr 3", "")), str(row.get("Beginn 3", "")), str(row.get("Ende 3", "")), str(row.get("Verspätung 3", "")),
@@ -546,10 +545,10 @@ def generate_tickets_pdf(month_str, year_val, df, total_hours):
     elements.append(Paragraph(f"<b>Monat:</b> {month_str} {year_val}", styles['Normal']))
     elements.append(Spacer(1, 15))
     
-    table_data = [["Datum", "Ort", "Ticket-Nr.", "Beginn", "Ende", "Bemerkung", "Netto-Stunden"]]
+    table_data = [["Tag", "Ort", "Ticket-Nr.", "Beginn", "Ende", "Bemerkung", "Netto-Stunden"]]
     for _, row in df.iterrows():
         table_data.append([
-            str(row["Datum"]),
+            str(row["Tag"]),
             str(row.get("Ort", "")),
             str(row.get("Ticket-Nummer", "")),
             str(row.get("Beginn", "")),
