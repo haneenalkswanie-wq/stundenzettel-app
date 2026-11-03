@@ -1037,7 +1037,7 @@ elif page == t["p6"]:
       if isinstance(df_d, pd.DataFrame) and not df_d.empty and "Gesamtstunden" in df_d.columns:
         emp_tot += df_d["Gesamtstunden"].sum()
 
-    if emp_tot > 0:
+  if emp_tot > 0:
       summary_data.append({
           "Mitarbeiter": emp,
           "Gesamtstunden": f"{emp_tot:.2f} St."
