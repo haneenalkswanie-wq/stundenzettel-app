@@ -27,32 +27,25 @@ def get_supabase_client() -> Client:
 supabase = get_supabase_client()
 
 # ---------------------------------------------------------
-# نظام الحماية وتسجيل الدخول
+# نظام الحماية وتسجيل الدخول المحسّن (بدون أخطاء)
 # ---------------------------------------------------------
 def check_password():
-    def password_entered():
-        user_input = st.session_state["username"].strip()
-        pass_input = st.session_state["password"].strip()
-        if user_input == "admin" and pass_input == "clean2026":
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]
-            del st.session_state["username"]
-        else:
-            st.session_state["password_correct"] = False
-
     if "password_correct" not in st.session_state:
+        st.session_state["password_correct"] = False
+
+    if not st.session_state["password_correct"]:
         st.markdown("## 🔐 Clean & Care GmbH - Login")
         st.markdown("Bitte melden Sie sich an, um fortzufahren. / يرجى تسجيل الدخول للمتابعة.")
-        st.text_input("Benutzername (Username):", key="username")
-        st.text_input("Passwort (Password):", type="password", key="password")
-        st.button("Anmelden / دخول", on_click=password_entered)
-        return False
-    elif not st.session_state["password_correct"]:
-        st.markdown("## 🔐 Clean & Care GmbH - Login")
-        st.text_input("Benutzername (Username):", key="username")
-        st.text_input("Passwort (Password):", type="password", key="password")
-        st.button("Anmelden / دخول", on_click=password_entered)
-        st.error("😕 Benutzername oder Passwort ist falsch / اسم المستخدم أو كلمة السر غير صحيحة.")
+        
+        user_input = st.text_input("Benutzername (Username):", key="username_input")
+        pass_input = st.text_input("Passwort (Password):", type="password", key="password_input")
+        
+        if st.button("Anmelden / دخول"):
+            if user_input.strip() == "admin" and pass_input.strip() == "clean2026":
+                st.session_state["password_correct"] = True
+                st.rerun()
+            else:
+                st.error("😕 Benutzername oder Passwort ist falsch / اسم المستخدم أو كلمة السر غير صحيحة.")
         return False
     else:
         return True
@@ -237,7 +230,6 @@ def generate_pdf(emp_name, month_str, year_val, df, total_hours):
     elements.append(t_pdf)
     elements.append(Spacer(1, 20))
     
-    # حقل التوقيع في نهاية الـ PDF
     sig_data = [
         ["Unterschrift Mitarbeiter / توقيع الموظف:", "Unterschrift Firma (Clean & Care GmbH) / توقيع الشركة:"],
         ["\n\n___________________________", "\n\n___________________________"]
