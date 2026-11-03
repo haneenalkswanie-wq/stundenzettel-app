@@ -67,14 +67,20 @@ def load_employees():
 
 def save_employees(emp_list):
     try:
-        supabase.table("employees").delete().neq("name", "").execute()
+        # جلب السجلات الحالية وحذفها لتجنب التكرار
+        existing = supabase.table("employees").select("id").execute()
+        if existing.data:
+            for row in existing.data:
+                supabase.table("employees").delete().eq("id", row["id"]).execute()
+        
+        # إدراج الأسماء الجديدة
         for emp in emp_list:
             if emp and str(emp).strip():
                 supabase.table("employees").insert({"name": str(emp).strip()}).execute()
-        st.success("تم حفظ قائمة الموظفين بنجاح!")
+        st.success("تم تحديث الموظفين في السحابة بنجاح!")
         st.rerun()
     except Exception as e:
-        st.error(f"خطأ في الحفظ: {e}")
+        st.error(f"خطأ في حفظ الموظفين: {e}")
 
 def load_places():
     try:
@@ -87,14 +93,20 @@ def load_places():
 
 def save_places(places_list):
     try:
-        supabase.table("places").delete().neq("name", "").execute()
+        # جلب الأماكن الحالية وحذفها لتجنب التكرار
+        existing = supabase.table("places").select("id").execute()
+        if existing.data:
+            for row in existing.data:
+                supabase.table("places").delete().eq("id", row["id"]).execute()
+        
+        # إدراج الأماكن الجديدة
         for place in places_list:
             if place and str(place).strip():
                 supabase.table("places").insert({"name": str(place).strip()}).execute()
-        st.success("تم حفظ قائمة الأماكن بنجاح!")
+        st.success("تم تحديث الأماكن في السحابة بنجاح!")
         st.rerun()
     except Exception as e:
-        st.error(f"خطأ في الحفظ: {e}")
+        st.error(f"خطأ في حفظ الأماكن: {e}")
 
 def load_employee_month_hours(emp_name, month_str, year_val):
     try:
