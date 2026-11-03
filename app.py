@@ -56,70 +56,77 @@ if not check_password():
 # ---------------------------------------------------------
 # دوال التعامل مع السحاب (Supabase Cloud)
 # ---------------------------------------------------------
+# --- دوال تحميل وحفظ الموظفين والأماكن ---
 def load_employees():
     try:
         res = supabase.table("employees").select("name").execute()
         if res.data:
-            return sorted([r["name"] for r in res.data])
-    except:
+            return [row["name"] for row in res.data if row.get("name")]
+    except Exception:
         pass
-    return ["Sakleh Alsoudi", "Alaa Edin Ibrahim"]
+    return []
 
-def save_employees(emp_list):
-    try:
-        # مسح السجلات القديمة أولاً
-        supabase.table("employees").delete().neq("id", 0).execute()
-        
-        # إضافة الأسماء الجديدة
-        for emp in emp_list:
-            clean_name = str(emp).strip()
-            if clean_name:
-                supabase.table("employees").insert({"name": clean_name}).execute()
-        
-        st.success("تم تحديث الموظفين وحفظهم بنجاح!")
-        st.rerun()
-    except Exception as e:
-        st.error(f"خطأ في حفظ الموظفين: {e}")
 def load_places():
     try:
         res = supabase.table("places").select("name").execute()
         if res.data:
-            return sorted([r["name"] for r in res.data])
-    except:
+            return [row["name"] for row in res.data if row.get("name")]
+    except Exception:
         pass
-    return ["Limehome Salzburg", "Nespresso Store", "IKEA Wals", "Villach Hauptplatz"]
+    return []
+
+def save_employees(emp_list):
+    try:
+        supabase.table("employees").delete().neq("id", 0).execute()
+        for emp in emp_list:
+            name_clean = str(emp).strip()
+            if name_clean:
+                supabase.table("employees").insert({"name": name_clean}).execute()
+        st.success("تم حفظ قائمة الموظفين بنجاح في السحابة!")
+        st.rerun()
+    except Exception as e:
+        st.error(f"خطأ في حفظ الموظفين: {e}")
 
 def save_places(places_list):
     try:
-        # مسح السجلات القديمة أولاً
         supabase.table("places").delete().neq("id", 0).execute()
-        
-        # إضافة الأماكن الجديدة
         for place in places_list:
-            clean_place = str(place).strip()
-            if clean_place:
-                supabase.table("places").insert({"name": clean_place}).execute()
-        
-        st.success("تم تحديث الأماكن وحفظها بنجاح!")
+            place_clean = str(place).strip()
+            if place_clean:
+                supabase.table("places").insert({"name": place_clean}).execute()
+        st.success("تم حفظ قائمة الأماكن بنجاح في السحابة!")
         st.rerun()
     except Exception as e:
         st.error(f"خطأ في حفظ الأماكن: {e}")
 
+# --- دوال تحميل وحفظ الساعات الشهرية واليومية ---
 def load_employee_month_hours(emp_name, month_str, year_val):
     try:
         res = supabase.table("monthly_hours").select("content").eq("emp", emp_name).eq("month", month_str).eq("year", year_val).execute()
         if res.data and len(res.data) > 0:
             return pd.DataFrame(json.loads(res.data[0]["content"]))
-    except:
+    except Exception:
         pass
     days_data = []
     for day in range(1, 32):
-        days_data.append({"Datum": str(day), "Ort": "", "Beginn": "", "Ende": "", "Pause": "", "Arbeitszeit (abzgl. Pause)": 0.0})
+        days_data.append({"Tag": str(day), "Ort": "", "Beginn": "", "Ende": "", "Pause": "", "Arbeitszeit (abzgl. Pause)": 0.0})
     return pd.DataFrame(days_data)
 
 def save_employee_month_hours(emp_name, month_str, year_val, df):
-    content = json.dumps(df.to_dict(orient="list"), ensure_ascii=False)
-    supabase.table("monthly_hours").upsert({"emp": emp_name, "month": month_str, "year": year_val, "content": content}).execute()
+    try:
+        records = df.to_dict(orient="records") if hasattr(df, 'to_dict') else list(df)
+        content_json = json.dumps(records, ensure_ascii=False)
+        payload = {
+            "emp": str(emp_name).strip(),
+            "month": str(month_str).strip(),
+            "year": int(year_val),
+            "content": content_json
+        }
+        supabase.table("monthly_hours").upsert(payload).execute()
+        st.success("تم حفظ الساعات الشهرية بنجاح!")
+        st.rerun()
+    except Exception as e:
+        st.error(f"خطأ في حفظ الساعات الشهرية: {e}")
 
 def load_daily_emp_hours(emp_name, month_str, year_val):
     try:
@@ -127,18 +134,36 @@ def load_daily_emp_hours(emp_name, month_str, year_val):
         if res.data and len(res.data) > 0:
             df = pd.DataFrame(json.loads(res.data[0]["content"]))
             for i in range(1, 4):
-                if f"Hrs{i}" not in df.columns: df[f"Hrs{i}"] = ""
+                if f"Hrs{i}" not in df.columns:
+                    df[f"Hrs{i}"] = 0.0
             return df
-    except:
+    except Exception:
         pass
     days_data = []
     for day in range(1, 32):
-        days_data.append({"Datum": str(day), "Ort 1": "", "Beginn 1": "", "Ende 1": "", "Hrs1": "", "Ort 2": "", "Beginn 2": "", "Ende 2": "", "Hrs2": "", "Ort 3": "", "Beginn 3": "", "Ende 3": "", "Hrs3": "", "Pause": "", "Gesamtstunden": 0.0})
+        days_data.append({
+            "Tag": str(day), "Ort": "", "Beginn": "", "Ende": "", "Pause": "", "Gesamtstunden": 0.0,
+            "Ort 2": "", "Beginn 2": "", "Ende 2": "", "Hrs2": 0.0,
+            "Ort 3": "", "Beginn 3": "", "Ende 3": "", "Hrs3": 0.0
+        })
     return pd.DataFrame(days_data)
 
 def save_daily_emp_hours(emp_name, month_str, year_val, df):
-    content = json.dumps(df.to_dict(orient="list"), ensure_ascii=False)
-    supabase.table("daily_hours").upsert({"emp": emp_name, "month": month_str, "year": year_val, "content": content}).execute()
+    try:
+        records = df.to_dict(orient="records") if hasattr(df, 'to_dict') else list(df)
+        content_json = json.dumps(records, ensure_ascii=False)
+        payload = {
+            "emp": str(emp_name).strip(),
+            "month": str(month_str).strip(),
+            "year": int(year_val),
+            "content": content_json
+        }
+        supabase.table("daily_hours").upsert(payload).execute()
+        st.success("تم حفظ الساعات اليومية بنجاح!")
+        st.rerun()
+    except Exception as e:
+        st.error(f"خطأ في حفظ الساعات اليومية: {e}")
+
 
 def load_tickets_data(month_str, year_val):
     try:
