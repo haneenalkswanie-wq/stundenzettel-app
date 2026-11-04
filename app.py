@@ -32,34 +32,38 @@ supabase = init_supabase()
 # ---------------------------------------------------------
 # نظام الحماية وتسجيل الدخول (Login System)
 # ---------------------------------------------------------
-def check_password():
-  def password_entered():
-    if st.session_state["username"].strip() == "admin" and st.session_state["password"].strip() == "clean2026":
-      st.session_state["password_correct"] = True
-      del st.session_state["password"]
-      del st.session_state["username"]
-    else:
-      st.session_state["password_correct"] = False
+import streamlit_authenticator as stauth
 
-  if "password_correct" not in st.session_state:
-    st.markdown("## 🔐 Clean & Care GmbH - Login")
-    st.markdown("Bitte melden Sie sich an, um fortzufahren. / يرجى تسجيل الدخول للمتابعة.")
-    st.text_input("Benutzername (Username):", key="username")
-    st.text_input("Passwort (Password):", type="password", key="password")
-    st.button("Anmelden / دخول", on_click=password_entered)
-    return False
-  elif not st.session_state["password_correct"]:
-    st.markdown("## 🔐 Clean & Care GmbH - Login")
-    st.text_input("Benutzername (Username):", key="username")
-    st.text_input("Passwort (Password):", type="password", key="password")
-    st.button("Anmelden / دخول", on_click=password_entered)
+# إعداد بيانات المستخدم الصلاحيات (كلمة السر مشفرة تلقائياً لتوافق المكتبة)
+credentials = {
+    "usernames": {
+        "admin": {
+            "name": "Admin",
+            "password": stauth.Hasher(["clean2026"]).generate()[0]
+        }
+    }
+}
+
+authenticator = stauth.Authenticate(
+    credentials,
+    cookie_name="clean_care_login_cookie",
+    cookie_key="clean_care_secure_signature_2026",
+    cookie_expiry_days=1  # تبقى الجلسة مفعلة وتتحمل مع تحديث F5، وتنتهي عند إغلاق المتصفح
+)
+
+# نافذة تسجيل الدخول
+name, authentication_status, username = authenticator.login("Anmelden / دخول", "main")
+
+if authentication_status == False:
     st.error("😕 Benutzername oder Passwort ist falsch / اسم المستخدم أو كلمة السر غير صحيحة.")
-    return False
-  else:
-    return True
-
-if not check_password():
     st.stop()
+elif authentication_status == None:
+    st.warning("Bitte melden Sie sich an, um fortzufahren. / يرجى تسجيل الدخول للمتابعة.")
+    st.stop()
+
+# إذا تم تسجيل الدخول بنجاح، سيظهر التطبيق بشكل طبيعي تماماً
+# ويمكنك إضافة زر تسجيل خروج في القائمة الجانبية هكذا:
+authenticator.logout("Abmelden / تسجيل خروج", "sidebar")
 
 
 # ---------------------------------------------------------
