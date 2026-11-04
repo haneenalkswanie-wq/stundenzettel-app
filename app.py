@@ -32,38 +32,6 @@ supabase = init_supabase()
 # ---------------------------------------------------------
 # نظام الحماية وتسجيل الدخول (Login System)
 # ---------------------------------------------------------
-import streamlit_authenticator as stauth
-
-# بيانات المستخدم مع كلمة المرور مباشرة
-credentials = {
-    "usernames": {
-        "admin": {
-            "name": "Admin",
-            "password": "clean2026"
-        }
-    }
-}
-
-authenticator = stauth.Authenticate(
-    credentials,
-    cookie_name="clean_care_login_cookie",
-    cookie_key="clean_care_secure_signature_2026",
-    cookie_expiry_days=1
-)
-
-# نافذة تسجيل الدخول
-name, authentication_status, username = authenticator.login("Anmelden", "main")
-
-if authentication_status == False:
-    st.error("😕 Benutzername oder Passwort ist falsch / اسم المستخدم أو كلمة السر غير صحيحة.")
-    st.stop()
-elif authentication_status == None:
-    st.warning("Bitte melden Sie sich an, um fortzufahren. / يرجى تسجيل الدخول للمتابعة.")
-    st.stop()
-
-# زر تسجيل الخروج في القائمة الجانبية
-authenticator.logout("Abmelden / تسجيل خروج", "sidebar")
-
 
 # ---------------------------------------------------------
 # قاعدة البيانات السحابية Supabase لضمان المزامنة التامة
