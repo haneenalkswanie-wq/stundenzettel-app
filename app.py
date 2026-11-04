@@ -34,12 +34,12 @@ supabase = init_supabase()
 # ---------------------------------------------------------
 import streamlit_authenticator as stauth
 
-# إعداد بيانات المستخدم الصلاحيات (كلمة السر مشفرة تلقائياً لتوافق المكتبة)
+# بيانات المستخدم مع كلمة المرور مباشرة
 credentials = {
     "usernames": {
         "admin": {
             "name": "Admin",
-            "password": stauth.Hasher(["clean2026"]).generate()[0]
+            "password": "clean2026"
         }
     }
 }
@@ -48,7 +48,7 @@ authenticator = stauth.Authenticate(
     credentials,
     cookie_name="clean_care_login_cookie",
     cookie_key="clean_care_secure_signature_2026",
-    cookie_expiry_days=1  # تبقى الجلسة مفعلة وتتحمل مع تحديث F5، وتنتهي عند إغلاق المتصفح
+    cookie_expiry_days=1
 )
 
 # نافذة تسجيل الدخول
@@ -61,8 +61,7 @@ elif authentication_status == None:
     st.warning("Bitte melden Sie sich an, um fortzufahren. / يرجى تسجيل الدخول للمتابعة.")
     st.stop()
 
-# إذا تم تسجيل الدخول بنجاح، سيظهر التطبيق بشكل طبيعي تماماً
-# ويمكنك إضافة زر تسجيل خروج في القائمة الجانبية هكذا:
+# زر تسجيل الخروج في القائمة الجانبية
 authenticator.logout("Abmelden / تسجيل خروج", "sidebar")
 
 
