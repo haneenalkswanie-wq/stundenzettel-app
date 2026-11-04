@@ -52,7 +52,7 @@ authenticator = stauth.Authenticate(
 )
 
 # نافذة تسجيل الدخول
-name, authentication_status, username = authenticator.login("Anmelden / دخول", "main")
+name, authentication_status, username = authenticator.login("Anmelden", "main")
 
 if authentication_status == False:
     st.error("😕 Benutzername oder Passwort ist falsch / اسم المستخدم أو كلمة السر غير صحيحة.")
