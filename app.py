@@ -1129,32 +1129,31 @@ for row in rows:
           total_company_hours += total_emp_combined
 
     # إضافة الموظفين الذين لديهم ساعات قطار فقط (بدون ساعات عمل يومية)
-    for emp_name, zug_hrs in zug_hours_per_emp.items():
-        if emp_name and emp_name.strip() not in processed_emps and zug_hrs > 0:
-            clean_name = emp_name.strip()
-            processed_emps.add(clean_name)
-            summary_data.append({
-                "Mitarbeiter": clean_name,
-                "Gesamtstunden": f"{zug_hrs:.2f} St."
-            })
-            total_company_hours += zug_hrs
-    except:
-      pass
+  for emp_name, zug_hrs in zug_hours_per_emp.items():
+      if emp_name and emp_name.strip() not in processed_emps and zug_hrs > 0:
+          clean_name = emp_name.strip()
+          processed_emps.add(clean_name)
+          summary_data.append({
+              "Mitarbeiter": clean_name,
+              "Gesamtstunden": f"{zug_hrs:.2f} St."
+          })
+          total_company_hours += zug_hrs
+  except:
+    pass
 
-  if not summary_data:
-    summary_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Gesamtstunden": "0.00 St."}])
-  else:
-    summary_df = pd.DataFrame(summary_data)
+if not summary_data:
+  summary_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Gesamtstunden": "0.00 St."}])
+ else:
+  summary_df = pd.DataFrame(summary_data)
 
-  st.dataframe(summary_df, use_container_width=True)
-
-  st.markdown("---")
-  col_s1, col_s2 = st.columns([2, 1])
-  with col_s1:
-    pdf_summary_data = generate_summary_pdf(summary_month, summary_year, summary_df, total_company_hours)
-    st.download_button(t["pdf_btn"], pdf_summary_data, f"Monatsübersicht_{summary_month}_{summary_year}.pdf", "application/pdf", key="p6_pdf")
-  with col_s2:
-    st.metric("Gesamtsumme:", f"{total_company_hours:.2f} St.")
+st.dataframe(summary_df, use_container_width=True)
+ st.markdown("---")
+ col_s1, col_s2 = st.columns([2, 1])
+ with col_s1:
+   pdf_summary_data = generate_summary_pdf(summary_month, summary_year, summary_df, total_company_hours)
+   st.download_button(t["pdf_btn"], pdf_summary_data, f"Monatsübersicht_{summary_month}_{summary_year}.pdf", "application/pdf", key="p6_pdf")
+ with col_s2:
+   st.metric("Gesamtsumme:", f"{total_company_hours:.2f} St.")
 
 
 
