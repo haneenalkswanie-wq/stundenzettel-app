@@ -712,7 +712,7 @@ if page == t["p1"]:
         try:
           t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
           t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
-          if t2 < t1
+          if t2 < t1:
               from datetime import timedelta 
               t2 += timedelta(days=1)
 
@@ -811,7 +811,7 @@ elif page == t["p2"]:
           try:
             t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
             t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
-            if t2 < t1
+            if t2 < t1:
               from datetime import timedelta 
               t2 += timedelta(days=1)
 
