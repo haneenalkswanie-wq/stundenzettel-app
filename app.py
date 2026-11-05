@@ -1067,6 +1067,7 @@ elif page == t["p5"]:
 # ---------------------------------------------------------
 # الصفحة السادسة: ملخص الأشهر (Monatsübersicht)
 # ---------------------------------------------------------
+
 elif page == t["p6"]:
     st.title("📅 Clean & Care GmbH - Monatsübersicht")
     
@@ -1076,40 +1077,19 @@ elif page == t["p6"]:
     with col2:
         summary_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="summary_year_select")
 
-    # جلب الساعات اليومية أولاً من Supabase للشهر والسنّة المحددة
+    # جلب الساعات اليومية من Supabase للشهر والسنة المحددين
     rows = []
     try:
         res_rows = supabase.table("daily_hours").select("emp, content").eq("month", summary_month).eq("jahr", str(summary_year)).execute()
         rows = res_rows.data if res_rows.data else []
-    except:
+    except Exception:
         rows = []
 
     summary_data = []
     total_company_hours = 0.0
     processed_emps = set()
 
-    # جلب ساعات القطارات لهذا الشهر والسنة بأمان تام
-    zug_summary_data = []
-    try:
-        zug_res = supabase.table("zugstunden")\
-            .select("mitarbeiter, gesamtstunden")\
-            .eq("monat", summary_month)\
-            .eq("jahr", str(summary_year))\
-            .execute()
-        zug_summary_data = zug_res.data if zug_res.data else []
-    except:
-        zug_summary_data = []
-
-    # تجميع ساعات القطار لكل موظف في قاموس
-    zug_hours_per_emp = {}
-    for item in zug_summary_data:
-        emp = item.get("mitarbeiter")
-        if emp:
-            clean_name = emp.strip()
-            hrs = float(item.get("gesamtstunden", 0.0) or 0.0)
-            zug_hours_per_emp[clean_name] = zug_hours_per_emp.get(clean_name, 0.0) + hrs
-
-    # معالجة الساعات اليومية ودمجها مع ساعات القطار لكل موظف
+    # معالجة وحساب الساعات اليومية لكل موظف
     for row in rows:
         emp = row.get("emp")
         if not emp:
@@ -1123,28 +1103,13 @@ elif page == t["p6"]:
         except Exception:
             emp_total = 0.0
 
-        # إضافة ساعات القطار للموظف
-        emp_zug_total = zug_hours_per_emp.get(clean_emp_name, 0.0)
-        total_emp_combined = emp_total + emp_zug_total
-
-        if total_emp_combined > 0 and clean_emp_name not in processed_emps:
+        if emp_total > 0 and clean_emp_name not in processed_emps:
             processed_emps.add(clean_emp_name)
             summary_data.append({
                 "Mitarbeiter": clean_emp_name,
-                "Gesamtstunden": f"{total_emp_combined:.2f} St."
+                "Gesamtstunden": f"{emp_total:.2f} St."
             })
-            total_company_hours += total_emp_combined
-
-    # إضافة الموظفين الذين لديهم ساعات قطار فقط (بدون ساعات عمل يومية)
-    for emp_name, zug_hrs in zug_hours_per_emp.items():
-        if emp_name and emp_name.strip() not in processed_emps and zug_hrs > 0:
-            clean_name = emp_name.strip()
-            processed_emps.add(clean_name)
-            summary_data.append({
-                "Mitarbeiter": clean_name,
-                "Gesamtstunden": f"{zug_hrs:.2f} St."
-            })
-            total_company_hours += zug_hrs
+            total_company_hours += emp_total
 
     # عرض الجدول والنتائج النهائية
     if not summary_data:
@@ -1166,8 +1131,6 @@ elif page == t["p6"]:
         st.download_button("🖨️ / 📊 📥 Excel / CSV exportieren", data=csv_summary, file_name=f"Monatsübersicht_{summary_month}_{summary_year}.csv", mime="text/csv", key="p6_csv")
     with col_s3:
         st.metric("Gesamtsumme:", f"{total_company_hours:.2f} St.")
-
-
 # ---------------------------------------------------------
 # الصفحة السابعة: تذاكر المهام (Einsatz-Tickets)
 # ---------------------------------------------------------
