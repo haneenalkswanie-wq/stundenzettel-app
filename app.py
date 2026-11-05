@@ -1077,12 +1077,12 @@ elif page == t["p6"]:
     with col2:
         summary_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="summary_year_select")
 
-    # 1. جلب الساعات اليومية من Supabase للشهر والسنة المحددين (هذا الجزء كان مفقوداً)
+    # 1. جلب الساعات اليومية من Supabase مطابقة لأسماء حقول الحفظ (month و year)
     rows = []
     try:
-        res_rows = supabase.table("daily_hours").select("emp, content").eq("month", summary_month).eq("jahr", str(summary_year)).execute()
+        res_rows = supabase.table("daily_hours").select("emp, content").eq("month", summary_month).eq("year", int(summary_year)).execute()
         rows = res_rows.data if res_rows.data else []
-    except Exception:
+    except Exception as e:
         rows = []
 
     summary_data = []
@@ -1240,10 +1240,9 @@ elif page == t["p8"]:
     except Exception as e:
         st.warning(f"ملاحظة: لم يتم جلب بيانات سابقة أو الجدول غير مجدول بعد: {e}")
 
-    # تحويل البيانات المجلوبة إلى قاموس يسهل البحث فيه بواسطة اليوم
     db_rows_by_day = {str(item.get("tag")): item for item in existing_data} if existing_data else {}
 
-    # --- 2. بناء الأسطر (إما من الداتا بيز أو فارغة) ---
+    # --- 2. بناء الأسطر ---
     trains_data_rows = []
     for day in range(1, days_count + 1):
         day_str = str(day)
@@ -1260,7 +1259,6 @@ elif page == t["p8"]:
 
     default_trains_df = pd.DataFrame(trains_data_rows)
 
-    # عرض الجدول القابل للتعديل
     edited_trains_df = st.data_editor(
         default_trains_df,
         num_rows="fixed",
@@ -1277,7 +1275,7 @@ elif page == t["p8"]:
 
     edited_trains_df = edited_trains_df.astype(object)
 
-    # --- 3. حساب الساعات والورديات الليلية ---
+    # --- 3. حساب الساعات والورديات الليلية وتجهيز القائمة ---
     total_trains_sum = 0.0
     records_to_save = []
 
@@ -1293,7 +1291,6 @@ elif page == t["p8"]:
                         t1 = datetime.strptime(v_str.replace(".", ":"), fmt)
                         t2 = datetime.strptime(b_str.replace(".", ":"), fmt)
                         
-                        # معالجة الشفت الليلي (بعد منتصف الليل)
                         if t2 < t1:
                             t2 += timedelta(days=1)
 
@@ -1306,31 +1303,31 @@ elif page == t["p8"]:
         
         total_trains_sum += day_total_hrs
 
-        # --- تجهيز السجل للحفظ في Supabase مع التحقق الآمن ---
-    records_to_save.append({
-        "mitarbeiter": train_emp,
-        "monat": train_month,
-        "jahr": str(train_year),
-        "tag": str(row["Datum"]),
-        "zug_1": str(row.get("Zug 1", "")),
-        "von_1": str(row.get("Von 1", "")),
-        "bis_1": str(row.get("Bis 1", "")),
-        "zug_2": str(row.get("Zug 2", "")),
-        "von_2": str(row.get("Von 2", "")),
-        "bis_2": str(row.get("Bis 2", "")),
-        "zug_3": str(row.get("Zug 3", "")),
-        "von_3": str(row.get("Von 3", "")),
-        "bis_3": str(row.get("Bis 3", "")),
-        "zug_4": str(row.get("Zug 4", "")),
-        "von_4": str(row.get("Von 4", "")),
-        "bis_4": str(row.get("Bis 4", "")),
-        "zug_5": str(row.get("Zug 5", "")),
-        "von_5": str(row.get("Von 5", "")),
-        "bis_5": str(row.get("Bis 5", "")),
-        "gesamtstunden": round(day_total_hrs, 2)
-    })
+        # تم إدخال السطر داخل حلقة التكرار بدقة لضمان حفظ جميع الأيام
+        records_to_save.append({
+            "mitarbeiter": train_emp,
+            "monat": train_month,
+            "jahr": str(train_year),
+            "tag": str(row["Datum"]),
+            "zug_1": str(row.get("Zug 1", "")),
+            "von_1": str(row.get("Von 1", "")),
+            "bis_1": str(row.get("Bis 1", "")),
+            "zug_2": str(row.get("Zug 2", "")),
+            "von_2": str(row.get("Von 2", "")),
+            "bis_2": str(row.get("Bis 2", "")),
+            "zug_3": str(row.get("Zug 3", "")),
+            "von_3": str(row.get("Von 3", "")),
+            "bis_3": str(row.get("Bis 3", "")),
+            "zug_4": str(row.get("Zug 4", "")),
+            "von_4": str(row.get("Von 4", "")),
+            "bis_4": str(row.get("Bis 4", "")),
+            "zug_5": str(row.get("Zug 5", "")),
+            "von_5": str(row.get("Von 5", "")),
+            "bis_5": str(row.get("Bis 5", "")),
+            "gesamtstunden": round(day_total_hrs, 2)
+        })
 
-# --- 4. أزرار الحفظ والتحميل (الطباعة) ---
+    # --- 4. أزرار الحفظ والتحميل (الطباعة) ---
     col_b1, col_b2 = st.columns(2)
     
     with col_b1:
@@ -1339,10 +1336,9 @@ elif page == t["p8"]:
                 supabase.table("zugstunden").upsert(records_to_save).execute()
                 st.success("✅ تم حفظ ساعات القطار في قاعدة البيانات بنجاح!")
             except Exception as e:
-                st.info("💡 ملاحظة: يرجى التأكد من إنشاء جدول 'zugstunden' في Supabase لتفعيل الحفظ الدائم.")
+                st.info(f"💡 ملاحظة: {e}")
     
     with col_b2:
-        # تحويل جدول القطارات إلى CSV للتحميل أو الطباعة
         csv_data = edited_trains_df.to_csv(index=False).encode('utf-8')
         st.download_button(
             label="📥 Zug-Stunden exportieren / تحميل وتصدير",
