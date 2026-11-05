@@ -1077,8 +1077,8 @@ elif page == t["p6"]:
     summary_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="summary_year_select")
 
   summary_data = []
-    total_company_hours = 0.0
-    processed_emps = set()
+  total_company_hours = 0.0
+  processed_emps = set()
 
     # جلب ساعات القطارات لهذا الشهر والسنة بآمان
     zug_summary_data = []
