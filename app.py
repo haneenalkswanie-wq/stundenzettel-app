@@ -1227,37 +1227,47 @@ elif page == t["p8"]:
     except:
         days_count = 31
 
-    # --- 1. جلب البيانات المخزنة سابقاً من Supabase ---
+    # استخدام الدالة الموجودة مسبقاً load_trains_data أو الاستعلام المباشر من trains_data
     existing_data = []
     try:
-        res = supabase.table("zugstunden")\
+        res = supabase.table("trains_data")\
             .select("*")\
-            .eq("mitarbeiter", train_emp)\
-            .eq("monat", train_month)\
-            .eq("jahr", str(train_year))\
+            .eq("emp", train_emp)\
+            .eq("month", train_month)\
+            .eq("year", int(train_year))\
             .execute()
         existing_data = res.data if res.data else []
     except Exception as e:
-        st.warning(f"ملاحظة: لم يتم جلب بيانات سابقة أو الجدول غير مجدول بعد: {e}")
+        st.warning(f"ملاحظة: {e}")
 
-    db_rows_by_day = {str(item.get("tag")): item for item in existing_data} if existing_data else {}
-
-    # --- 2. بناء الأسطر ---
+    # إذا كانت البيانات مخزنة كـ JSON داخل عمود content كما تظهر في قاعدة البيانات لديك
     trains_data_rows = []
-    for day in range(1, days_count + 1):
-        day_str = str(day)
-        saved_row = db_rows_by_day.get(day_str, {})
-        
-        row_data = {"Datum": day_str}
-        for i in range(1, 6):
-            row_data[f"Zug {i}"] = saved_row.get(f"zug_{i}", "")
-            row_data[f"Von {i}"] = saved_row.get(f"von_{i}", "")
-            row_data[f"Bis {i}"] = saved_row.get(f"bis_{i}", "")
-        
-        row_data["Gesamtstunden"] = saved_row.get("gesamtstunden", 0.0)
-        trains_data_rows.append(row_data)
+    saved_df = None
+    if existing_data and "content" in existing_data[0]:
+        try:
+            content_json = json.loads(existing_data[0]["content"])
+            saved_df = pd.DataFrame(content_json)
+        except:
+            pass
 
-    default_trains_df = pd.DataFrame(trains_data_rows)
+    if saved_df is not None and not saved_df.empty:
+        default_trains_df = saved_df
+        for i in range(1, 6):
+            if f"Zug {i}" not in default_trains_df.columns:
+                default_trains_df[f"Zug {i}"] = ""
+            if f"Verspätung {i}" not in default_trains_df.columns:
+                default_trains_df[f"Verspätung {i}"] = 0
+    else:
+        trains_rows = []
+        for day in range(1, days_count + 1):
+            row_data = {"Datum": str(day)}
+            for i in range(1, 6):
+                row_data[f"Zug {i}"] = ""
+                row_data[f"Von {i}"] = ""
+                row_data[f"Bis {i}"] = ""
+            row_data["Gesamtstunden"] = 0.0
+            trains_rows.append(row_data)
+        default_trains_df = pd.DataFrame(trains_rows)
 
     edited_trains_df = st.data_editor(
         default_trains_df,
@@ -1275,10 +1285,7 @@ elif page == t["p8"]:
 
     edited_trains_df = edited_trains_df.astype(object)
 
-    # --- 3. حساب الساعات والورديات الليلية وتجهيز القائمة ---
     total_trains_sum = 0.0
-    records_to_save = []
-
     for index, row in edited_trains_df.iterrows():
         day_total_hrs = 0.0
         for i in range(1, 6):
@@ -1292,6 +1299,7 @@ elif page == t["p8"]:
                         t2 = datetime.strptime(b_str.replace(".", ":"), fmt)
                         
                         if t2 < t1:
+                            from datetime import timedelta
                             t2 += timedelta(days=1)
 
                         diff = (t2 - t1).total_seconds() / 3600.0
@@ -1302,47 +1310,32 @@ elif page == t["p8"]:
                         continue
         
         total_trains_sum += day_total_hrs
+        edited_trains_df.at[index, "Gesamtstunden"] = round(day_total_hrs, 2)
 
-        # تم إدخال السطر داخل حلقة التكرار بدقة لضمان حفظ جميع الأيام
-        records_to_save.append({
-            "mitarbeiter": train_emp,
-            "monat": train_month,
-            "jahr": str(train_year),
-            "tag": str(row["Datum"]),
-            "zug_1": str(row.get("Zug 1", "")),
-            "von_1": str(row.get("Von 1", "")),
-            "bis_1": str(row.get("Bis 1", "")),
-            "zug_2": str(row.get("Zug 2", "")),
-            "von_2": str(row.get("Von 2", "")),
-            "bis_2": str(row.get("Bis 2", "")),
-            "zug_3": str(row.get("Zug 3", "")),
-            "von_3": str(row.get("Von 3", "")),
-            "bis_3": str(row.get("Bis 3", "")),
-            "zug_4": str(row.get("Zug 4", "")),
-            "von_4": str(row.get("Von 4", "")),
-            "bis_4": str(row.get("Bis 4", "")),
-            "zug_5": str(row.get("Zug 5", "")),
-            "von_5": str(row.get("Von 5", "")),
-            "bis_5": str(row.get("Bis 5", "")),
-            "gesamtstunden": round(day_total_hrs, 2)
-        })
-
-    # --- 4. أزرار الحفظ والتحميل (الطباعة) ---
-    col_b1, col_b2 = st.columns(2)
+    col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 1])
     
     with col_b1:
-        if st.button("💾 Speichern / حفظ ساعات القطار", type="primary"):
+        if st.button("💾 Speichern / حفظ ساعات القطار", type="primary", key="save_trains_btn"):
             try:
-                supabase.table("zugstunden").upsert(records_to_save).execute()
-                st.success("✅ تم حفظ ساعات القطار في قاعدة البيانات بنجاح!")
+                content_str = json.dumps(edited_trains_df.to_dict(orient="list"), ensure_ascii=False)
+                supabase.table("trains_data").upsert({
+                    "emp": train_emp,
+                    "month": train_month,
+                    "year": int(train_year),
+                    "content": content_str
+                }).execute()
+                st.success("✅ تم حفظ ساعات القطار في جدول trains_data بنجاح!")
             except Exception as e:
-                st.info(f"💡 ملاحظة: {e}")
+                st.error(f"حدث خطأ أثناء الحفظ: {e}")
     
     with col_b2:
         csv_data = edited_trains_df.to_csv(index=False).encode('utf-8')
         st.download_button(
-            label="📥 Zug-Stunden exportieren / تحميل وتصدير",
+            label="📥 Zug-Stunden exportieren",
             data=csv_data,
             file_name=f"Zugstunden_{train_emp}_{train_month}_{train_year}.csv",
-            mime="text/csv"
+            mime="text/csv",
+            key="export_trains_btn"
         )
+    with col_b3:
+        st.metric("Gesamtsumme:", f"{total_trains_sum:.2f} St.")
