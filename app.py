@@ -1194,99 +1194,144 @@ elif page == t["p7"]:
 # الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - 5 قطارات (رقم، بداية، نهاية) مع جمع الساعات
 # ---------------------------------------------------------
 elif page == t["p8"]:
-  st.title("🚆 Clean & Care GmbH - Zug-Fahrten")
-  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
+    st.title("🚆 Clean & Care GmbH - Zug-Fahrten")
+    st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
-  employees_list = load_employees()
+    employees_list = load_employees()
 
-  col1, col2, col3 = st.columns(3)
-  with col1:
-    train_emp = st.selectbox(t["emp_label"], employees_list, key="train_emp_select")
-  with col2:
-    train_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="train_month_select")
-  with col3:
-    train_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="train_year_select")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        train_emp = st.selectbox(t["emp_label"], employees_list, key="train_emp_select")
+    with col2:
+        train_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="train_month_select")
+    with col3:
+        train_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="train_year_select")
 
-  st.subheader(f"Zug-Fahrten für: {train_emp} ({train_month} {train_year})")
+    st.subheader(f"Zug-Fahrten für: {train_emp} ({train_month} {train_year})")
 
-  # خيارات أرقام القطارات
-  trains_options = ["", "Zug 1", "Zug 2", "Zug 3", "Zug 4", "Zug 5"]
+    trains_options = ["", "Zug 1", "Zug 2", "Zug 3", "Zug 4", "Zug 5"]
 
-  # إعداد الأعمدة لـ 5 قطارات (كل قطار: رقم، بداية، نهاية)
-  import calendar
-  months_map_de = {
-      "Januar": 1, "Februar": 2, "März": 3, "April": 4, 
-      "Mai": 5, "Juni": 6, "Juli": 7, "August": 8, 
-      "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
-  }
-  m_num = months_map_de.get(train_month, 10)
-  try:
-      days_count = calendar.monthrange(int(train_year), m_num)[1]
-  except:
-      days_count = 31
+    import calendar
+    months_map_de = {
+        "Januar": 1, "Februar": 2, "März": 3, "April": 4,
+        "Mai": 5, "Juni": 6, "Juli": 7, "August": 8,
+        "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
+    }
+    m_num = months_map_de.get(train_month, 10)
+    try:
+        days_count = calendar.monthrange(int(train_year), m_num)[1]
+    except:
+        days_count = 31
 
-  # تحميل أو إنشاء جدول القطارات الجديد
-  trains_data_rows = []
-  for day in range(1, days_count + 1):
-      row_data = {"Datum": str(day)}
-      for i in range(1, 6):
-          row_data[f"Zug {i}"] = ""
-          row_data[f"Von {i}"] = ""
-          row_data[f"Bis {i}"] = ""
-      row_data["Gesamtstunden"] = 0.0
-      trains_data_rows.append(row_data)
-  
-  default_trains_df = pd.DataFrame(trains_data_rows)
+    # --- 1. جلب البيانات المخزنة سابقاً من Supabase ---
+    existing_data = []
+    try:
+        res = supabase.table("zugstunden")\
+            .select("*")\
+            .eq("mitarbeiter", train_emp)\
+            .eq("monat", train_month)\
+            .eq("jahr", str(train_year))\
+            .execute()
+        existing_data = res.data if res.data else []
+    except Exception as e:
+        st.warning(f"ملاحظة: لم يتم جلب بيانات سابقة أو الجدول غير مجدول بعد: {e}")
 
-  edited_trains_df = st.data_editor(
-      default_trains_df,
-      num_rows="fixed",
-      use_container_width=True,
-      key=f"trains_table_new_{train_emp}_{train_month}_{train_year}",
-      column_config={
-          "Zug 1": st.column_config.SelectboxColumn("Zug 1", options=trains_options),
-          "Zug 2": st.column_config.SelectboxColumn("Zug 2", options=trains_options),
-          "Zug 3": st.column_config.SelectboxColumn("Zug 3", options=trains_options),
-          "Zug 4": st.column_config.SelectboxColumn("Zug 4", options=trains_options),
-          "Zug 5": st.column_config.SelectboxColumn("Zug 5", options=trains_options),
-      }
-  )
+    # تحويل البيانات المجلوبة إلى قاموس يسهل البحث فيه بواسطة اليوم
+    db_rows_by_day = {str(item.get("tag")): item for item in existing_data} if existing_data else {}
 
-  edited_trains_df = edited_trains_df.astype(object)
+    # --- 2. بناء الأسطر (إما من الداتا بيز أو فارغة) ---
+    trains_data_rows = []
+    for day in range(1, days_count + 1):
+        day_str = str(day)
+        saved_row = db_rows_by_day.get(day_str, {})
+        
+        row_data = {"Datum": day_str}
+        for i in range(1, 6):
+            row_data[f"Zug {i}"] = saved_row.get(f"zug_{i}", "")
+            row_data[f"Von {i}"] = saved_row.get(f"von_{i}", "")
+            row_data[f"Bis {i}"] = saved_row.get(f"bis_{i}", "")
+        
+        row_data["Gesamtstunden"] = saved_row.get("gesamtstunden", 0.0)
+        trains_data_rows.append(row_data)
 
-  # حساب إجمالي الساعات لكل قطار بناءً على وقت البداية والنهاية
-  total_trains_sum = 0.0
-  for index, row in edited_trains_df.iterrows():
-    day_total_hrs = 0.0
-    
-    for i in range(1, 6):
-      v_str = str(row.get(f"Von {i}", "")).strip()
-      b_str = str(row.get(f"Bis {i}", "")).strip()
+    default_trains_df = pd.DataFrame(trains_data_rows)
 
-      if v_str and b_str and v_str != "nan" and b_str != "nan":
-        for fmt in ("%H:%M", "%H.%M", "%H"):
-          try:
-            t1 = datetime.strptime(v_str.replace(".", ":"), fmt)
-            t2 = datetime.strptime(b_str.replace(".", ":"), fmt)
-            diff = (t2 - t1).total_seconds() / 3600.0
-            if diff > 0:
-              day_total_hrs += diff
-            break
-          except:
-            continue
+    # عرض الجدول القابل للتعديل
+    edited_trains_df = st.data_editor(
+        default_trains_df,
+        num_rows="fixed",
+        use_container_width=True,
+        key=f"trains_table_{train_emp}_{train_month}_{train_year}",
+        column_config={
+            "Zug 1": st.column_config.SelectboxColumn("Zug 1", options=trains_options),
+            "Zug 2": st.column_config.SelectboxColumn("Zug 2", options=trains_options),
+            "Zug 3": st.column_config.SelectboxColumn("Zug 3", options=trains_options),
+            "Zug 4": st.column_config.SelectboxColumn("Zug 4", options=trains_options),
+            "Zug 5": st.column_config.SelectboxColumn("Zug 5", options=trains_options),
+        }
+    )
 
-    edited_trains_df.at[index, "Gesamtstunden"] = round(day_total_hrs, 2)
-    total_trains_sum += day_total_hrs
+    edited_trains_df = edited_trains_df.astype(object)
 
-  st.markdown("---")
-  col_tr1, col_tr2, col_tr3 = st.columns([2, 1, 1])
-  with col_tr1:
-    # زر طباعة تقرير القطارات الجديد
-    pdf_trains_data = generate_trains_pdf(train_emp, train_month, train_year, edited_trains_df, total_trains_sum)
-    st.download_button(t["pdf_btn"], pdf_trains_data, f"Zug_Fahrten_{train_emp}_{train_month}_{train_year}.pdf", "application/pdf", key="p8_pdf_btn")
-  with col_tr2:
-    if st.button(t["save_btn"], key="trains_save_btn"):
-      save_trains_data(train_emp, train_month, train_year, edited_trains_df)
-      st.success(t["success_msg"])
-  with col_tr3:
-    st.metric(t["sum_label"], f"{total_trains_sum:.2f} St.")
+    # --- 3. حساب الساعات والورديات الليلية ---
+    total_trains_sum = 0.0
+    records_to_save = []
+
+    for index, row in edited_trains_df.iterrows():
+        day_total_hrs = 0.0
+        for i in range(1, 6):
+            v_str = str(row.get(f"Von {i}", "")).strip()
+            b_str = str(row.get(f"Bis {i}", "")).strip()
+
+            if v_str and b_str and v_str != "nan" and b_str != "nan":
+                for fmt in ("%H:%M", "%H.%M", "%H"):
+                    try:
+                        t1 = datetime.strptime(v_str.replace(".", ":"), fmt)
+                        t2 = datetime.strptime(b_str.replace(".", ":"), fmt)
+                        
+                        # معالجة الشفت الليلي (بعد منتصف الليل)
+                        if t2 < t1:
+                            t2 += timedelta(days=1)
+
+                        diff = (t2 - t1).total_seconds() / 3600.0
+                        if diff > 0:
+                            day_total_hrs += diff
+                        break
+                    except:
+                        continue
+        
+        total_trains_sum += day_total_hrs
+
+        # تجهيز السجل للحفظ في Supabase
+        records_to_save.append({
+            "mitarbeiter": train_emp,
+            "monat": train_month,
+            "jahr": str(train_year),
+            "tag": str(row["Datum"]),
+            "zug_1": str(row.get("Zug 1", "")),
+            "von_1": str(row.get("Von 1", "")),
+            "bis_1": str(row.get("Bis 1", "")),
+            "zug_2": str(row.get("Zug 2", "")),
+            "von_2": str(row.get("Von 2", "")),
+            "bis_2": str(row.get("Bis 2", "")),
+            "zug_3": str(row.get("Zug 3", "")),
+            "von_3": str(row.get("Von 3", "")),
+            "bis_3": str(row.get("Bis 3", "")),
+            "zug_4": str(row.get("Zug 4", "")),
+            "von_4": str(row.get("Von 4", "")),
+            "bis_4": str(row.get("Bis 4", "")),
+            "zug_5": str(row.get("Zug 5", "")),
+            "von_5": str(row.get("Von 5", "")),
+            "bis_5": str(row.get("Bis 5", "")),
+            "gesamtstunden": round(day_total_hrs, 2)
+        })
+
+    st.markdown(f"### 🧮 Gesamtsumme Zug-Stunden: **{round(total_trains_sum, 2)} hrs**")
+
+    # --- 4. زر الحفظ المباشر في Supabase ---
+    if st.button("💾 Speichern", type="primary"):
+        try:
+            supabase.table("zugstunden").upsert(records_to_save).execute()
+            st.success("✅ تم حفظ ساعات القطار في قاعدة البيانات بنجاح ولن تضيع عند الخروج!")
+        except Exception as e:
+            st.error(f"❌ خطأ أثناء الحفظ في Supabase: {e}")
