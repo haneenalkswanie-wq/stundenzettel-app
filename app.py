@@ -1117,16 +1117,16 @@ for row in rows:
           emp_total = 0.0
 
         # إضافة ساعات القطار للموظف
-        emp_zug_total = zug_hours_per_emp.get(clean_emp_name, 0.0)
-        total_emp_combined = emp_total + emp_zug_total
+      emp_zug_total = zug_hours_per_emp.get(clean_emp_name, 0.0)
+      total_emp_combined = emp_total + emp_zug_total
 
-        if total_emp_combined > 0 and clean_emp_name not in processed_emps:
-            processed_emps.add(clean_emp_name)
-            summary_data.append({
-                "Mitarbeiter": clean_emp_name,
-                "Gesamtstunden": f"{total_emp_combined:.2f} St."
-            })
-            total_company_hours += total_emp_combined
+      if total_emp_combined > 0 and clean_emp_name not in processed_emps:
+          processed_emps.add(clean_emp_name)
+          summary_data.append({
+              "Mitarbeiter": clean_emp_name,
+              "Gesamtstunden": f"{total_emp_combined:.2f} St."
+          })
+          total_company_hours += total_emp_combined
 
     # إضافة الموظفين الذين لديهم ساعات قطار فقط (بدون ساعات عمل يومية)
     for emp_name, zug_hrs in zug_hours_per_emp.items():
