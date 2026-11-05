@@ -1129,7 +1129,7 @@ for row in rows:
           total_company_hours += total_emp_combined
 
     # إضافة الموظفين الذين لديهم ساعات قطار فقط (بدون ساعات عمل يومية)
-  for emp_name, zug_hrs in zug_hours_per_emp.items():
+ for emp_name, zug_hrs in zug_hours_per_emp.items():
       if emp_name and emp_name.strip() not in processed_emps and zug_hrs > 0:
           clean_name = emp_name.strip()
           processed_emps.add(clean_name)
