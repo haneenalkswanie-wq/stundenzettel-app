@@ -1081,25 +1081,25 @@ elif page == t["p6"]:
   processed_emps = set()
 
     # جلب ساعات القطارات لهذا الشهر والسنة بآمان
-    zug_summary_data = []
-    try:
-        zug_res = supabase.table("zugstunden")\
-            .select("mitarbeiter, gesamtstunden")\
-            .eq("monat", summary_month)\
-            .eq("jahr", str(summary_year))\
-            .execute()
-        zug_summary_data = zug_res.data if zug_res.data else []
-    except:
-        zug_summary_data = []
+  zug_summary_data = []
+  try:
+      zug_res = supabase.table("zugstunden")\
+          .select("mitarbeiter, gesamtstunden")\
+          .eq("monat", summary_month)\
+          .eq("jahr", str(summary_year))\
+          .execute()
+      zug_summary_data = zug_res.data if zug_res.data else []
+  except:
+      zug_summary_data = []
 
     # تجميع ساعات القطار لكل موظف في قاموس
-    zug_hours_per_emp = {}
-    for item in zug_summary_data:
-        emp = item.get("mitarbeiter")
-        if emp:
-            clean_name = emp.strip()
-            hrs = float(item.get("gesamtstunden", 0.0) or 0.0)
-            zug_hours_per_emp[clean_name] = zug_hours_per_emp.get(clean_name, 0.0) + hrs
+  zug_hours_per_emp = {}
+  for item in zug_summary_data:
+      emp = item.get("mitarbeiter")
+      if emp:
+          clean_name = emp.strip()
+          hrs = float(item.get("gesamtstunden", 0.0) or 0.0)
+          zug_hours_per_emp[clean_name] = zug_hours_per_emp.get(clean_name, 0.0) + hrs
 
 processed_emps = set()
 
