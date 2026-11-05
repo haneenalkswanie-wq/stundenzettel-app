@@ -1077,19 +1077,37 @@ elif page == t["p6"]:
     with col2:
         summary_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="summary_year_select")
 
-    # 1. جلب الساعات اليومية من Supabase مطابقة لأسماء حقول الحفظ (month و year)
+    # 1. جلب الساعات اليومية من Supabase
     rows = []
     try:
         res_rows = supabase.table("daily_hours").select("emp, content").eq("month", summary_month).eq("year", int(summary_year)).execute()
         rows = res_rows.data if res_rows.data else []
-    except Exception as e:
+    except Exception:
         rows = []
+
+    # 2. جلب ساعات القطارات من trains_data وحساب مجموعها لكل موظف بشكل آمن
+    zug_hours_per_emp = {}
+    try:
+        zug_res = supabase.table("trains_data").select("emp, content").eq("month", summary_month).eq("year", int(summary_year)).execute()
+        zug_rows = zug_res.data if zug_res.data else []
+        for z_row in zug_rows:
+            z_emp = z_row.get("emp")
+            if z_emp and z_row.get("content"):
+                try:
+                    z_df = pd.DataFrame(json.loads(z_row["content"]))
+                    if "Gesamtstunden" in z_df.columns:
+                        z_sum = z_df["Gesamtstunden"].astype(float).sum()
+                        zug_hours_per_emp[z_emp.strip()] = z_sum
+                except Exception:
+                    pass
+    except Exception:
+        zug_hours_per_emp = {}
 
     summary_data = []
     total_company_hours = 0.0
     processed_emps = set()
 
-    # 2. معالجة وحساب الساعات اليومية لكل موظف
+    # 3. معالجة الساعات اليومية ودمج ساعات القطارات معها
     for row in rows:
         emp = row.get("emp")
         if not emp:
@@ -1099,19 +1117,34 @@ elif page == t["p6"]:
         try:
             emp_data = json.loads(row["content"])
             emp_daily_df = pd.DataFrame(emp_data)
-            emp_total = emp_daily_df["Gesamtstunden"].astype(float).sum() if "Gesamtstunden" in emp_daily_df.columns else 0.0
+            emp_daily_total = emp_daily_df["Gesamtstunden"].astype(float).sum() if "Gesamtstunden" in emp_daily_df.columns else 0.0
         except Exception:
-            emp_total = 0.0
+            emp_daily_total = 0.0
 
-        if emp_total > 0 and clean_emp_name not in processed_emps:
+        # إضافة ساعات القطار إن وجدت دون المساس ببيانات الساعات اليومية الأصلية
+        emp_zug_total = zug_hours_per_emp.get(clean_emp_name, 0.0)
+        total_emp_combined = emp_daily_total + emp_zug_total
+
+        if total_emp_combined > 0 and clean_emp_name not in processed_emps:
             processed_emps.add(clean_emp_name)
             summary_data.append({
                 "Mitarbeiter": clean_emp_name,
-                "Gesamtstunden": f"{emp_total:.2f} St."
+                "Gesamtstunden": f"{total_emp_combined:.2f} St."
             })
-            total_company_hours += emp_total
+            total_company_hours += total_emp_combined
 
-    # 3. عرض الجدول والنتائج النهائية
+    # 4. إضافة الموظفين الذين لديهم ساعات قطارات فقط (إن وجدوا)
+    for emp_name, zug_hrs in zug_hours_per_emp.items():
+        if emp_name and emp_name.strip() not in processed_emps and zug_hrs > 0:
+            clean_name = emp_name.strip()
+            processed_emps.add(clean_name)
+            summary_data.append({
+                "Mitarbeiter": clean_name,
+                "Gesamtstunden": f"{zug_hrs:.2f} St."
+            })
+            total_company_hours += zug_hrs
+
+    # 5. عرض النتائج والتصدير
     if not summary_data:
         summary_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Gesamtstunden": "0.00 St."}])
     else:
@@ -1126,7 +1159,6 @@ elif page == t["p6"]:
         st.download_button(t["pdf_btn"], pdf_summary_data, f"Monatsübersicht_{summary_month}_{summary_year}.pdf", "application/pdf", key="p6_pdf")
     with col_s2:
         st.metric("Gesamtsumme:", f"{total_company_hours:.2f} St.")
-
 # ---------------------------------------------------------
 # الصفحة السابعة: تذاكر المهام (Einsatz-Tickets)
 # ---------------------------------------------------------
