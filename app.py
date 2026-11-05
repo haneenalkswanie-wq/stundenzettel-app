@@ -32,7 +32,35 @@ supabase = init_supabase()
 # ---------------------------------------------------------
 # نظام الحماية وتسجيل الدخول (Login System)
 # ---------------------------------------------------------
+import streamlit_authenticator as stauth
 
+credentials = {
+    "usernames": {
+        "admin": {
+            "name": "Clean & Care Admin",
+            "password": "clean2026"
+        }
+    }
+}
+
+authenticator = stauth.Authenticate(
+    credentials,
+    cookie_name="clean_care_login_cooki",
+    cookie_key="clean_care_secure_signature_2026",
+    cookie_expiry_days=1
+)
+
+name, authentication_status, username = authenticator.login("Anmelden", "main")
+
+if authentication_status == False:
+    st.error("Benutzername oder passwort ist falsch")
+    st.stop()
+elif authentication_status == None:
+    st.warning("Bitte melden Sie sich an, um fortzufahren.")
+    st.stop()
+authenticator.logout("Abmelden", sidebar")
+
+st.success
 # ---------------------------------------------------------
 # قاعدة البيانات السحابية Supabase لضمان المزامنة التامة
 # ---------------------------------------------------------
@@ -684,6 +712,10 @@ if page == t["p1"]:
         try:
           t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
           t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
+          if t2 < t1
+              from datetime import timedelta 
+              t2 += timedelta(days=1)
+
           gross_hours = (t2 - t1).total_seconds() / 3600
           if gross_hours > 0:
             if p_input and p_input != "nan" and p_input != "":
@@ -779,6 +811,10 @@ elif page == t["p2"]:
           try:
             t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
             t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
+            if t2 < t1
+              from datetime import timedelta 
+              t2 += timedelta(days=1)
+
             gh = (t2 - t1).total_seconds() / 3600
             if gh > 0:
               hrs = gh
