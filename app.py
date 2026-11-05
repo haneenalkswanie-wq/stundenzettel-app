@@ -1068,93 +1068,98 @@ elif page == t["p5"]:
 # الصفحة السادسة: ملخص الأشهر (Monatsübersicht)
 # ---------------------------------------------------------
 elif page == t["p6"]:
-  st.title("📅 Clean & Care GmbH - Monatsübersicht")
-  
-  col1, col2 = st.columns(2)
-  with col1:
-    summary_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="summary_month_select")
-  with col2:
-    summary_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="summary_year_select")
+    st.title("📅 Clean & Care GmbH - Monatsübersicht")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        summary_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="summary_month_select")
+    with col2:
+        summary_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="summary_year_select")
 
-  summary_data = []
-  total_company_hours = 0.0
-  processed_emps = set()
+    # جلب الساعات اليومية أولاً من Supabase
+    rows = []
+    try:
+        res_rows = supabase.table("daily_hours").select("emp, content").eq("month", summary_month).eq("jahr", str(summary_year)).execute()
+        rows = res_rows.data if res_rows.data else []
+    except:
+        rows = []
 
-    # جلب ساعات القطارات لهذا الشهر والسنة بآمان
-  zug_summary_data = []
-  try:
-      zug_res = supabase.table("zugstunden")\
-          .select("mitarbeiter, gesamtstunden")\
-          .eq("monat", summary_month)\
-          .eq("jahr", str(summary_year))\
-          .execute()
-      zug_summary_data = zug_res.data if zug_res.data else []
-  except:
-      zug_summary_data = []
+    summary_data = []
+    total_company_hours = 0.0
+    processed_emps = set()
+
+    # جلب ساعات القطارات لهذا الشهر والسنة بأمان
+    zug_summary_data = []
+    try:
+        zug_res = supabase.table("zugstunden")\
+            .select("mitarbeiter, gesamtstunden")\
+            .eq("monat", summary_month)\
+            .eq("jahr", str(summary_year))\
+            .execute()
+        zug_summary_data = zug_res.data if zug_res.data else []
+    except:
+        zug_summary_data = []
 
     # تجميع ساعات القطار لكل موظف في قاموس
-  zug_hours_per_emp = {}
-  for item in zug_summary_data:
-      emp = item.get("mitarbeiter")
-      if emp:
-          clean_name = emp.strip()
-          hrs = float(item.get("gesamtstunden", 0.0) or 0.0)
-          zug_hours_per_emp[clean_name] = zug_hours_per_emp.get(clean_name, 0.0) + hrs
+    zug_hours_per_emp = {}
+    for item in zug_summary_data:
+        emp = item.get("mitarbeiter")
+        if emp:
+            clean_name = emp.strip()
+            hrs = float(item.get("gesamtstunden", 0.0) or 0.0)
+            zug_hours_per_emp[clean_name] = zug_hours_per_emp.get(clean_name, 0.0) + hrs
 
-processed_emps = set()
-
-for row in rows:
-      emp = row.get("emp")
-      if not emp:
-          continue
-      clean_emp_name = emp.strip()
-        
-      try:
-          emp_data = json.loads(row["content"])
-          emp_daily_df = pd.DataFrame(emp_data)
-          emp_total = emp_daily_df["Gesamtstunden"].astype(float).sum() if "Gesamtstunden" in emp_daily_df.columns else 0.0
-      except Exception:
-          emp_total = 0.0
+    # معالجة الساعات اليومية للموظفين
+    for row in rows:
+        emp = row.get("emp")
+        if not emp:
+            continue
+        clean_emp_name = emp.strip()
+          
+        try:
+            emp_data = json.loads(row["content"])
+            emp_daily_df = pd.DataFrame(emp_data)
+            emp_total = emp_daily_df["Gesamtstunden"].astype(float).sum() if "Gesamtstunden" in emp_daily_df.columns else 0.0
+        except Exception:
+            emp_total = 0.0
 
         # إضافة ساعات القطار للموظف
-      emp_zug_total = zug_hours_per_emp.get(clean_emp_name, 0.0)
-      total_emp_combined = emp_total + emp_zug_total
+        emp_zug_total = zug_hours_per_emp.get(clean_emp_name, 0.0)
+        total_emp_combined = emp_total + emp_zug_total
 
-      if total_emp_combined > 0 and clean_emp_name not in processed_emps:
-          processed_emps.add(clean_emp_name)
-          summary_data.append({
-              "Mitarbeiter": clean_emp_name,
-              "Gesamtstunden": f"{total_emp_combined:.2f} St."
-          })
-          total_company_hours += total_emp_combined
+        if total_emp_combined > 0 and clean_emp_name not in processed_emps:
+            processed_emps.add(clean_emp_name)
+            summary_data.append({
+                "Mitarbeiter": clean_emp_name,
+                "Gesamtstunden": f"{total_emp_combined:.2f} St."
+            })
+            total_company_hours += total_emp_combined
 
     # إضافة الموظفين الذين لديهم ساعات قطار فقط (بدون ساعات عمل يومية)
- for emp_name, zug_hrs in zug_hours_per_emp.items():
-      if emp_name and emp_name.strip() not in processed_emps and zug_hrs > 0:
-          clean_name = emp_name.strip()
-          processed_emps.add(clean_name)
-          summary_data.append({
-              "Mitarbeiter": clean_name,
-              "Gesamtstunden": f"{zug_hrs:.2f} St."
-          })
-          total_company_hours += zug_hrs
-  except:
-    pass
+    for emp_name, zug_hrs in zug_hours_per_emp.items():
+        if emp_name and emp_name.strip() not in processed_emps and zug_hrs > 0:
+            clean_name = emp_name.strip()
+            processed_emps.add(clean_name)
+            summary_data.append({
+                "Mitarbeiter": clean_name,
+                "Gesamtstunden": f"{zug_hrs:.2f} St."
+            })
+            total_company_hours += zug_hrs
 
-if not summary_data:
-  summary_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Gesamtstunden": "0.00 St."}])
- else:
-  summary_df = pd.DataFrame(summary_data)
+    # عرض الجدول والنتائج
+    if not summary_data:
+        summary_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Gesamtstunden": "0.00 St."}])
+    else:
+        summary_df = pd.DataFrame(summary_data)
 
-st.dataframe(summary_df, use_container_width=True)
- st.markdown("---")
- col_s1, col_s2 = st.columns([2, 1])
- with col_s1:
-   pdf_summary_data = generate_summary_pdf(summary_month, summary_year, summary_df, total_company_hours)
-   st.download_button(t["pdf_btn"], pdf_summary_data, f"Monatsübersicht_{summary_month}_{summary_year}.pdf", "application/pdf", key="p6_pdf")
- with col_s2:
-   st.metric("Gesamtsumme:", f"{total_company_hours:.2f} St.")
-
+    st.dataframe(summary_df, use_container_width=True)
+    st.markdown("---")
+    col_s1, col_s2 = st.columns([2, 1])
+    with col_s1:
+        pdf_summary_data = generate_summary_pdf(summary_month, summary_year, summary_df, total_company_hours)
+        st.download_button(t["pdf_btn"], pdf_summary_data, f"Monatsübersicht_{summary_month}_{summary_year}.pdf", "application/pdf", key="p6_pdf")
+    with col_s2:
+        st.metric("Gesamtsumme:", f"{total_company_hours:.2f} St.")
 
 
 # ---------------------------------------------------------
