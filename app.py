@@ -1077,7 +1077,7 @@ elif page == t["p6"]:
     with col2:
         summary_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="summary_year_select")
 
-    # جلب الساعات اليومية من Supabase للشهر والسنة المحددين
+    # جلب الساعات اليومية من Supabase
     rows = []
     try:
         res_rows = supabase.table("daily_hours").select("emp, content").eq("month", summary_month).eq("jahr", str(summary_year)).execute()
@@ -1089,7 +1089,6 @@ elif page == t["p6"]:
     total_company_hours = 0.0
     processed_emps = set()
 
-    # معالجة وحساب الساعات اليومية لكل موظف
     for row in rows:
         emp = row.get("emp")
         if not emp:
@@ -1111,7 +1110,6 @@ elif page == t["p6"]:
             })
             total_company_hours += emp_total
 
-    # عرض الجدول والنتائج النهائية
     if not summary_data:
         summary_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Gesamtstunden": "0.00 St."}])
     else:
@@ -1119,19 +1117,12 @@ elif page == t["p6"]:
 
     st.dataframe(summary_df, use_container_width=True)
     st.markdown("---")
-    
-    # تحضير بيانات التصدير كملف CSV للطباعة أو الإكسل
-    csv_summary = summary_df.to_csv(index=False).encode('utf-8')
-
-    col_s1, col_s2, col_s3 = st.columns([1.5, 1.5, 1])
+    col_s1, col_s2 = st.columns([2, 1])
     with col_s1:
         pdf_summary_data = generate_summary_pdf(summary_month, summary_year, summary_df, total_company_hours)
         st.download_button(t["pdf_btn"], pdf_summary_data, f"Monatsübersicht_{summary_month}_{summary_year}.pdf", "application/pdf", key="p6_pdf")
     with col_s2:
-        st.download_button("🖨️ / 📊 📥 Excel / CSV exportieren", data=csv_summary, file_name=f"Monatsübersicht_{summary_month}_{summary_year}.csv", mime="text/csv", key="p6_csv")
-    with col_s3:
-        st.metric("Gesamtsumme:", f"{total_company_hours:.2f} St.")
-# ---------------------------------------------------------
+        st.metric("Gesamtsumme:", f"{total_company_hours:.2f} St.")# ---------------------------------------------------------
 # الصفحة السابعة: تذاكر المهام (Einsatz-Tickets)
 # ---------------------------------------------------------
 elif page == t["p7"]:
