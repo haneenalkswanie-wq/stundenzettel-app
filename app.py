@@ -1103,7 +1103,7 @@ elif page == t["p6"]:
 
 processed_emps = set()
 
-  for row in rows:
+for row in rows:
       emp = row.get("emp")
       if not emp:
           continue
