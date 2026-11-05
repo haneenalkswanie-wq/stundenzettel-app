@@ -58,7 +58,7 @@ if authentication_status == False:
 elif authentication_status == None:
     st.warning("Bitte melden Sie sich an, um fortzufahren.")
     st.stop()
-authenticator.logout("Abmelden", sidebar")
+authenticator.logout("Abmelden", "sidebar")
 
 st.success
 # ---------------------------------------------------------
