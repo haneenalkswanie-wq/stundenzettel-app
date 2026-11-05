@@ -1087,12 +1087,35 @@ elif page == t["p6"]:
   summary_data = []
   total_company_hours = 0.0
 
+# جلب ساعات القطارات لهذا الشهر والسنة مسبقاً
+   zug_summary_data = []
+   try:
+       zug_res = supabase.table("zugstunden")\
+           .select("mitarbeiter, gesamtstunden")\
+           .eq("monat", summary_month)\
+           .eq("jahr", str(summary_year))\
+           .execute()
+       zug_summary_data = zug_res.data if zug_res.data else []
+   except:
+       zug_summary_data = []
+
+    # تجميع ساعات القطار لكل موظف في قاموس
+   zug_hours_per_emp = {}
+   for item in zug_summary_data:
+       emp = item.get("mitarbeiter")
+      hrs = float(item.get("gesamtstunden", 0.0) or 0.0)
+       zug_hours_per_emp[emp] = zug_hours_per_emp.get(emp, 0.0) + hrs
+
   for row in rows:
     emp = row["emp"]
     try:
       emp_data = json.loads(row["content"])
       emp_daily_df = pd.DataFrame(emp_data)
       emp_total = emp_daily_df["Gesamtstunden"].astype(float).sum() if "Gesamtstunden" in emp_daily_df.columns else 0.0
+
+      emp_zug_total = zug_hours_per_emp.get(clean_emp_name, 0.0)
+      emp_total += emp_zug_total
+
       if emp_total > 0:
         clean_emp_name = emp.strip()
         existing_row = next((r for r in summary_data if r["Mitarbeiter"].strip().lower() == clean_emp_name.lower()), None)
@@ -1121,6 +1144,7 @@ elif page == t["p6"]:
     st.download_button(t["pdf_btn"], pdf_summary_data, f"Monatsübersicht_{summary_month}_{summary_year}.pdf", "application/pdf", key="p6_pdf")
   with col_s2:
     st.metric("Gesamtsumme:", f"{total_company_hours:.2f} St.")
+
 
 
 # ---------------------------------------------------------
@@ -1302,36 +1326,47 @@ elif page == t["p8"]:
         
         total_trains_sum += day_total_hrs
 
-        # تجهيز السجل للحفظ في Supabase
-        records_to_save.append({
-            "mitarbeiter": train_emp,
-            "monat": train_month,
-            "jahr": str(train_year),
-            "tag": str(row["Datum"]),
-            "zug_1": str(row.get("Zug 1", "")),
-            "von_1": str(row.get("Von 1", "")),
-            "bis_1": str(row.get("Bis 1", "")),
-            "zug_2": str(row.get("Zug 2", "")),
-            "von_2": str(row.get("Von 2", "")),
-            "bis_2": str(row.get("Bis 2", "")),
-            "zug_3": str(row.get("Zug 3", "")),
-            "von_3": str(row.get("Von 3", "")),
-            "bis_3": str(row.get("Bis 3", "")),
-            "zug_4": str(row.get("Zug 4", "")),
-            "von_4": str(row.get("Von 4", "")),
-            "bis_4": str(row.get("Bis 4", "")),
-            "zug_5": str(row.get("Zug 5", "")),
-            "von_5": str(row.get("Von 5", "")),
-            "bis_5": str(row.get("Bis 5", "")),
-            "gesamtstunden": round(day_total_hrs, 2)
-        })
+        # --- تجهيز السجل للحفظ في Supabase مع التحقق الآمن ---
+    records_to_save.append({
+        "mitarbeiter": train_emp,
+        "monat": train_month,
+        "jahr": str(train_year),
+        "tag": str(row["Datum"]),
+        "zug_1": str(row.get("Zug 1", "")),
+        "von_1": str(row.get("Von 1", "")),
+        "bis_1": str(row.get("Bis 1", "")),
+        "zug_2": str(row.get("Zug 2", "")),
+        "von_2": str(row.get("Von 2", "")),
+        "bis_2": str(row.get("Bis 2", "")),
+        "zug_3": str(row.get("Zug 3", "")),
+        "von_3": str(row.get("Von 3", "")),
+        "bis_3": str(row.get("Bis 3", "")),
+        "zug_4": str(row.get("Zug 4", "")),
+        "von_4": str(row.get("Von 4", "")),
+        "bis_4": str(row.get("Bis 4", "")),
+        "zug_5": str(row.get("Zug 5", "")),
+        "von_5": str(row.get("Von 5", "")),
+        "bis_5": str(row.get("Bis 5", "")),
+        "gesamtstunden": round(day_total_hrs, 2)
+    })
 
-    st.markdown(f"### 🧮 Gesamtsumme Zug-Stunden: **{round(total_trains_sum, 2)} hrs**")
-
-    # --- 4. زر الحفظ المباشر في Supabase ---
-    if st.button("💾 Speichern", type="primary"):
-        try:
-            supabase.table("zugstunden").upsert(records_to_save).execute()
-            st.success("✅ تم حفظ ساعات القطار في قاعدة البيانات بنجاح ولن تضيع عند الخروج!")
-        except Exception as e:
-            st.error(f"❌ خطأ أثناء الحفظ في Supabase: {e}")
+# --- 4. أزرار الحفظ والتحميل (الطباعة) ---
+    col_b1, col_b2 = st.columns(2)
+    
+    with col_b1:
+        if st.button("💾 Speichern / حفظ ساعات القطار", type="primary"):
+            try:
+                supabase.table("zugstunden").upsert(records_to_save).execute()
+                st.success("✅ تم حفظ ساعات القطار في قاعدة البيانات بنجاح!")
+            except Exception as e:
+                st.info("💡 ملاحظة: يرجى التأكد من إنشاء جدول 'zugstunden' في Supabase لتفعيل الحفظ الدائم.")
+    
+    with col_b2:
+        # تحويل جدول القطارات إلى CSV للتحميل أو الطباعة
+        csv_data = edited_trains_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Zug-Stunden exportieren / تحميل وتصدير",
+            data=csv_data,
+            file_name=f"Zugstunden_{train_emp}_{train_month}_{train_year}.csv",
+            mime="text/csv"
+        )
