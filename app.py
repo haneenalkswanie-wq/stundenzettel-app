@@ -1103,18 +1103,18 @@ elif page == t["p6"]:
 
 processed_emps = set()
 
-    for row in rows:
-        emp = row.get("emp")
-        if not emp:
-            continue
-        clean_emp_name = emp.strip()
+  for row in rows:
+      emp = row.get("emp")
+      if not emp:
+          continue
+      clean_emp_name = emp.strip()
         
-        try:
-            emp_data = json.loads(row["content"])
-            emp_daily_df = pd.DataFrame(emp_data)
-            emp_total = emp_daily_df["Gesamtstunden"].astype(float).sum() if "Gesamtstunden" in emp_daily_df.columns else 0.0
-        except Exception:
-            emp_total = 0.0
+      try:
+          emp_data = json.loads(row["content"])
+          emp_daily_df = pd.DataFrame(emp_data)
+          emp_total = emp_daily_df["Gesamtstunden"].astype(float).sum() if "Gesamtstunden" in emp_daily_df.columns else 0.0
+      except Exception:
+          emp_total = 0.0
 
         # إضافة ساعات القطار للموظف
         emp_zug_total = zug_hours_per_emp.get(clean_emp_name, 0.0)
