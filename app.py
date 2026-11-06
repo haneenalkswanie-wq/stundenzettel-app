@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import io
 import json
 import os
@@ -29,16 +29,22 @@ def init_supabase() -> Client:
 supabase = init_supabase()
 
 
-# ---------------------------------------------------------
-# نظام الحماية وتسجيل الدخول (Login System)
-# ---------------------------------------------------------
-# ---------------------------------------------------------
-# نظام الحماية وتسجيل الدخول (Login System) مرة واحدة فقط
-# ---------------------------------------------------------
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
+import extra_streamlit_components as stx
 
-if not st.session_state["authenticated"]:
+# ---------------------------------------------------------
+# نظام الحماية وتسجيل الدخول عبر Cookies (يبقى حتى بعد التحديث)
+# ---------------------------------------------------------
+@st.cache_resource(experimental_allow_widgets=True)
+def get_cookie_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_cookie_manager()
+
+# قراءة حالة تسجيل الدخول من الكوكيز
+auth_cookie = cookie_manager.get(cookie="cc_authenticated")
+
+# التحقق من تسجيل الدخول
+if auth_cookie != "true":
     st.title("🔐 Clean & Care GmbH - Login")
     st.markdown("Bitte melden Sie sich an, um fortzufahren.")
     
@@ -48,13 +54,16 @@ if not st.session_state["authenticated"]:
         submit_button = st.form_submit_button("Anmelden")
         
         if submit_button:
-            # يمكنك تعديل اسم المستخدم وكلمة السر هنا حسب رغبتك
             if username_input == "admin" and password_input == "clean2026":
-                st.session_state["authenticated"] = True
+                # حفظ الجلسة في كوكيز المتصفح لمدة 30 يوماً
+                cookie_manager.set("cc_authenticated", "true", key="set_auth", expires_at=datetime.now() + timedelta(days=30))
+                st.success("Erfolgreich angemeldet!")
                 st.rerun()
             else:
                 st.error("Falscher Benutzername oder falsches Passwort!")
-    st.stop()  # إيقاف تنفيذ باقي الكود إذا لم يتم تسجيل الدخول
+
+st.stop()
+
 # ---------------------------------------------------------
 # قاعدة البيانات السحابية Supabase لضمان المزامنة التامة
 # ---------------------------------------------------------

@@ -3,4 +3,5 @@ pandas
 reportlab
 supabase
 fpdf
-Streamlit-authenticator
+Streamlit-authenticators
+extra-streamlit-components
