@@ -32,7 +32,29 @@ supabase = init_supabase()
 # ---------------------------------------------------------
 # نظام الحماية وتسجيل الدخول (Login System)
 # ---------------------------------------------------------
+# ---------------------------------------------------------
+# نظام الحماية وتسجيل الدخول (Login System) مرة واحدة فقط
+# ---------------------------------------------------------
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
 
+if not st.session_state["authenticated"]:
+    st.title("🔐 Clean & Care GmbH - Login")
+    st.markdown("Bitte melden Sie sich an, um fortzufahren.")
+    
+    with st.form("login_form"):
+        username_input = st.text_input("Benutzername")
+        password_input = st.text_input("Passwort", type="password")
+        submit_button = st.form_submit_button("Anmelden")
+        
+        if submit_button:
+            # يمكنك تعديل اسم المستخدم وكلمة السر هنا حسب رغبتك
+            if username_input == "admin" and password_input == "clean2026":
+                st.session_state["authenticated"] = True
+                st.rerun()
+            else:
+                st.error("Falscher Benutzername oder falsches Passwort!")
+    st.stop()  # إيقاف تنفيذ باقي الكود إذا لم يتم تسجيل الدخول
 # ---------------------------------------------------------
 # قاعدة البيانات السحابية Supabase لضمان المزامنة التامة
 # ---------------------------------------------------------
