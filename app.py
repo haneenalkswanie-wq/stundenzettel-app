@@ -9,7 +9,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 import streamlit as st
 from supabase import create_client, Client
-import extra_streamlit_components as stx
+
 
 # إعدادات الصفحة
 st.set_page_config(
@@ -33,34 +33,7 @@ supabase = init_supabase()
 # ---------------------------------------------------------
 # نظام الحماية وتسجيل الدخول عبر Cookies (يبقى حتى بعد التحديث)
 # ---------------------------------------------------------
-def get_cookie_manager():
-    return stx.CookieManager()
 
-cookie_manager = get_cookie_manager()
-
-# قراءة حالة تسجيل الدخول من الكوكيز
-auth_cookie = cookie_manager.get(cookie="cc_authenticated")
-
-# التحقق من تسجيل الدخول
-if auth_cookie != "true":
-    st.title("🔐 Clean & Care GmbH - Login")
-    st.markdown("Bitte melden Sie sich an, um fortzufahren.")
-    
-    with st.form("login_form"):
-        username_input = st.text_input("Benutzername")
-        password_input = st.text_input("Passwort", type="password")
-        submit_button = st.form_submit_button("Anmelden")
-        
-        if submit_button:
-            if username_input == "admin" and password_input == "clean2026":
-                # حفظ الجلسة في كوكيز المتصفح لمدة 30 يوماً
-                cookie_manager.set("cc_authenticated", "true", key="set_auth", expires_at=datetime.now() + timedelta(days=30))
-                st.success("Erfolgreich angemeldet!")
-                st.rerun()
-            else:
-                st.error("Falscher Benutzername oder falsches Passwort!")
-
-st.stop()
 
 # ---------------------------------------------------------
 # قاعدة البيانات السحابية Supabase لضمان المزامنة التامة
