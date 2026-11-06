@@ -1,5 +1,5 @@
-streamlit
+streamlit==1.40.1
 pandas
 reportlab
 supabase
-extra-streamlit-components
+extra-streamlit-components==0.1.81
