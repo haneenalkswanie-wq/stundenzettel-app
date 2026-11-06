@@ -9,6 +9,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 import streamlit as st
 from supabase import create_client, Client
+import extra_streamlit_components as stx
 
 # إعدادات الصفحة
 st.set_page_config(
@@ -29,12 +30,9 @@ def init_supabase() -> Client:
 supabase = init_supabase()
 
 
-import extra_streamlit_components as stx
-
 # ---------------------------------------------------------
 # نظام الحماية وتسجيل الدخول عبر Cookies (يبقى حتى بعد التحديث)
 # ---------------------------------------------------------
-@st.cache_resource
 def get_cookie_manager():
     return stx.CookieManager()
 
