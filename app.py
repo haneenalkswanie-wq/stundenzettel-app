@@ -743,12 +743,14 @@ elif page == t["p2"]:
           data = json.loads(res.data[0]["content"])
           df = pd.DataFrame(data)
           
-          # استيراد قيم استراحة العمود القديم (Pause) ووضعها في Pause 1 إن وجد
+          # 1. أولاً: نقل قيم استراحة العمود القديم (Pause) إلى Pause 1 إن وجدت
           if "Pause" in df.columns:
             for idx, val in enumerate(df["Pause"]):
               if pd.notna(val) and str(val).strip() != "" and str(val).strip() != "nan":
                 if "Pause 1" not in df.columns or pd.isna(df.loc[idx, "Pause 1"]) or str(df.loc[idx, "Pause 1"]).strip() in ["", "nan"]:
                   df.loc[idx, "Pause 1"] = val
+            # 2. ثانياً: حذف العمود القديم نهائياً لكي لا يظهر أبداً
+            df = df.drop(columns=["Pause"])
 
           # التأكد من وجود كافة الأعمدة الجديدة
           for i in range(1, 4):
@@ -757,7 +759,7 @@ elif page == t["p2"]:
             if f"Hrs{i}" not in df.columns:
               df[f"Hrs{i}"] = ""
               
-          # ترتيب الأعمدة بشكل منظّم وجميل بجانب بعضها
+          # ترتيب الأعمدة بشكل منظم وجميل بجانب بعضها
           cols_order = [
               "Datum", 
               "Ort 1", "Beginn 1", "Ende 1", "Pause 1", "Hrs1",
