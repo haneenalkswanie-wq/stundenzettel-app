@@ -422,7 +422,7 @@ def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
 
 def generate_daily_pdf(emp_name, month_str, year_val, df, total_hours):
   buffer = io.BytesIO()
-  doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=20, leftMargin=20, topMargin=30, bottomMargin=30)
+  doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=30, bottomMargin=30)
   elements = []
   styles = getSampleStyleSheet()
   title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=13, leading=16, textColor=colors.HexColor("#111111"))
@@ -433,19 +433,19 @@ def generate_daily_pdf(emp_name, month_str, year_val, df, total_hours):
   elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 10))
   
-  table_data = [["Tag", "Ort 1", "Std 1", "Ort 2", "Std 2", "Ort 3", "Std 3", "Pause", "Gesamt"]]
+  # أعمدة الجدول المحدثة لتشمل الاستراحة لكل مكان
+  table_data = [["Tag", "Ort 1", "Std 1", "Pause 1", "Ort 2", "Std 2", "Pause 2", "Ort 3", "Std 3", "Pause 3", "Gesamt"]]
   for _, row in df.iterrows():
     table_data.append([
         str(row["Datum"]),
-        str(row["Ort 1"] if pd.notna(row["Ort 1"]) else ""), str(row.get("Hrs1", "")),
-        str(row["Ort 2"] if pd.notna(row["Ort 2"]) else ""), str(row.get("Hrs2", "")),
-        str(row["Ort 3"] if pd.notna(row["Ort 3"]) else ""), str(row.get("Hrs3", "")),
-        str(row["Pause"] if pd.notna(row["Pause"]) else ""),
+        str(row["Ort 1"] if pd.notna(row["Ort 1"]) else ""), str(row.get("Hrs1", "")), str(row.get("Pause 1", "")),
+        str(row["Ort 2"] if pd.notna(row["Ort 2"]) else ""), str(row.get("Hrs2", "")), str(row.get("Pause 2", "")),
+        str(row["Ort 3"] if pd.notna(row["Ort 3"]) else ""), str(row.get("Hrs3", "")), str(row.get("Pause 3", "")),
         str(row["Gesamtstunden"])
     ])
-  table_data.append(["Summe:", "", "", "", "", "", "", "", f"{total_hours:.2f} St."])
+  table_data.append(["Summe:", "", "", "", "", "", "", "", "", "", f"{total_hours:.2f} St."])
   
-  t_pdf = Table(table_data, colWidths=[25, 85, 40, 85, 40, 85, 40, 45, 55])
+  t_pdf = Table(table_data, colWidths=[25, 75, 35, 45, 75, 35, 45, 75, 35, 45, 55])
   t_pdf.setStyle(TableStyle([
       ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
       ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -461,7 +461,6 @@ def generate_daily_pdf(emp_name, month_str, year_val, df, total_hours):
   doc.build(elements)
   buffer.seek(0)
   return buffer.getvalue()
-
 
 def generate_single_location_pdf(place_name, month_str, year_val, df, total_hours):
   buffer = io.BytesIO()
