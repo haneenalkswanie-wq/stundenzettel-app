@@ -708,8 +708,9 @@ if page == t["p1"]:
     st.text("Datum: ______________")
 
 
+
 # ---------------------------------------------------------
-# الصفحة الثانية: الساعات اليومية (Tägliche Stunden) - مربوطة بالمدن
+# الصفحة الثانية: الساعات اليومية (Tägliche Stunden) - استراحة لكل مكان على حدة
 # ---------------------------------------------------------
 elif page == t["p2"]:
   st.title("📝 Clean & Care GmbH - Tägliche Stunden")
@@ -735,7 +736,37 @@ elif page == t["p2"]:
   if city_employees:
     st.subheader(f"Tägliche Stunden für: {daily_emp} ({daily_month} {daily_year})")
 
-    daily_df = load_daily_emp_hours(daily_emp, daily_month, daily_year)
+    # تحديث هيكل البيانات اليومية ليشمل استراحة خاصة بكل مكان
+    def load_custom_daily_hours(emp_name, month_str, year_val):
+      try:
+        res = supabase.table("daily_hours").select("content").eq("emp", emp_name).eq("month", month_str).eq("year", int(year_val)).execute()
+        if res.data and len(res.data) > 0:
+          data = json.loads(res.data[0]["content"])
+          df = pd.DataFrame(data)
+          # التأكد من وجود أعمدة الاستراحة لكل مكان
+          for i in range(1, 4):
+            if f"Pause {i}" not in df.columns:
+              df[f"Pause {i}"] = ""
+            if f"Hrs{i}" not in df.columns:
+              df[f"Hrs{i}"] = ""
+          return df
+      except:
+        pass
+      
+      days_data = []
+      for day in range(1, 32):
+        days_data.append(
+            {
+                "Datum": str(day),
+                "Ort 1": "", "Beginn 1": "", "Ende 1": "", "Pause 1": "", "Hrs1": "",
+                "Ort 2": "", "Beginn 2": "", "Ende 2": "", "Pause 2": "", "Hrs2": "",
+                "Ort 3": "", "Beginn 3": "", "Ende 3": "", "Pause 3": "", "Hrs3": "",
+                "Gesamtstunden": 0.0,
+            }
+        )
+      return pd.DataFrame(days_data)
+
+    daily_df = load_custom_daily_hours(daily_emp, daily_month, daily_year)
 
     edited_daily_df = st.data_editor(
         daily_df,
@@ -753,12 +784,15 @@ elif page == t["p2"]:
 
     total_daily_sum = 0.0
     for index, row in edited_daily_df.iterrows():
-      gross_day_total = 0.0
+      net_day_total = 0.0
       
       for i in range(1, 4):
         b_str = str(row.get(f"Beginn {i}", "")).strip()
         e_str = str(row.get(f"Ende {i}", "")).strip()
+        p_str = str(row.get(f"Pause {i}", "")).strip()
+        
         hrs = 0.0
+        break_val = 0.0
 
         if b_str and e_str and b_str != "nan" and e_str != "nan":
           for fmt in ("%H:%M", "%H.%M", "%H"):
@@ -770,35 +804,33 @@ elif page == t["p2"]:
 
               gh = (t2 - t1).total_seconds() / 3600
               if gh > 0:
-                hrs = gh
+                # حساب استراحة هذا المكان بالذات
+                if p_str and p_str != "nan" and p_str != "":
+                  try:
+                    break_val = float(p_str.replace(",", "."))
+                  except:
+                    break_val = 0.0
+                hrs = max(0.0, gh - break_val)
               break
             except:
               continue
 
-        gross_day_total += hrs
+        if break_val > 0:
+          edited_daily_df.at[index, f"Pause {i}"] = str(break_val)
+        else:
+          if not p_str or p_str == "nan":
+            edited_daily_df.at[index, f"Pause {i}"] = ""
+
         edited_daily_df.at[index, f"Hrs{i}"] = round(hrs, 2) if hrs > 0 else ""
+        net_day_total += hrs
 
-      p_input = str(row.get("Pause", "")).strip()
-      break_val = 0.0
-      if p_input and p_input != "nan" and p_input != "":
-        try:
-          break_val = float(p_input.replace(",", "."))
-        except:
-          break_val = 0.0
-
-      if break_val > 0:
-        edited_daily_df.at[index, "Pause"] = str(break_val)
-      else:
-        if not p_input or p_input == "nan":
-          edited_daily_df.at[index, "Pause"] = ""
-
-      net_day_total = max(0.0, gross_day_total - break_val)
       edited_daily_df.at[index, "Gesamtstunden"] = round(net_day_total, 2)
       total_daily_sum += net_day_total
 
     st.markdown("---")
     col_d1, col_d2, col_d3 = st.columns([2, 1, 1])
     with col_d1:
+      # دالة الطباعة المحدثة إذا احتجت لتعديل شكل PDF لاحقاً
       pdf_daily_data = generate_daily_pdf(daily_emp, daily_month, daily_year, edited_daily_df, total_daily_sum)
       st.download_button(t["pdf_btn"], pdf_daily_data, f"Tägliche_Stunden_{daily_emp}_{daily_month}_{daily_year}.pdf", "application/pdf", key="p2_pdf")
     with col_d2:
@@ -807,7 +839,6 @@ elif page == t["p2"]:
         st.success(t["success_msg"])
     with col_d3:
       st.metric(t["sum_label"], f"{total_daily_sum:.2f} St.")
-
 
 # ---------------------------------------------------------
 # الصفحة الثالثة: ملخص ساعات المواقع (Objekt-Stundenübersicht)
