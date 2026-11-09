@@ -20,7 +20,6 @@ st.set_page_config(
 # إعدادات الاتصال بـ Supabase
 # ---------------------------------------------------------
 SUPABASE_URL = "https://knzrtbjwqqhxghtfasvy.supabase.co"
-# قراءة المفتاح بأمان من إعدادات السحابة التي وضعناها قبل قليل
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
 @st.cache_resource
@@ -31,12 +30,7 @@ supabase = init_supabase()
 
 
 # ---------------------------------------------------------
-# نظام الحماية وتسجيل الدخول عبر Cookies (يبقى حتى بعد التحديث)
-# ---------------------------------------------------------
-
-
-# ---------------------------------------------------------
-# قاعدة البيانات السحابية Supabase لضمان المزامنة التامة
+# قاعدة البيانات السحابية Supabase (إضافة جدول المدن وربط العمال)
 # ---------------------------------------------------------
 def init_db_supabase():
   try:
@@ -51,6 +45,22 @@ def init_db_supabase():
     if not res_p.data or len(res_p.data) == 0:
       for place in ["Limehome Salzburg", "Nespresso Store", "IKEA Wals", "Villach Hauptplatz"]:
         supabase.table("places").upsert({"name": place}).execute()
+
+    # التحقق من المدن (Cities)
+    res_c = supabase.table("cities").select("name").execute()
+    if not res_c.data or len(res_c.data) == 0:
+      for city in ["Salzburg", "Villach", "Klagenfurt", "Bregenz"]:
+        supabase.table("cities").upsert({"name": city}).execute()
+
+    # التحقق من جدول ربط العمال بالمدن (employee_cities)
+    res_ec = supabase.table("employee_cities").select("*").execute()
+    if not res_ec.data or len(res_ec.data) == 0:
+      default_mappings = [
+          {"employee": "Sakleh Alsoudi", "city": "Salzburg"},
+          {"employee": "Alaa Edin Ibrahim", "city": "Salzburg"}
+      ]
+      for m in default_mappings:
+        supabase.table("employee_cities").upsert(m).execute()
   except Exception as e:
     st.sidebar.warning(f"ملاحظة اتصال قاعدة البيانات: {e}")
 
@@ -69,7 +79,6 @@ def load_employees():
 
 def save_employees(emp_list):
   try:
-    # حذف القديم وإعادة الإضافة أو تحديث القائمة
     existing = supabase.table("employees").select("name").execute()
     if existing.data:
       for row in existing.data:
@@ -100,6 +109,57 @@ def save_places(places_list):
       supabase.table("places").upsert({"name": place}).execute()
   except Exception as e:
     st.error(f"خطأ في حفظ الأماكن: {e}")
+
+
+# دوال إدارة المدن والربط
+def load_cities():
+  try:
+    res = supabase.table("cities").select("name").execute()
+    if res.data:
+      return sorted([row["name"] for row in res.data])
+  except:
+    pass
+  return ["Salzburg", "Villach", "Klagenfurt", "Bregenz"]
+
+
+def save_cities(cities_list):
+  try:
+    existing = supabase.table("cities").select("name").execute()
+    if existing.data:
+      for row in existing.data:
+        supabase.table("cities").delete().eq("name", row["name"]).execute()
+    for city in cities_list:
+      supabase.table("cities").upsert({"name": city}).execute()
+  except Exception as e:
+    st.error(f"خطأ في حفظ المدن: {e}")
+
+
+def get_employee_city(emp_name):
+  try:
+    res = supabase.table("employee_cities").select("city").eq("employee", emp_name).execute()
+    if res.data and len(res.data) > 0:
+      return res.data[0]["city"]
+  except:
+    pass
+  return "Salzburg"
+
+
+def set_employee_city(emp_name, city_name):
+  try:
+    supabase.table("employee_cities").upsert({"employee": emp_name, "city": city_name}).execute()
+  except Exception as e:
+    st.error(f"خطأ في ربط العامل بالمدينة: {e}")
+
+
+def get_employees_by_city(city_name):
+  all_emps = load_employees()
+  if city_name == "Alle Städte" or not city_name:
+    return all_emps
+  filtered = []
+  for emp in all_emps:
+    if get_employee_city(emp) == city_name:
+      filtered.append(emp)
+  return filtered if filtered else all_emps
 
 
 def load_employee_month_hours(emp_name, month_str, year_val):
@@ -222,52 +282,6 @@ def save_tickets_data(month_str, year_val, df):
     st.error(f"خطأ في حفظ التذاكر: {e}")
 
 
-def load_trains_data(emp_name, month_str, year_val):
-  try:
-    res = supabase.table("trains_data").select("content").eq("emp", emp_name).eq("month", month_str).eq("year", int(year_val)).execute()
-    if res.data and len(res.data) > 0:
-      data = json.loads(res.data[0]["content"])
-      df = pd.DataFrame(data)
-      for i in range(1, 6):
-        if f"Zug {i}" not in df.columns:
-          df[f"Zug {i}"] = ""
-        if f"Verspätung {i}" not in df.columns:
-          df[f"Verspätung {i}"] = 0
-      return df
-  except:
-    pass
-  
-  month_map = {
-      "Januar": 1, "Februar": 2, "März": 3, "April": 4, "Mai": 5, "Juni": 6,
-      "Juli": 7, "August": 8, "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
-  }
-  m_num = month_map.get(month_str, 10)
-  days_in_m = pd.Period(f"{year_val}-{m_num}").days_in_month
-  
-  trains_rows = []
-  for day in range(1, days_in_m + 1):
-    row_data = {"Datum": str(day)}
-    for i in range(1, 6):
-      row_data[f"Zug {i}"] = ""
-      row_data[f"Verspätung {i}"] = 0
-    row_data["Gesamtstunden"] = 0.0
-    trains_rows.append(row_data)
-  return pd.DataFrame(trains_rows)
-
-
-def save_trains_data(emp_name, month_str, year_val, df):
-  try:
-    content = json.dumps(df.to_dict(orient="list"), ensure_ascii=False)
-    supabase.table("trains_data").upsert({
-        "emp": emp_name,
-        "month": month_str,
-        "year": int(year_val),
-        "content": content
-    }).execute()
-  except Exception as e:
-    st.error(f"خطأ في حفظ القطارات: {e}")
-
-
 months_list_de = [
     "Januar", "Februar", "März", "April", "Mai", "Juni",
     "Juli", "August", "September", "Oktober", "November", "Dezember"
@@ -314,6 +328,8 @@ if not is_arabic:
         "place_label": "Ort / Platz auswählen:",
         "add_place": "Neuen Ort hinzufügen",
         "del_place": "Ort löschen",
+        "city_label": "Stadt wählen (المدينة):",
+        "all_cities": "Alle Städte",
     }
 else:
     t = {
@@ -322,7 +338,7 @@ else:
         "p2": "📝 الساعات اليومية (Tägliche Stunden)",
         "p3": "🏢 ملخص ساعات المواقع (Objekt-Stundenübersicht)",
         "p4": "🏢 الأماكن وساعات العمال (Orte & Mitarbeiter)",
-        "p5": "👥 إدارة العمال (Mitarbeiterverwaltung)",
+        "p5": "👥 إدارة العمال والمدن (Mitarbeiter & Städte)",
         "p6": "📅 ملخص الأشهر (Monatsübersicht)",
         "p7": "🎫 تذاكر المهام (Einsatz-Tickets)",
         "p8": "🚆 جدول القطارات (Zug-Fahrten)",
@@ -340,6 +356,8 @@ else:
         "place_label": "Ort / Platz auswählen:",
         "add_place": "Neuen Ort hinzufügen",
         "del_place": "Ort löschen",
+        "city_label": "Stadt wählen (المدينة):",
+        "all_cities": "Alle Städte (كل المدن)",
     }
 
 page = st.sidebar.radio(
@@ -550,51 +568,6 @@ def generate_summary_pdf(month_str, year_val, df, total_hours):
   return buffer.getvalue()
 
 
-def generate_trains_pdf(emp_name, month_str, year_val, df, total_hours):
-  buffer = io.BytesIO()
-  doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=30, bottomMargin=30)
-  elements = []
-  styles = getSampleStyleSheet()
-  title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
-  
-  elements.append(Paragraph("<b>CLEAN & CARE GmbH - Zug-Fahrten Bericht</b>", title_style))
-  elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
-  elements.append(Spacer(1, 10))
-  elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
-  elements.append(Spacer(1, 10))
-  
-  # أعمدة الجدول الجديد للقطارات
-  table_data = [["Tag", "Zug 1", "Von", "Bis", "Zug 2", "Von", "Bis", "Zug 3", "Von", "Bis", "Zug 4", "Von", "Bis", "Zug 5", "Von", "Bis", "Gesamt"]]
-  for _, row in df.iterrows():
-    table_data.append([
-        str(row["Datum"]),
-        str(row.get("Zug 1", "")), str(row.get("Von 1", "")), str(row.get("Bis 1", "")),
-        str(row.get("Zug 2", "")), str(row.get("Von 2", "")), str(row.get("Bis 2", "")),
-        str(row.get("Zug 3", "")), str(row.get("Von 3", "")), str(row.get("Bis 3", "")),
-        str(row.get("Zug 4", "")), str(row.get("Von 4", "")), str(row.get("Bis 4", "")),
-        str(row.get("Zug 5", "")), str(row.get("Von 5", "")), str(row.get("Bis 5", "")),
-        str(row["Gesamtstunden"])
-    ])
-  table_data.append(["Summe:", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", f"{total_hours:.2f} St."])
-  
-  t_pdf = Table(table_data, colWidths=[28, 50, 38, 38, 50, 38, 38, 50, 38, 38, 50, 38, 38, 50, 38, 38, 45])
-  t_pdf.setStyle(TableStyle([
-      ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
-      ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-      ('FONTSIZE', (0, 0), (-1, -1), 7),
-      ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
-      ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor("#666666")),
-      ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f0f0f0")),
-      ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-      ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
-  ]))
-  elements.append(t_pdf)
-  doc.build(elements)
-  buffer.seek(0)
-  return buffer.getvalue()
-
-
 def generate_tickets_pdf(month_str, year_val, df, total_hours):
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
@@ -640,6 +613,7 @@ def generate_tickets_pdf(month_str, year_val, df, total_hours):
 
 # ---------------------------------------------------------
 # الصفحة الأولى: استمارة ساعات العمال (Mitarbeiter Stundenzettel)
+# (تبقى مستقلة كما طلبت)
 # ---------------------------------------------------------
 if page == t["p1"]:
   st.title("📋 Clean & Care GmbH - Stundenzettel")
@@ -687,7 +661,6 @@ if page == t["p1"]:
           t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
           t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
           if t2 < t1:
-              from datetime import timedelta 
               t2 += timedelta(days=1)
 
           gross_hours = (t2 - t1).total_seconds() / 3600
@@ -736,98 +709,104 @@ if page == t["p1"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الثانية: الساعات اليومية (Tägliche Stunden)
+# الصفحة الثانية: الساعات اليومية (Tägliche Stunden) - مربوطة بالمدن
 # ---------------------------------------------------------
 elif page == t["p2"]:
   st.title("📝 Clean & Care GmbH - Tägliche Stunden")
   st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
-  employees_list = load_employees()
+  cities_list = load_cities()
   places_list = [""] + load_places()
 
-  col1, col2, col3 = st.columns(3)
-  with col1:
-    daily_emp = st.selectbox(t["emp_label"], employees_list, key="daily_emp_select")
-  with col2:
+  col_c, col_m, col_y = st.columns(3)
+  with col_c:
+    selected_city = st.selectbox(t["city_label"], cities_list, key="p2_city_select")
+  with col_m:
     daily_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="daily_month_select")
-  with col3:
+  with col_y:
     daily_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="daily_year_select")
 
-  st.subheader(f"Tägliche Stunden für: {daily_emp} ({daily_month} {daily_year})")
+  city_employees = get_employees_by_city(selected_city)
 
-  daily_df = load_daily_emp_hours(daily_emp, daily_month, daily_year)
+  col1, col2 = st.columns(2)
+  with col1:
+    daily_emp = st.selectbox(t["emp_label"], city_employees, key="daily_emp_select") if city_employees else st.warning("Keine Mitarbeiter in dieser Stadt")
 
-  edited_daily_df = st.data_editor(
-      daily_df,
-      num_rows="fixed",
-      use_container_width=True,
-      key=f"daily_table_{daily_emp}_{daily_month}_{daily_year}",
-      column_config={
-          "Ort 1": st.column_config.SelectboxColumn("Ort 1", options=places_list),
-          "Ort 2": st.column_config.SelectboxColumn("Ort 2", options=places_list),
-          "Ort 3": st.column_config.SelectboxColumn("Ort 3", options=places_list),
-      }
-  )
+  if city_employees:
+    st.subheader(f"Tägliche Stunden für: {daily_emp} ({daily_month} {daily_year})")
 
-  edited_daily_df = edited_daily_df.astype(object)
+    daily_df = load_daily_emp_hours(daily_emp, daily_month, daily_year)
 
-  total_daily_sum = 0.0
-  for index, row in edited_daily_df.iterrows():
-    gross_day_total = 0.0
-    
-    for i in range(1, 4):
-      b_str = str(row.get(f"Beginn {i}", "")).strip()
-      e_str = str(row.get(f"Ende {i}", "")).strip()
-      hrs = 0.0
+    edited_daily_df = st.data_editor(
+        daily_df,
+        num_rows="fixed",
+        use_container_width=True,
+        key=f"daily_table_{daily_emp}_{daily_month}_{daily_year}",
+        column_config={
+            "Ort 1": st.column_config.SelectboxColumn("Ort 1", options=places_list),
+            "Ort 2": st.column_config.SelectboxColumn("Ort 2", options=places_list),
+            "Ort 3": st.column_config.SelectboxColumn("Ort 3", options=places_list),
+        }
+    )
 
-      if b_str and e_str and b_str != "nan" and e_str != "nan":
-        for fmt in ("%H:%M", "%H.%M", "%H"):
-          try:
-            t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
-            t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
-            if t2 < t1:
-              from datetime import timedelta 
-              t2 += timedelta(days=1)
+    edited_daily_df = edited_daily_df.astype(object)
 
-            gh = (t2 - t1).total_seconds() / 3600
-            if gh > 0:
-              hrs = gh
-            break
-          except:
-            continue
+    total_daily_sum = 0.0
+    for index, row in edited_daily_df.iterrows():
+      gross_day_total = 0.0
+      
+      for i in range(1, 4):
+        b_str = str(row.get(f"Beginn {i}", "")).strip()
+        e_str = str(row.get(f"Ende {i}", "")).strip()
+        hrs = 0.0
 
-      gross_day_total += hrs
-      edited_daily_df.at[index, f"Hrs{i}"] = round(hrs, 2) if hrs > 0 else ""
+        if b_str and e_str and b_str != "nan" and e_str != "nan":
+          for fmt in ("%H:%M", "%H.%M", "%H"):
+            try:
+              t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
+              t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
+              if t2 < t1:
+                t2 += timedelta(days=1)
 
-    p_input = str(row.get("Pause", "")).strip()
-    break_val = 0.0
-    if p_input and p_input != "nan" and p_input != "":
-      try:
-        break_val = float(p_input.replace(",", "."))
-      except:
-        break_val = 0.0
+              gh = (t2 - t1).total_seconds() / 3600
+              if gh > 0:
+                hrs = gh
+              break
+            except:
+              continue
 
-    if break_val > 0:
-      edited_daily_df.at[index, "Pause"] = str(break_val)
-    else:
-      if not p_input or p_input == "nan":
-        edited_daily_df.at[index, "Pause"] = ""
+        gross_day_total += hrs
+        edited_daily_df.at[index, f"Hrs{i}"] = round(hrs, 2) if hrs > 0 else ""
 
-    net_day_total = max(0.0, gross_day_total - break_val)
-    edited_daily_df.at[index, "Gesamtstunden"] = round(net_day_total, 2)
-    total_daily_sum += net_day_total
+      p_input = str(row.get("Pause", "")).strip()
+      break_val = 0.0
+      if p_input and p_input != "nan" and p_input != "":
+        try:
+          break_val = float(p_input.replace(",", "."))
+        except:
+          break_val = 0.0
 
-  st.markdown("---")
-  col_d1, col_d2, col_d3 = st.columns([2, 1, 1])
-  with col_d1:
-    pdf_daily_data = generate_daily_pdf(daily_emp, daily_month, daily_year, edited_daily_df, total_daily_sum)
-    st.download_button(t["pdf_btn"], pdf_daily_data, f"Tägliche_Stunden_{daily_emp}_{daily_month}_{daily_year}.pdf", "application/pdf", key="p2_pdf")
-  with col_d2:
-    if st.button(t["save_btn"], key="p2_save"):
-      save_daily_emp_hours(daily_emp, daily_month, daily_year, edited_daily_df)
-      st.success(t["success_msg"])
-  with col_d3:
-    st.metric(t["sum_label"], f"{total_daily_sum:.2f} St.")
+      if break_val > 0:
+        edited_daily_df.at[index, "Pause"] = str(break_val)
+      else:
+        if not p_input or p_input == "nan":
+          edited_daily_df.at[index, "Pause"] = ""
+
+      net_day_total = max(0.0, gross_day_total - break_val)
+      edited_daily_df.at[index, "Gesamtstunden"] = round(net_day_total, 2)
+      total_daily_sum += net_day_total
+
+    st.markdown("---")
+    col_d1, col_d2, col_d3 = st.columns([2, 1, 1])
+    with col_d1:
+      pdf_daily_data = generate_daily_pdf(daily_emp, daily_month, daily_year, edited_daily_df, total_daily_sum)
+      st.download_button(t["pdf_btn"], pdf_daily_data, f"Tägliche_Stunden_{daily_emp}_{daily_month}_{daily_year}.pdf", "application/pdf", key="p2_pdf")
+    with col_d2:
+      if st.button(t["save_btn"], key="p2_save"):
+        save_daily_emp_hours(daily_emp, daily_month, daily_year, edited_daily_df)
+        st.success(t["success_msg"])
+    with col_d3:
+      st.metric(t["sum_label"], f"{total_daily_sum:.2f} St.")
 
 
 # ---------------------------------------------------------
@@ -857,7 +836,6 @@ elif page == t["p3"]:
   if places_list:
     st.subheader(f"Objekt: {selected_loc_place} ({loc_month} {loc_year})")
 
-    # جلب البيانات من Supabase
     try:
       res_rows = supabase.table("daily_hours").select("content").eq("month", loc_month).eq("year", int(loc_year)).execute()
       rows = res_rows.data if res_rows.data else []
@@ -1036,50 +1014,94 @@ elif page == t["p4"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الخامسة: إدارة العمال (Mitarbeiterverwaltung)
+# الصفحة الخامسة: إدارة العمال والمدن (Mitarbeiterverwaltung & Städte)
 # ---------------------------------------------------------
 elif page == t["p5"]:
-  st.title("👥 Clean & Care GmbH - Mitarbeiterverwaltung")
+  st.title("👥 Clean & Care GmbH - Mitarbeiter- & Städtederverwaltung")
   
   employees_list = load_employees()
+  cities_list = load_cities()
 
-  st.subheader(t["add_emp"])
-  new_emp_name = st.text_input("Name des Mitarbeiters:")
-  if st.button(t["add_btn"], key="add_emp_btn"):
-    if new_emp_name and new_emp_name not in employees_list:
-      employees_list.append(new_emp_name)
-      save_employees(employees_list)
-      st.success(t["success_msg"])
-      st.rerun()
+  tab1, tab2 = st.tabs(["إدارة العمال وتعيين المدن", "إدارة المدن (Städte verwalten)"])
 
-  st.markdown("---")
-  st.subheader(t["del_emp"])
-  if len(employees_list) > 0:
-    emp_to_delete = st.selectbox("Mitarbeiter:", employees_list)
-    if st.button(t["del_btn"], key="del_emp_btn"):
-      if len(employees_list) > 1:
-        employees_list.remove(emp_to_delete)
+  with tab1:
+    st.subheader("تعيين المدينة للعامل / Mitarbeiter-Stadtzuweisung")
+    if employees_list and cities_list:
+      selected_emp_to_assign = st.selectbox("اختر العامل:", employees_list, key="assign_emp")
+      current_city = get_employee_city(selected_emp_to_assign)
+      current_city_index = cities_list.index(current_city) if current_city in cities_list else 0
+      
+      assigned_city = st.selectbox("اختر المدينة:", cities_list, index=current_city_index, key="assign_city")
+      if st.button("حفظ ربط العامل بالمدينة"):
+        set_employee_city(selected_emp_to_assign, assigned_city)
+        st.success(f"تم ربط العامل {selected_emp_to_assign} بمدينة {assigned_city} بنجاح!")
+
+    st.markdown("---")
+    st.subheader(t["add_emp"])
+    new_emp_name = st.text_input("Name des Mitarbeiters:")
+    default_emp_city = st.selectbox("المدينة الأساسية للعامل الجديد:", cities_list, key="new_emp_city")
+    if st.button(t["add_btn"], key="add_emp_btn"):
+      if new_emp_name and new_emp_name not in employees_list:
+        employees_list.append(new_emp_name)
         save_employees(employees_list)
-        st.success("Mitarbeiter erfolgreich gelöscht!")
+        set_employee_city(new_emp_name, default_emp_city)
+        st.success(t["success_msg"])
         st.rerun()
-      else:
-        st.warning("Es muss mindestens ein Mitarbeiter bleiben.")
+
+    st.markdown("---")
+    st.subheader(t["del_emp"])
+    if len(employees_list) > 0:
+      emp_to_delete = st.selectbox("Mitarbeiter löschen:", employees_list, key="del_emp_select")
+      if st.button(t["del_btn"], key="del_emp_btn"):
+        if len(employees_list) > 1:
+          employees_list.remove(emp_to_delete)
+          save_employees(employees_list)
+          st.success("Mitarbeiter erfolgreich gelöscht!")
+          st.rerun()
+        else:
+          st.warning("Es muss mindestens ein Mitarbeiter bleiben.")
+
+  with tab2:
+    st.subheader("إضافة وحذف المدن / Städte hinzufügen & löschen")
+    new_city_name = st.text_input("اسم المدينة الجديدة (Neue Stadt):")
+    if st.button("إضافة المدينة", key="add_city_btn"):
+      if new_city_name and new_city_name not in cities_list:
+        cities_list.append(new_city_name)
+        save_cities(cities_list)
+        st.success(t["success_msg"])
+        st.rerun()
+
+    st.markdown("---")
+    if len(cities_list) > 0:
+      city_to_delete = st.selectbox("حذف مدينة (Stadt löschen):", cities_list, key="del_city_select")
+      if st.button("حذف المدينة المحددة", key="del_city_btn"):
+        if len(cities_list) > 1:
+          cities_list.remove(city_to_delete)
+          save_cities(cities_list)
+          st.success("Stadt erfolgreich gelöscht!")
+          st.rerun()
+        else:
+          st.warning("Es muss mindestens eine Stadt bleiben.")
 
 
 # ---------------------------------------------------------
-# الصفحة السادسة: ملخص الأشهر (Monatsübersicht)
+# الصفحة السادسة: ملخص الأشهر (Monatsübersicht) - مع خيار "جميع المدن"
 # ---------------------------------------------------------
-
 elif page == t["p6"]:
     st.title("📅 Clean & Care GmbH - Monatsübersicht")
     
-    col1, col2 = st.columns(2)
+    cities_list = [t["all_cities"]] + load_cities()
+
+    col_c, col1, col2 = st.columns(3)
+    with col_c:
+        summary_city = st.selectbox(t["city_label"], cities_list, key="summary_city_select")
     with col1:
         summary_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="summary_month_select")
     with col2:
         summary_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="summary_year_select")
 
-    # 1. جلب الساعات اليومية من Supabase
+    allowed_emps = get_employees_by_city(summary_city)
+
     rows = []
     try:
         res_rows = supabase.table("daily_hours").select("emp, content").eq("month", summary_month).eq("year", int(summary_year)).execute()
@@ -1087,7 +1109,6 @@ elif page == t["p6"]:
     except Exception:
         rows = []
 
-    # 2. جلب ساعات القطارات من trains_data وحساب مجموعها لكل موظف بشكل آمن
     zug_hours_per_emp = {}
     try:
         zug_res = supabase.table("trains_data").select("emp, content").eq("month", summary_month).eq("year", int(summary_year)).execute()
@@ -1109,12 +1130,14 @@ elif page == t["p6"]:
     total_company_hours = 0.0
     processed_emps = set()
 
-    # 3. معالجة الساعات اليومية ودمج ساعات القطارات معها
     for row in rows:
         emp = row.get("emp")
         if not emp:
             continue
         clean_emp_name = emp.strip()
+        
+        if clean_emp_name not in allowed_emps:
+            continue
           
         try:
             emp_data = json.loads(row["content"])
@@ -1123,7 +1146,6 @@ elif page == t["p6"]:
         except Exception:
             emp_daily_total = 0.0
 
-        # إضافة ساعات القطار إن وجدت دون المساس ببيانات الساعات اليومية الأصلية
         emp_zug_total = zug_hours_per_emp.get(clean_emp_name, 0.0)
         total_emp_combined = emp_daily_total + emp_zug_total
 
@@ -1135,18 +1157,17 @@ elif page == t["p6"]:
             })
             total_company_hours += total_emp_combined
 
-    # 4. إضافة الموظفين الذين لديهم ساعات قطارات فقط (إن وجدوا)
     for emp_name, zug_hrs in zug_hours_per_emp.items():
         if emp_name and emp_name.strip() not in processed_emps and zug_hrs > 0:
             clean_name = emp_name.strip()
-            processed_emps.add(clean_name)
-            summary_data.append({
-                "Mitarbeiter": clean_name,
-                "Gesamtstunden": f"{zug_hrs:.2f} St."
-            })
-            total_company_hours += zug_hrs
+            if clean_name in allowed_emps:
+                processed_emps.add(clean_name)
+                summary_data.append({
+                    "Mitarbeiter": clean_name,
+                    "Gesamtstunden": f"{zug_hrs:.2f} St."
+                })
+                total_company_hours += zug_hrs
 
-    # 5. عرض النتائج والتصدير
     if not summary_data:
         summary_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Gesamtstunden": "0.00 St."}])
     else:
@@ -1161,6 +1182,8 @@ elif page == t["p6"]:
         st.download_button(t["pdf_btn"], pdf_summary_data, f"Monatsübersicht_{summary_month}_{summary_year}.pdf", "application/pdf", key="p6_pdf")
     with col_s2:
         st.metric("Gesamtsumme:", f"{total_company_hours:.2f} St.")
+
+
 # ---------------------------------------------------------
 # الصفحة السابعة: تذاكر المهام (Einsatz-Tickets)
 # ---------------------------------------------------------
@@ -1226,150 +1249,149 @@ elif page == t["p7"]:
 
 
 # ---------------------------------------------------------
-# الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - بالعرض تماماً (5 قطارات لكل يوم في سطر واحد)
-# ---------------------------------------------------------
-# ---------------------------------------------------------
-# الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - 5 قطارات (رقم، بداية، نهاية) مع جمع الساعات
+# الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - مربوطة بالمدن
 # ---------------------------------------------------------
 elif page == t["p8"]:
     st.title("🚆 Clean & Care GmbH - Zug-Fahrten")
     st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
-    employees_list = load_employees()
+    cities_list = load_cities()
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        train_emp = st.selectbox(t["emp_label"], employees_list, key="train_emp_select")
-    with col2:
+    col_c, col_m, col_y = st.columns(3)
+    with col_c:
+        selected_city = st.selectbox(t["city_label"], cities_list, key="train_city_select")
+    with col_m:
         train_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="train_month_select")
-    with col3:
+    with col_y:
         train_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="train_year_select")
 
-    st.subheader(f"Zug-Fahrten für: {train_emp} ({train_month} {train_year})")
+    city_employees = get_employees_by_city(selected_city)
 
-    trains_options = ["", "Zug 1", "Zug 2", "Zug 3", "Zug 4", "Zug 5"]
+    if city_employees:
+        train_emp = st.selectbox(t["emp_label"], city_employees, key="train_emp_select")
+        st.subheader(f"Zug-Fahrten für: {train_emp} ({train_month} {train_year})")
 
-    import calendar
-    months_map_de = {
-        "Januar": 1, "Februar": 2, "März": 3, "April": 4,
-        "Mai": 5, "Juni": 6, "Juli": 7, "August": 8,
-        "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
-    }
-    m_num = months_map_de.get(train_month, 10)
-    try:
-        days_count = calendar.monthrange(int(train_year), m_num)[1]
-    except:
-        days_count = 31
+        trains_options = ["", "Zug 1", "Zug 2", "Zug 3", "Zug 4", "Zug 5"]
 
-    # استخدام الدالة الموجودة مسبقاً load_trains_data أو الاستعلام المباشر من trains_data
-    existing_data = []
-    try:
-        res = supabase.table("trains_data")\
-            .select("*")\
-            .eq("emp", train_emp)\
-            .eq("month", train_month)\
-            .eq("year", int(train_year))\
-            .execute()
-        existing_data = res.data if res.data else []
-    except Exception as e:
-        st.warning(f"ملاحظة: {e}")
-
-    # إذا كانت البيانات مخزنة كـ JSON داخل عمود content كما تظهر في قاعدة البيانات لديك
-    trains_data_rows = []
-    saved_df = None
-    if existing_data and "content" in existing_data[0]:
-        try:
-            content_json = json.loads(existing_data[0]["content"])
-            saved_df = pd.DataFrame(content_json)
-        except:
-            pass
-
-    if saved_df is not None and not saved_df.empty:
-        default_trains_df = saved_df
-        for i in range(1, 6):
-            if f"Zug {i}" not in default_trains_df.columns:
-                default_trains_df[f"Zug {i}"] = ""
-            if f"Verspätung {i}" not in default_trains_df.columns:
-                default_trains_df[f"Verspätung {i}"] = 0
-    else:
-        trains_rows = []
-        for day in range(1, days_count + 1):
-            row_data = {"Datum": str(day)}
-            for i in range(1, 6):
-                row_data[f"Zug {i}"] = ""
-                row_data[f"Von {i}"] = ""
-                row_data[f"Bis {i}"] = ""
-            row_data["Gesamtstunden"] = 0.0
-            trains_rows.append(row_data)
-        default_trains_df = pd.DataFrame(trains_rows)
-
-    edited_trains_df = st.data_editor(
-        default_trains_df,
-        num_rows="fixed",
-        use_container_width=True,
-        key=f"trains_table_{train_emp}_{train_month}_{train_year}",
-        column_config={
-            "Zug 1": st.column_config.SelectboxColumn("Zug 1", options=trains_options),
-            "Zug 2": st.column_config.SelectboxColumn("Zug 2", options=trains_options),
-            "Zug 3": st.column_config.SelectboxColumn("Zug 3", options=trains_options),
-            "Zug 4": st.column_config.SelectboxColumn("Zug 4", options=trains_options),
-            "Zug 5": st.column_config.SelectboxColumn("Zug 5", options=trains_options),
+        import calendar
+        months_map_de = {
+            "Januar": 1, "Februar": 2, "März": 3, "April": 4,
+            "Mai": 5, "Juni": 6, "Juli": 7, "August": 8,
+            "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
         }
-    )
+        m_num = months_map_de.get(train_month, 10)
+        try:
+            days_count = calendar.monthrange(int(train_year), m_num)[1]
+        except:
+            days_count = 31
 
-    edited_trains_df = edited_trains_df.astype(object)
+        existing_data = []
+        try:
+            res = supabase.table("trains_data")\
+                .select("*")\
+                .eq("emp", train_emp)\
+                .eq("month", train_month)\
+                .eq("year", int(train_year))\
+                .execute()
+            existing_data = res.data if res.data else []
+        except Exception as e:
+            st.warning(f"ملاحظة: {e}")
 
-    total_trains_sum = 0.0
-    for index, row in edited_trains_df.iterrows():
-        day_total_hrs = 0.0
-        for i in range(1, 6):
-            v_str = str(row.get(f"Von {i}", "")).strip()
-            b_str = str(row.get(f"Bis {i}", "")).strip()
-
-            if v_str and b_str and v_str != "nan" and b_str != "nan":
-                for fmt in ("%H:%M", "%H.%M", "%H"):
-                    try:
-                        t1 = datetime.strptime(v_str.replace(".", ":"), fmt)
-                        t2 = datetime.strptime(b_str.replace(".", ":"), fmt)
-                        
-                        if t2 < t1:
-                            from datetime import timedelta
-                            t2 += timedelta(days=1)
-
-                        diff = (t2 - t1).total_seconds() / 3600.0
-                        if diff > 0:
-                            day_total_hrs += diff
-                        break
-                    except:
-                        continue
-        
-        total_trains_sum += day_total_hrs
-        edited_trains_df.at[index, "Gesamtstunden"] = round(day_total_hrs, 2)
-
-    col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 1])
-    
-    with col_b1:
-        if st.button("💾 Speichern / حفظ ساعات القطار", type="primary", key="save_trains_btn"):
+        saved_df = None
+        if existing_data and "content" in existing_data[0]:
             try:
-                content_str = json.dumps(edited_trains_df.to_dict(orient="list"), ensure_ascii=False)
-                supabase.table("trains_data").upsert({
-                    "emp": train_emp,
-                    "month": train_month,
-                    "year": int(train_year),
-                    "content": content_str
-                }).execute()
-                st.success("✅ تم حفظ ساعات القطار في جدول trains_data بنجاح!")
-            except Exception as e:
-                st.error(f"حدث خطأ أثناء الحفظ: {e}")
-    
-    with col_b2:
-        csv_data = edited_trains_df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Zug-Stunden exportieren",
-            data=csv_data,
-            file_name=f"Zugstunden_{train_emp}_{train_month}_{train_year}.csv",
-            mime="text/csv",
-            key="export_trains_btn"
+                content_json = json.loads(existing_data[0]["content"])
+                saved_df = pd.DataFrame(content_json)
+            except:
+                pass
+
+        if saved_df is not None and not saved_df.empty:
+            default_trains_df = saved_df
+            for i in range(1, 6):
+                if f"Zug {i}" not in default_trains_df.columns:
+                    default_trains_df[f"Zug {i}"] = ""
+                if f"Verspätung {i}" not in default_trains_df.columns:
+                    default_trains_df[f"Verspätung {i}"] = 0
+        else:
+            trains_rows = []
+            for day in range(1, days_count + 1):
+                row_data = {"Datum": str(day)}
+                for i in range(1, 6):
+                    row_data[f"Zug {i}"] = ""
+                    row_data[f"Von {i}"] = ""
+                    row_data[f"Bis {i}"] = ""
+                row_data["Gesamtstunden"] = 0.0
+                trains_rows.append(row_data)
+            default_trains_df = pd.DataFrame(trains_rows)
+
+        edited_trains_df = st.data_editor(
+            default_trains_df,
+            num_rows="fixed",
+            use_container_width=True,
+            key=f"trains_table_{train_emp}_{train_month}_{train_year}",
+            column_config={
+                "Zug 1": st.column_config.SelectboxColumn("Zug 1", options=trains_options),
+                "Zug 2": st.column_config.SelectboxColumn("Zug 2", options=trains_options),
+                "Zug 3": st.column_config.SelectboxColumn("Zug 3", options=trains_options),
+                "Zug 4": st.column_config.SelectboxColumn("Zug 4", options=trains_options),
+                "Zug 5": st.column_config.SelectboxColumn("Zug 5", options=trains_options),
+            }
         )
-    with col_b3:
-        st.metric("Gesamtsumme:", f"{total_trains_sum:.2f} St.")
+
+        edited_trains_df = edited_trains_df.astype(object)
+
+        total_trains_sum = 0.0
+        for index, row in edited_trains_df.iterrows():
+            day_total_hrs = 0.0
+            for i in range(1, 6):
+                v_str = str(row.get(f"Von {i}", "")).strip()
+                b_str = str(row.get(f"Bis {i}", "")).strip()
+
+                if v_str and b_str and v_str != "nan" and b_str != "nan":
+                    for fmt in ("%H:%M", "%H.%M", "%H"):
+                        try:
+                            t1 = datetime.strptime(v_str.replace(".", ":"), fmt)
+                            t2 = datetime.strptime(b_str.replace(".", ":"), fmt)
+                            
+                            if t2 < t1:
+                                t2 += timedelta(days=1)
+
+                            diff = (t2 - t1).total_seconds() / 3600.0
+                            if diff > 0:
+                                day_total_hrs += diff
+                            break
+                        except:
+                            continue
+            
+            total_trains_sum += day_total_hrs
+            edited_trains_df.at[index, "Gesamtstunden"] = round(day_total_hrs, 2)
+
+        col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 1])
+        
+        with col_b1:
+            if st.button("💾 Speichern / حفظ ساعات القطار", type="primary", key="save_trains_btn"):
+                try:
+                    content_str = json.dumps(edited_trains_df.to_dict(orient="list"), ensure_ascii=False)
+                    supabase.table("trains_data").upsert({
+                        "emp": train_emp,
+                        "month": train_month,
+                        "year": int(train_year),
+                        "content": content_str
+                    }).execute()
+                    st.success("✅ تم حفظ ساعات القطار في جدول trains_data بنجاح!")
+                except Exception as e:
+                    st.error(f"حدث خطأ أثناء الحفظ: {e}")
+        
+        with col_b2:
+            csv_data = edited_trains_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Zug-Stunden exportieren",
+                data=csv_data,
+                file_name=f"Zugstunden_{train_emp}_{train_month}_{train_year}.csv",
+                mime="text/csv",
+                key="export_trains_btn"
+            )
+        with col_b3:
+            st.metric("Gesamtsumme:", f"{total_trains_sum:.2f} St.")
+    else:
+        st.warning("لا يوجد عمال مرتبطون بهذه المدينة حالياً.")
