@@ -1141,7 +1141,8 @@ elif page == t["p5"]:
 
 
 st.markdown("---")
-  st.subheader("🏙️ Städte-Verwaltung / إدارة المدن")
+  
+st.subheader("🏙️ Städte-Verwaltung / إدارة المدن")
   
   col_c1, col_c2 = st.columns(2)
   with col_c1:
