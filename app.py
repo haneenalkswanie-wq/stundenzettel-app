@@ -21,7 +21,7 @@ st.set_page_config(
 # ---------------------------------------------------------
 SUPABASE_URL = "https://knzrtbjwqqhxghtfasvy.supabase.co"
 # قراءة المفتاح بأمان من إعدادات السحابة التي وضعناها قبل قليل
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+SUPABASE_KEY = ["sb_secret_ILqB9i_KxjRb396b_lVqKA__v8i8tNJ"]
 
 @st.cache_resource
 def init_supabase() -> Client:
