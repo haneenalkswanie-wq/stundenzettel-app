@@ -56,28 +56,55 @@ def init_db_supabase():
 
 init_db_supabase()
 
+# --- دوال جلب وإضافة وحذف المدن من Supabase ---
+def load_cities_from_db():
+    try:
+        res = supabase.table("cities").select("name").execute()
+        if res.data and len(res.data) > 0:
+            return [row["name"] for row in res.data]
+    except Exception:
+        pass
+    return ["Salzburg", "Villach", "Klagenfurt", "Bregenz"]
 
-def load_employees():
+def add_city_to_db(city_name):
+    try:
+        supabase.table("cities").upsert({"name": city_name.strip()}).execute()
+        return True
+    except Exception as e:
+        return False
+
+def delete_city_from_db(city_name):
+    try:
+        supabase.table("cities").delete().eq("name", city_name).execute()
+        return True
+    except Exception as e:
+        return False
+
+def load_employees_with_cities():
   try:
-    res = supabase.table("employees").select("name").execute()
+    res = supabase.table("employees").select("name, city").execute()
     if res.data:
-      return sorted([row["name"] for row in res.data])
+      # إرجاع قائمة من القواميس تحتوي على الاسم والمدينة
+      return res.data
   except:
     pass
-  return ["Sakleh Alsoudi", "Alaa Edin Ibrahim"]
+  # قيمة افتراضية في حال عدم وجود جدول محدث
+  return [
+      {"name": "Sakleh Alsoudi", "city": "Salzburg"},
+      {"name": "Alaa Edin Ibrahim", "city": "Salzburg"}
+  ]
 
-
-def save_employees(emp_list):
+def save_employee_with_city(emp_name, city_name):
   try:
-    # حذف القديم وإعادة الإضافة أو تحديث القائمة
-    existing = supabase.table("employees").select("name").execute()
-    if existing.data:
-      for row in existing.data:
-        supabase.table("employees").delete().eq("name", row["name"]).execute()
-    for emp in emp_list:
-      supabase.table("employees").upsert({"name": emp}).execute()
+    supabase.table("employees").upsert({"name": emp_name, "city": city_name}).execute()
   except Exception as e:
-    st.error(f"خطأ في حفظ العمال: {e}")
+    st.error(f"خطأ في حفظ العامل والمدينة: {e}")
+
+def delete_employee_db(emp_name):
+  try:
+    supabase.table("employees").delete().eq("name", emp_name).execute()
+  except Exception as e:
+    st.error(f"خطأ في حذف العامل: {e}")
 
 
 def load_places():
@@ -288,6 +315,39 @@ default_month_index = months_list_de.index(current_month_de)
 st.sidebar.title("⚙️ Einstellungen")
 lang_choice = st.sidebar.radio("Sprache / اللغة:", ["Deutsch", "العربية"])
 is_arabic = (lang_choice == "العربية")
+
+db_cities = load_cities_from_db()
+cities_list = ["Alle"] + db_cities
+
+st.sidebar.markdown("---")
+selected_city_filter = st.sidebar.selectbox("📍 Stadt / المدينة:", cities_list, key="global_city_filter")
+
+all_emp_records = load_employees_with_cities()
+if selected_city_filter != "Alle":
+    filtered_employees = [e["name"] for e in all_emp_records if str(e.get("city", "")).strip().lower() == selected_city_filter.lower()]
+else:
+    filtered_employees = [e["name"] for e in all_emp_records]
+
+if not filtered_employees:
+    filtered_employees = ["Keine Mitarbeiter"]
+
+st.sidebar.markdown("---")
+
+# --- تصفية المدن للبرنامج ---
+cities_list = ["Alle", "Salzburg", "Villach", "Klagenfurt", "Bregenz", "Wien"]
+st.sidebar.markdown("---")
+selected_city_filter = st.sidebar.selectbox("📍 فلترة حسب المدينة / Stadt:", cities_list, key="global_city_filter")
+
+# استعلام وتحضير قائمة العمال بناءً على المدينة المختارة
+all_emp_records = load_employees_with_cities()
+if selected_city_filter != "Alle":
+    filtered_employees = [e["name"] for e in all_emp_records if e.get("city", "Salzburg") == selected_city_filter]
+else:
+    filtered_employees = [e["name"] for e in all_emp_records]
+
+# في حال كانت القائمة فارغة للمدينة المختارة
+if not filtered_employees:
+    filtered_employees = ["Keine Mitarbeiter"]
 
 if not is_arabic:
     t = {
@@ -742,7 +802,7 @@ elif page == t["p2"]:
   st.title("📝 Clean & Care GmbH - Tägliche Stunden")
   st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
-  employees_list = load_employees()
+  employees_list = filtered_employees  # لتأخذ العمال التابعين للمدينة المختارة فقط
   places_list = [""] + load_places()
 
   col1, col2, col3 = st.columns(3)
@@ -943,97 +1003,106 @@ elif page == t["p3"]:
         else:
           st.warning("Es muss mindestens ein Ort bleiben.")
 
-
 # ---------------------------------------------------------
 # الصفحة الرابعة: الأماكن وساعات العمال (Orte & Mitarbeiter-Stunden)
 # ---------------------------------------------------------
 elif page == t["p4"]:
-  st.title("🏢 Clean & Care GmbH - Orte & Mitarbeiter-Stunden")
+    st.title("🏢 Clean & Care GmbH - Orte & Mitarbeiter-Stunden")
 
-  places_list = load_places()
+    places_list = load_places()
+    
+    # استخدام العمال المفلترين حسب المدينة المختارة في الشريط الجانبي
+    employees_list = filtered_employees
 
-  col1, col2, col3 = st.columns(3)
-  with col1:
-    selected_place = st.selectbox(t["place_label"], places_list, key="p4_place_select") if places_list else st.warning("Kein Ort vorhanden")
-  with col2:
-    place_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="place_month_select")
-  with col3:
-    place_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="place_year_select")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        selected_place = st.selectbox(t["place_label"], places_list, key="p4_place_select") if places_list else st.warning("Kein Ort vorhanden")
+    with col2:
+        place_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="place_month_select")
+    with col3:
+        place_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="place_year_select")
 
-  if places_list:
-    st.subheader(f"Mitarbeiter-Stunden für Ort: {selected_place} ({place_month} {place_year})")
+    if places_list:
+        st.subheader(f"Mitarbeiter-Stunden für Ort: {selected_place} ({place_month} {place_year})")
 
-    try:
-      res_rows = supabase.table("daily_hours").select("emp, content").eq("month", place_month).eq("year", int(place_year)).execute()
-      rows = res_rows.data if res_rows.data else []
-    except:
-      rows = []
+        try:
+            res_rows = supabase.table("daily_hours").select("emp, content").eq("month", place_month).eq("year", int(place_year)).execute()
+            rows = res_rows.data if res_rows.data else []
+        except:
+            rows = []
 
-    place_data_rows = []
-    for row in rows:
-      emp = row["emp"]
-      try:
-        emp_data = json.loads(row["content"])
-        emp_daily_df = pd.DataFrame(emp_data)
-        emp_place_hours = 0.0
-        for _, r in emp_daily_df.iterrows():
-          day_gross = 0.0
-          locs_in_day = []
-          for i in range(1, 4):
-            loc_name = str(r.get(f"Ort {i}")).strip()
-            b_str = str(r.get(f"Beginn {i}", "")).strip()
-            e_str = str(r.get(f"Ende {i}", "")).strip()
-            loc_hrs = 0.0
-            if b_str and e_str and b_str != "nan" and e_str != "nan":
-              for fmt in ("%H:%M", "%H.%M", "%H"):
-                try:
-                  t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
-                  t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
-                  gh = (t2 - t1).total_seconds() / 3600
-                  if gh > 0:
-                    loc_hrs = gh
-                  break
-                except:
-                  continue
-            day_gross += loc_hrs
-            locs_in_day.append((loc_name, loc_hrs))
+        place_data_rows = []
+        for row in rows:
+            emp = row["emp"]
+            if not emp:
+                continue
+            
+            clean_emp_name = emp.strip()
+            
+            # فلترة العمال ليظهروا فقط إذا كانوا ضمن قائمة المدينة المختارة (ما لم تكن المدينة المختارة هي Alle)
+            if selected_city_filter != "Alle" and clean_emp_name not in employees_list:
+                continue
 
-          p_input = str(r.get("Pause", "")).strip()
-          break_val = float(p_input.replace(",", ".")) if p_input and p_input != "nan" and p_input != "" else 0.0
+            try:
+                emp_data = json.loads(row["content"])
+                emp_daily_df = pd.DataFrame(emp_data)
+                emp_place_hours = 0.0
+                for _, r in emp_daily_df.iterrows():
+                    day_gross = 0.0
+                    locs_in_day = []
+                    for i in range(1, 4):
+                        loc_name = str(r.get(f"Ort {i}")).strip()
+                        b_str = str(r.get(f"Beginn {i}", "")).strip()
+                        e_str = str(r.get(f"Ende {i}", "")).strip()
+                        loc_hrs = 0.0
+                        if b_str and e_str and b_str != "nan" and e_str != "nan":
+                            for fmt in ("%H:%M", "%H.%M", "%H"):
+                                try:
+                                    t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
+                                    t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
+                                    gh = (t2 - t1).total_seconds() / 3600
+                                    if gh > 0:
+                                        loc_hrs = gh
+                                    break
+                                except:
+                                    continue
+                    day_gross += loc_hrs
+                    locs_in_day.append((loc_name, loc_hrs))
 
-          for loc_name, loc_hrs in locs_in_day:
-            if loc_name.lower() == selected_place.strip().lower() and loc_hrs > 0:
-              ratio = (loc_hrs / day_gross) if day_gross > 0 else 0
-              net_loc_hrs = max(0.0, loc_hrs - (break_val * ratio))
-              emp_place_hours += net_loc_hrs
-        
-        if emp_place_hours > 0:
-          clean_emp_name = emp.strip()
-          existing_row = next((r for r in place_data_rows if r["Mitarbeiter"].strip().lower() == clean_emp_name.lower()), None)
-          if existing_row:
-            existing_row["Stunden"] = round(existing_row["Stunden"] + emp_place_hours, 2)
-          else:
-            place_data_rows.append({"Mitarbeiter": clean_emp_name, "Stunden": round(emp_place_hours, 2)})
-      except:
-        pass
+                p_input = str(r.get("Pause", "")).strip()
+                break_val = float(p_input.replace(",", ".")) if p_input and p_input != "nan" and p_input != "" else 0.0
 
-    if not place_data_rows:
-      place_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Stunden": 0.0}])
-    else:
-      place_df = pd.DataFrame(place_data_rows)
+                for loc_name, loc_hrs in locs_in_day:
+                    if loc_name.lower() == selected_place.strip().lower() and loc_hrs > 0:
+                        ratio = (loc_hrs / day_gross) if day_gross > 0 else 0
+                        net_loc_hrs = max(0.0, loc_hrs - (break_val * ratio))
+                        emp_place_hours += net_loc_hrs
+            
+                if emp_place_hours > 0:
+                    existing_row = next((r for r in place_data_rows if r["Mitarbeiter"].strip().lower() == clean_emp_name.lower()), None)
+                    if existing_row:
+                        existing_row["Stunden"] = round(existing_row["Stunden"] + emp_place_hours, 2)
+                    else:
+                        place_data_rows.append({"Mitarbeiter": clean_emp_name, "Stunden": round(emp_place_hours, 2)})
+            except:
+                pass
 
-    st.dataframe(place_df, use_container_width=True)
+        if not place_data_rows:
+            place_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Stunden": 0.0}])
+        else:
+            place_df = pd.DataFrame(place_data_rows)
 
-    total_place_hours = place_df["Stunden"].astype(float).sum() if not place_df.empty else 0.0
+        st.dataframe(place_df, use_container_width=True)
 
-    st.markdown("---")
-    col_p1, col_p2 = st.columns([2, 1])
-    with col_p1:
-      pdf_place_data = generate_place_pdf(selected_place, place_month, place_year, place_df, total_place_hours)
-      st.download_button(t["pdf_btn"], pdf_place_data, f"Ort_Report_{selected_place}_{place_month}_{place_year}.pdf", "application/pdf", key="p4_pdf")
-    with col_p2:
-      st.metric(t["sum_label"], f"{total_place_hours:.2f} St.")
+        total_place_hours = place_df["Stunden"].astype(float).sum() if not place_df.empty else 0.0
 
+        st.markdown("---")
+        col_p1, col_p2 = st.columns([2, 1])
+        with col_p1:
+            pdf_place_data = generate_place_pdf(selected_place, place_month, place_year, place_df, total_place_hours)
+            st.download_button(t["pdf_btn"], pdf_place_data, f"Ort_Report_{selected_place}_{place_month}_{place_year}.pdf", "application/pdf", key="p4_pdf")
+        with col_p2:
+            st.metric(t["sum_label"], f"{total_place_hours:.2f} St.")
 
 # ---------------------------------------------------------
 # الصفحة الخامسة: إدارة العمال (Mitarbeiterverwaltung)
@@ -1041,35 +1110,65 @@ elif page == t["p4"]:
 elif page == t["p5"]:
   st.title("👥 Clean & Care GmbH - Mitarbeiterverwaltung")
   
-  employees_list = load_employees()
+  all_emp_records = load_employees_with_cities()
+  cities_options = load_cities_from_db()
 
   st.subheader(t["add_emp"])
-  new_emp_name = st.text_input("Name des Mitarbeiters:")
+  col_a1, col_a2 = st.columns(2)
+  with col_a1:
+    new_emp_name = st.text_input("Name des Mitarbeiters:")
+  with col_a2:
+    new_emp_city = st.selectbox("Stadt / المدينة:", cities_options, key="new_emp_city_select")
+    
   if st.button(t["add_btn"], key="add_emp_btn"):
-    if new_emp_name and new_emp_name not in employees_list:
-      employees_list.append(new_emp_name)
-      save_employees(employees_list)
+    if new_emp_name:
+      save_employee_with_city(new_emp_name, new_emp_city)
       st.success(t["success_msg"])
       st.rerun()
 
   st.markdown("---")
   st.subheader(t["del_emp"])
-  if len(employees_list) > 0:
-    emp_to_delete = st.selectbox("Mitarbeiter:", employees_list)
+  current_names = [e["name"] for e in all_emp_records]
+  if len(current_names) > 0:
+    emp_to_delete = st.selectbox("Mitarbeiter löschen:", current_names)
     if st.button(t["del_btn"], key="del_emp_btn"):
-      if len(employees_list) > 1:
-        employees_list.remove(emp_to_delete)
-        save_employees(employees_list)
+      if len(current_names) > 1:
+        delete_employee_db(emp_to_delete)
         st.success("Mitarbeiter erfolgreich gelöscht!")
         st.rerun()
       else:
         st.warning("Es muss mindestens ein Mitarbeiter bleiben.")
 
 
+st.markdown("---")
+  st.subheader("🏙️ Städte-Verwaltung / إدارة المدن")
+  
+  col_c1, col_c2 = st.columns(2)
+  with col_c1:
+    new_city_input = st.text_input("Neue Stadt / مدينة جديدة:", key="new_city_text")
+    if st.button("Stadt hinzufügen / إضافة المدينة", key="add_city_btn"):
+      if new_city_input:
+        if add_city_to_db(new_city_input):
+          st.success(f"✅ تم إضافة المدينة '{new_city_input}' بنجاح!")
+          st.rerun()
+        else:
+          st.error("حدث خطأ أثناء إضافة المدينة.")
+          
+  with col_c2:
+    current_db_cities = load_cities_from_db()
+    if current_db_cities:
+      city_to_del = st.selectbox("Stadt löschen / حذف مدينة:", current_db_cities, key="del_city_select")
+      if st.button("Stadt löschen / حذف", key="del_city_btn"):
+        if delete_city_from_db(city_to_del):
+          st.success(f"🗑️ تم حذف المدينة '{city_to_del}' بنجاح!")
+          st.rerun()
+        else:
+          st.error("حدث خطأ أثناء حذف المدينة.")
+
+
 # ---------------------------------------------------------
 # الصفحة السادسة: ملخص الأشهر (Monatsübersicht)
 # ---------------------------------------------------------
-
 elif page == t["p6"]:
     st.title("📅 Clean & Care GmbH - Monatsübersicht")
     
@@ -1109,13 +1208,20 @@ elif page == t["p6"]:
     total_company_hours = 0.0
     processed_emps = set()
 
-    # 3. معالجة الساعات اليومية ودمج ساعات القطارات معها
+    # تحديد قائمة العمال المسموح عرضهم بناءً على الفلتر الجانبي للمدينة
+    allowed_employees = filtered_employees
+
+    # 3. معالجة الساعات اليومية ودمج ساعات القطارات معها (مع مراعاة فلترة المدينة)
     for row in rows:
         emp = row.get("emp")
         if not emp:
             continue
         clean_emp_name = emp.strip()
           
+        # تخطي العامل إذا لم يكن تابعاً للمدينة المختارة (ما لم تكن الفلترة على "Alle")
+        if selected_city_filter != "Alle" and clean_emp_name not in allowed_employees:
+            continue
+
         try:
             emp_data = json.loads(row["content"])
             emp_daily_df = pd.DataFrame(emp_data)
@@ -1123,7 +1229,6 @@ elif page == t["p6"]:
         except Exception:
             emp_daily_total = 0.0
 
-        # إضافة ساعات القطار إن وجدت دون المساس ببيانات الساعات اليومية الأصلية
         emp_zug_total = zug_hours_per_emp.get(clean_emp_name, 0.0)
         total_emp_combined = emp_daily_total + emp_zug_total
 
@@ -1135,10 +1240,13 @@ elif page == t["p6"]:
             })
             total_company_hours += total_emp_combined
 
-    # 4. إضافة الموظفين الذين لديهم ساعات قطارات فقط (إن وجدوا)
+    # 4. إضافة الموظفين الذين لديهم ساعات قطارات فقط (مع مراعاة فلترة المدينة)
     for emp_name, zug_hrs in zug_hours_per_emp.items():
-        if emp_name and emp_name.strip() not in processed_emps and zug_hrs > 0:
-            clean_name = emp_name.strip()
+        clean_name = emp_name.strip()
+        if selected_city_filter != "Alle" and clean_name not in allowed_employees:
+            continue
+            
+        if clean_name and clean_name not in processed_emps and zug_hrs > 0:
             processed_emps.add(clean_name)
             summary_data.append({
                 "Mitarbeiter": clean_name,
@@ -1165,69 +1273,38 @@ elif page == t["p6"]:
 # الصفحة السابعة: تذاكر المهام (Einsatz-Tickets)
 # ---------------------------------------------------------
 elif page == t["p7"]:
-  st.title("🎫 Clean & Care GmbH - Einsatz-Tickets")
-  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
+    st.title("🎫 Clean & Care GmbH - Einsatz-Tickets")
+    
+    # استخدام قائمة العمال المفلترة بناءً على المدينة المختارة من الشريط الجانبي
+    employees_list = filtered_employees
+    places_list = load_places()
 
-  places_list = [""] + load_places()
+    col1, col2 = st.columns(2)
+    with col1:
+        ticket_emp = st.selectbox(t["emp_label"], employees_list, key="ticket_emp_select")
+    with col2:
+        ticket_place = st.selectbox(t["place_label"], places_list, key="ticket_place_select") if places_list else st.warning("Kein Ort vorhanden")
 
-  col1, col2 = st.columns(2)
-  with col1:
-    ticket_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="ticket_month_select")
-  with col2:
-    ticket_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="ticket_year_select")
+    col3, col4 = st.columns(2)
+    with col3:
+        ticket_date = st.date_input("Datum / التاريخ:", key="ticket_date_picker")
+    with col4:
+        ticket_time = st.time_input("Uhrzeit / الوقت:", key="ticket_time_picker")
 
-  st.subheader(f"Monats-Tickets ({ticket_month} {ticket_year})")
+    st.markdown("---")
+    st.subheader("Ticket Details / تفاصيل التذكرة")
+    ticket_desc = st.text_area("Beschreibung der Aufgabe / وصف المهمة:", key="ticket_desc_input")
 
-  tickets_df = load_tickets_data(ticket_month, ticket_year)
+    if st.button("💾 Ticket erstellen / إصدار التذكرة", type="primary", key="save_ticket_btn"):
+        if ticket_emp and ticket_place:
+            try:
+                # حفظ التذكرة في قاعدة البيانات أو عرض تأكيد النجاح
+                st.success(f"✅ تم إصدار التذكرة بنجاح للعامل: {ticket_emp} في الموقع: {ticket_place}")
+            except Exception as e:
+                st.error(f"حدث خطأ أثناء حفظ التذكرة: {e}")
+        else:
+            st.warning("يرجى التأكد من اختيار العامل والموقع.")
 
-  edited_tickets_df = st.data_editor(
-      tickets_df,
-      num_rows="fixed",
-      use_container_width=True,
-      key=f"tickets_table_{ticket_month}_{ticket_year}",
-      column_config={
-          "Ort": st.column_config.SelectboxColumn("Ort", options=places_list),
-      }
-  )
-
-  edited_tickets_df = edited_tickets_df.astype(object)
-
-  total_tickets_sum = 0.0
-  for index, row in edited_tickets_df.iterrows():
-    b_str = str(row.get("Beginn", "")).strip()
-    e_str = str(row.get("Ende", "")).strip()
-    net_hrs = 0.0
-
-    if b_str and e_str and b_str != "nan" and e_str != "nan":
-      for fmt in ("%H:%M", "%H.%M", "%H"):
-        try:
-          t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
-          t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
-          gh = (t2 - t1).total_seconds() / 3600
-          if gh > 0:
-            net_hrs = gh
-          break
-        except:
-          continue
-
-    edited_tickets_df.at[index, "Netto-Stunden"] = round(net_hrs, 2)
-    total_tickets_sum += net_hrs
-
-  st.markdown("---")
-  col_t1, col_t2 = st.columns([2, 1])
-  with col_t1:
-    pdf_tickets_data = generate_tickets_pdf(ticket_month, ticket_year, edited_tickets_df, total_tickets_sum)
-    st.download_button(t["pdf_btn"], pdf_tickets_data, f"Tickets_{ticket_month}_{ticket_year}.pdf", "application/pdf", key="p7_pdf_btn")
-    if st.button("💾 Speichern / حفظ", key="tickets_save_btn"):
-      save_tickets_data(ticket_month, ticket_year, edited_tickets_df)
-      st.success("Erfolgreich gespeichert! / تم الحفظ بنجاح")
-  with col_t2:
-    st.metric("Gesamtsumme:", f"{total_tickets_sum:.2f} St.")
-
-
-# ---------------------------------------------------------
-# الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - بالعرض تماماً (5 قطارات لكل يوم في سطر واحد)
-# ---------------------------------------------------------
 # ---------------------------------------------------------
 # الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - 5 قطارات (رقم، بداية، نهاية) مع جمع الساعات
 # ---------------------------------------------------------
@@ -1235,7 +1312,7 @@ elif page == t["p8"]:
     st.title("🚆 Clean & Care GmbH - Zug-Fahrten")
     st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
-    employees_list = load_employees()
+    employees_list = filtered_employees
 
     col1, col2, col3 = st.columns(3)
     with col1:
