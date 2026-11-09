@@ -1107,64 +1107,63 @@ elif page == t["p4"]:
 # ---------------------------------------------------------
 # الصفحة الخامسة: إدارة العمال (Mitarbeiterverwaltung)
 # ---------------------------------------------------------
-elif page == t["p5"]:
-  st.title("👥 Clean & Care GmbH - Mitarbeiterverwaltung")
-  
-  all_emp_records = load_employees_with_cities()
-  cities_options = load_cities_from_db()
-
-  st.subheader(t["add_emp"])
-  col_a1, col_a2 = st.columns(2)
-  with col_a1:
-    new_emp_name = st.text_input("Name des Mitarbeiters:")
-  with col_a2:
-    new_emp_city = st.selectbox("Stadt / المدينة:", cities_options, key="new_emp_city_select")
+# --- الصفحة الخامسة: إدارة العمال (p5) ---
+if page == t["p5"]:
+    st.title("Clean & Care GmbH - Mitarbeiterverwaltung")
     
-  if st.button(t["add_btn"], key="add_emp_btn"):
-    if new_emp_name:
-      save_employee_with_city(new_emp_name, new_emp_city)
-      st.success(t["success_msg"])
-      st.rerun()
+    all_emp_records = load_employees_with_cities()
+    cities_options = load_cities_from_db()
+    
+    st.subheader(t["add_emp"])
+    col_a1, col_a2 = st.columns(2)
+    with col_a1:
+        new_emp_name = st.text_input("Name des Mitarbeiters:")
+    with col_a2:
+        new_emp_city = st.selectbox("Stadt / المدينة:", cities_options, key="new_emp_city_select")
+        
+    if st.button(t["add_btn"], key="add_emp_btn"):
+        if new_emp_name:
+            save_employee_with_city(new_emp_name, new_emp_city)
+            st.success(t["success_msg"])
+            st.rerun()
 
-  st.markdown("---")
-  st.subheader(t["del_emp"])
-  current_names = [e["name"] for e in all_emp_records]
-  if len(current_names) > 0:
-    emp_to_delete = st.selectbox("Mitarbeiter löschen:", current_names)
-    if st.button(t["del_btn"], key="del_emp_btn"):
-      if len(current_names) > 1:
-        delete_employee_db(emp_to_delete)
-        st.success("Mitarbeiter erfolgreich gelöscht!")
-        st.rerun()
-      else:
-        st.warning("Es muss mindestens ein Mitarbeiter bleiben.")
+    st.markdown("---")
+    st.subheader(t["del_emp"])
+    current_names = [e["name"] for e in all_emp_records]
+    if len(current_names) > 0:
+        emp_to_delete = st.selectbox("Mitarbeiter löschen:", current_names, key="del_emp_select")
+        if st.button(t["del_btn"], key="del_emp_btn"):
+            if len(current_names) > 1:
+                delete_employee_db(emp_to_delete)
+                st.success("Mitarbeiter erfolgreich gelöscht!")
+                st.rerun()
+            else:
+                st.warning("Es muss mindestens ein Mitarbeiter bleiben.")
 
-
-st.markdown("---")
-  
-st.subheader("🏙️ Städte-Verwaltung / إدارة المدن")
-  
-  col_c1, col_c2 = st.columns(2)
-  with col_c1:
-    new_city_input = st.text_input("Neue Stadt / مدينة جديدة:", key="new_city_text")
-    if st.button("Stadt hinzufügen / إضافة المدينة", key="add_city_btn"):
-      if new_city_input:
-        if add_city_to_db(new_city_input):
-          st.success(f"✅ تم إضافة المدينة '{new_city_input}' بنجاح!")
-          st.rerun()
-        else:
-          st.error("حدث خطأ أثناء إضافة المدينة.")
-          
-  with col_c2:
-    current_db_cities = load_cities_from_db()
-    if current_db_cities:
-      city_to_del = st.selectbox("Stadt löschen / حذف مدينة:", current_db_cities, key="del_city_select")
-      if st.button("Stadt löschen / حذف", key="del_city_btn"):
-        if delete_city_from_db(city_to_del):
-          st.success(f"🗑️ تم حذف المدينة '{city_to_del}' بنجاح!")
-          st.rerun()
-        else:
-          st.error("حدث خطأ أثناء حذف المدينة.")
+    st.markdown("---")
+    st.subheader("🏙️ Städte-Verwaltung / إدارة المدن")
+    
+    col_c1, col_c2 = st.columns(2)
+    with col_c1:
+        new_city_input = st.text_input("Neue Stadt / مدينة جديدة:", key="new_city_text")
+        if st.button("Stadt hinzufügen / إضافة المدينة", key="add_city_btn"):
+            if new_city_input:
+                if add_city_to_db(new_city_input):
+                    st.success(f"✅ تم إضافة المدينة '{new_city_input}' بنجاح!")
+                    st.rerun()
+                else:
+                    st.error("حدث خطأ أثناء إضافة المدينة.")
+                    
+    with col_c2:
+        current_db_cities = load_cities_from_db()
+        if current_db_cities:
+            city_to_del = st.selectbox("Stadt löschen / حذف مدينة:", current_db_cities, key="del_city_select")
+            if st.button("Stadt löschen / حذف", key="del_city_btn"):
+                if delete_city_from_db(city_to_del):
+                    st.success(f"🗑️ تم حذف المدينة '{city_to_del}' بنجاح!")
+                    st.rerun()
+                else:
+                    st.error("حدث خطأ أثناء حذف المدينة.")
 
 
 # ---------------------------------------------------------
