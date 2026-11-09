@@ -742,12 +742,33 @@ elif page == t["p2"]:
         if res.data and len(res.data) > 0:
           data = json.loads(res.data[0]["content"])
           df = pd.DataFrame(data)
-          # التأكد من وجود أعمدة الاستراحة لكل مكان
+          
+          # استيراد قيم استراحة العمود القديم (Pause) ووضعها في Pause 1 إن وجد
+          if "Pause" in df.columns:
+            for idx, val in enumerate(df["Pause"]):
+              if pd.notna(val) and str(val).strip() != "" and str(val).strip() != "nan":
+                if "Pause 1" not in df.columns or pd.isna(df.loc[idx, "Pause 1"]) or str(df.loc[idx, "Pause 1"]).strip() in ["", "nan"]:
+                  df.loc[idx, "Pause 1"] = val
+
+          # التأكد من وجود كافة الأعمدة الجديدة
           for i in range(1, 4):
             if f"Pause {i}" not in df.columns:
               df[f"Pause {i}"] = ""
             if f"Hrs{i}" not in df.columns:
               df[f"Hrs{i}"] = ""
+              
+          # ترتيب الأعمدة بشكل منظّم وجميل بجانب بعضها
+          cols_order = [
+              "Datum", 
+              "Ort 1", "Beginn 1", "Ende 1", "Pause 1", "Hrs1",
+              "Ort 2", "Beginn 2", "Ende 2", "Pause 2", "Hrs2",
+              "Ort 3", "Beginn 3", "Ende 3", "Pause 3", "Hrs3",
+              "Gesamtstunden"
+          ]
+          existing_cols = [c for c in cols_order if c in df.columns]
+          other_cols = [c for c in df.columns if c not in existing_cols]
+          df = df[existing_cols + other_cols]
+          
           return df
       except:
         pass
