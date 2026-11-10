@@ -903,7 +903,7 @@ elif page == t["p2"]:
 # ---------------------------------------------------------
 # الصفحة الثالثة: ملخص ساعات المواقع (Objekt-Stundenübersicht)
 # ---------------------------------------------------------
-elif page == t["p3"]:
+Elif page == t["p3"]:
   st.title("🏢 Clean & Care GmbH - Objekt-Stundenübersicht")
   st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
@@ -942,34 +942,36 @@ elif page == t["p3"]:
           df_emp = pd.DataFrame(emp_data)
           for _, r in df_emp.iterrows():
             if str(r.get("Datum")) == str(d):
-              day_gross = 0.0
-              locs_in_day = []
               for i in range(1, 4):
-                loc_name = str(r.get(f"Ort {i}")).strip()
-                b_str = str(r.get(f"Beginn {i}", "")).strip()
-                e_str = str(r.get(f"Ende {i}", "")).strip()
-                loc_hrs = 0.0
-                if b_str and e_str and b_str != "nan" and e_str != "nan":
-                  for fmt in ("%H:%M", "%H.%M", "%H"):
+                loc_name = str(r.get(f"Ort {i}", "")).strip()
+                if loc_name.lower() == selected_loc_place.strip().lower():
+                  b_str = str(r.get(f"Beginn {i}", "")).strip()
+                  e_str = str(r.get(f"Ende {i}", "")).strip()
+                  loc_hrs = 0.0
+                  
+                  if b_str and e_str and b_str != "nan" and e_str != "nan":
+                    for fmt in ("%H:%M", "%H.%M", "%H"):
+                      try:
+                        t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
+                        t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
+                        gh = (t2 - t1).total_seconds() / 3600
+                        if gh > 0:
+                          loc_hrs = gh
+                          break
+                      except:
+                        continue
+                  
+                  # قراءة استراحة هذا الموقع المحددة (Pause 1, 2, 3)
+                  p_input = str(r.get(f"Pause {i}", "")).strip()
+                  break_val = 0.0
+                  if p_input and p_input not in ["none", "nan", "", "None"]:
                     try:
-                      t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
-                      t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
-                      gh = (t2 - t1).total_seconds() / 3600
-                      if gh > 0:
-                        loc_hrs = gh
-                      break
+                      break_val = float(p_input.replace(",", "."))
                     except:
-                      continue
-                day_gross += loc_hrs
-                locs_in_day.append((loc_name, loc_hrs))
-
-              p_input = str(r.get("Pause", "")).strip()
-              break_val = float(p_input.replace(",", ".")) if p_input and p_input != "nan" and p_input != "" else 0.0
-
-              for loc_name, loc_hrs in locs_in_day:
-                if loc_name.lower() == selected_loc_place.strip().lower() and loc_hrs > 0:
-                  ratio = (loc_hrs / day_gross) if day_gross > 0 else 0
-                  net_loc_hrs = max(0.0, loc_hrs - (break_val * ratio))
+                      break_val = 0.0
+                  
+                  # حساب صافي ساعات هذا الموقع بعد خصم استراحته الخاصة
+                  net_loc_hrs = max(0.0, loc_hrs - break_val)
                   day_sum += net_loc_hrs
         except:
           pass
