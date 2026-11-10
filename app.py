@@ -1045,14 +1045,14 @@ elif page == t["p4"]:
         emp_data = json.loads(row["content"])
         emp_daily_df = pd.DataFrame(emp_data)
         emp_place_hours = 0.0
+        
         for _, r in emp_daily_df.iterrows():
-          day_gross = 0.0
-          locs_in_day = []
           for i in range(1, 4):
-            loc_name = str(r.get(f"Ort {i}")).strip()
+            loc_name = str(r.get(f"Ort {i}", "")).strip()
             b_str = str(r.get(f"Beginn {i}", "")).strip()
             e_str = str(r.get(f"Ende {i}", "")).strip()
             loc_hrs = 0.0
+            
             if b_str and e_str and b_str != "nan" and e_str != "nan":
               for fmt in ("%H:%M", "%H.%M", "%H"):
                 try:
@@ -1061,21 +1061,26 @@ elif page == t["p4"]:
                   gh = (t2 - t1).total_seconds() / 3600
                   if gh > 0:
                     loc_hrs = gh
-                  break
+                    break
                 except:
                   continue
-            day_gross += loc_hrs
-            locs_in_day.append((loc_name, loc_hrs))
-
-          p_input = str(r.get("Pause", "")).strip()
-          break_val = float(p_input.replace(",", ".")) if p_input and p_input != "nan" and p_input != "" else 0.0
-
-          for loc_name, loc_hrs in locs_in_day:
-            if loc_name.lower() == selected_place.strip().lower() and loc_hrs > 0:
-              ratio = (loc_hrs / day_gross) if day_gross > 0 else 0
-              net_loc_hrs = max(0.0, loc_hrs - (break_val * ratio))
+                  
+            # قراءة استراحة هذا الموقع المحدد (Pause 1, 2, 3)
+            p_input = str(r.get(f"Pause {i}", "")).strip()
+            break_val = 0.0
+            if p_input and p_input not in ["none", "nan", ""]:
+              try:
+                break_val = float(p_input.replace(",", "."))
+              except:
+                break_val = 0.0
+                
+            # صافي ساعات هذا الموقع (بعد خصم استراحة هذا الموقع فقط)
+            net_loc_hrs = max(0.0, loc_hrs - break_val)
+            
+            # إذا كان هذا هو المكان المطلوب، أضف صافي ساعاته مباشرة
+            if loc_name.lower() == selected_place.strip().lower() and net_loc_hrs > 0:
               emp_place_hours += net_loc_hrs
-        
+              
         if emp_place_hours > 0:
           clean_emp_name = emp.strip()
           existing_row = next((r for r in place_data_rows if r["Mitarbeiter"].strip().lower() == clean_emp_name.lower()), None)
@@ -1102,7 +1107,6 @@ elif page == t["p4"]:
       st.download_button(t["pdf_btn"], pdf_place_data, f"Ort_Report_{selected_place}_{place_month}_{place_year}.pdf", "application/pdf", key="p4_pdf")
     with col_p2:
       st.metric(t["sum_label"], f"{total_place_hours:.2f} St.")
-
 
 # ---------------------------------------------------------
 # الصفحة الخامسة: إدارة العمال والمدن (Mitarbeiterverwaltung & Städte)
