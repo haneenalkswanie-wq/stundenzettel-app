@@ -903,7 +903,7 @@ elif page == t["p2"]:
 # ---------------------------------------------------------
 # الصفحة الثالثة: ملخص ساعات المواقع (Objekt-Stundenübersicht)
 # ---------------------------------------------------------
-Elif page == t["p3"]:
+elif page == t["p3"]:
   st.title("🏢 Clean & Care GmbH - Objekt-Stundenübersicht")
   st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
