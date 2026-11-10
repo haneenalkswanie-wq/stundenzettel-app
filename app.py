@@ -205,9 +205,46 @@ def load_daily_emp_hours(emp_name, month_str, year_val):
     if res.data and len(res.data) > 0:
       data = json.loads(res.data[0]["content"])
       df = pd.DataFrame(data)
+      
+      # استبدال أي قيم None أو NaN بنصوص فارغة
+      df = df.fillna("")
+      
+      # معالجة العمود القديم (Pause) إن وجد ونقله إلى Pause 1
+      if "Pause" in df.columns:
+        for idx, val in enumerate(df["Pause"]):
+          if str(val).strip() not in ["", "None", "nan"]:
+            if "Pause 1" not in df.columns or str(df.loc[idx, "Pause 1"]).strip() in ["", "None", "nan"]:
+              df.loc[idx, "Pause 1"] = val
+        df = df.drop(columns=["Pause"])
+
+      # التأكد من وجود كافة الأعمدة المطلوبة
       for i in range(1, 4):
+        if f"Pause {i}" not in df.columns:
+          df[f"Pause {i}"] = ""
         if f"Hrs{i}" not in df.columns:
           df[f"Hrs{i}"] = ""
+        if f"Ort {i}" not in df.columns:
+          df[f"Ort {i}"] = ""
+        if f"Beginn {i}" not in df.columns:
+          df[f"Beginn {i}"] = ""
+        if f"Ende {i}" not in df.columns:
+          df[f"Ende {i}"] = ""
+
+      # تنظيف أعمدة الأماكن من كلمة None
+      for i in range(1, 4):
+        df[f"Ort {i}"] = df[f"Ort {i}"].replace(["None", "nan", None], "")
+
+      cols_order = [
+          "Datum", 
+          "Ort 1", "Beginn 1", "Ende 1", "Pause 1", "Hrs1",
+          "Ort 2", "Beginn 2", "Ende 2", "Pause 2", "Hrs2",
+          "Ort 3", "Beginn 3", "Ende 3", "Pause 3", "Hrs3",
+          "Gesamtstunden"
+      ]
+      existing_cols = [c for c in cols_order if c in df.columns]
+      other_cols = [c for c in df.columns if c not in existing_cols]
+      df = df[existing_cols + other_cols]
+      
       return df
   except:
     pass
@@ -217,10 +254,9 @@ def load_daily_emp_hours(emp_name, month_str, year_val):
     days_data.append(
         {
             "Datum": str(day),
-            "Ort 1": "", "Beginn 1": "", "Ende 1": "", "Hrs1": "",
-            "Ort 2": "", "Beginn 2": "", "Ende 2": "", "Hrs2": "",
-            "Ort 3": "", "Beginn 3": "", "Ende 3": "", "Hrs3": "",
-            "Pause": "",
+            "Ort 1": "", "Beginn 1": "", "Ende 1": "", "Pause 1": "", "Hrs1": "",
+            "Ort 2": "", "Beginn 2": "", "Ende 2": "", "Pause 2": "", "Hrs2": "",
+            "Ort 3": "", "Beginn 3": "", "Ende 3": "", "Pause 3": "", "Hrs3": "",
             "Gesamtstunden": 0.0,
         }
     )
@@ -229,13 +265,15 @@ def load_daily_emp_hours(emp_name, month_str, year_val):
 
 def save_daily_emp_hours(emp_name, month_str, year_val, df):
   try:
-    content = json.dumps(df.to_dict(orient="list"), ensure_ascii=False)
+    clean_df = df.fillna("")
+    content = json.dumps(clean_df.to_dict(orient="list"), ensure_ascii=False)
     supabase.table("daily_hours").upsert({
         "emp": emp_name,
         "month": month_str,
         "year": int(year_val),
         "content": content
     }).execute()
+    st.success("Erfolgreich gespeichert!")
   except Exception as e:
     st.error(f"خطأ في حفظ الساعات اليومية: {e}")
 
