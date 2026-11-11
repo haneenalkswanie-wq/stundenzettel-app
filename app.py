@@ -1307,7 +1307,7 @@ elif page == t["p5"]:
 # ---------------------------------------------------------
 # الصفحة السادسة: ملخص الأشهر (Monatsübersicht) - مع خيار "جميع المدن"
 # ---------------------------------------------------------
-Elif page == t["p6"]:
+elif page == t["p6"]:
     st.title("📅 Clean & Care GmbH - Monatsübersicht")
     
     cities_list = [t["all_cities"]] + load_cities()
