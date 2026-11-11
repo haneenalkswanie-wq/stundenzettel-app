@@ -1275,32 +1275,38 @@ elif page == t["p5"]:
 # الصفحة السادسة: ملخص الأشهر (Monatsübersicht) - مع خيار "جميع المدن"
 # ---------------------------------------------------------
 elif page == t["p5"]:
-  st.title("👥 Clean & Care GmbH - Mitarbeiter- & Städtederverwaltung")
+  st.title("👥 Clean & Care GmbH - Mitarbeiter- & Städteverwaltung")
   
   employees_list = load_employees()
   cities_list = load_cities()
 
-  tab1, tab2 = st.tabs(["إدارة العمال وتعيين المدن", "إدارة المدن (Städte verwalten)"])
+  tab1, tab2 = st.tabs(["Mitarbeiterverwaltung & Stadtzuweisung", "Städte verwalten"])
 
   with tab1:
-    st.subheader("تعيين المدينة وساعات العمل للعامل / Mitarbeiter-Stadtzuweisung")
     if employees_list and cities_list:
-      selected_emp_to_assign = st.selectbox("اختر العامل:", employees_list, key="assign_emp")
+      # ---------------------------------------------------------
+      # 1. Zuordnung der Stadt zum Mitarbeiter (Separater Speichern-Button)
+      # ---------------------------------------------------------
+      st.subheader("Mitarbeiter-Stadtzuweisung")
+      selected_emp_to_assign = st.selectbox("Mitarbeiter auswählen:", employees_list, key="assign_emp")
       current_city = get_employee_city(selected_emp_to_assign)
       current_city_index = cities_list.index(current_city) if current_city in cities_list else 0
       
-      assigned_city = st.selectbox("اختر المدينة:", cities_list, index=current_city_index, key="assign_city")
+      assigned_city = st.selectbox("Stadt auswählen:", cities_list, index=current_city_index, key="assign_city")
       
-      # زر حفظ المدينة لوحده
-      if st.button("حفظ ربط العامل بالمدينة"):
+      if st.button("Stadtzuweisung speichern"):
         set_employee_city(selected_emp_to_assign, assigned_city)
-        st.success(f"تم ربط العامل {selected_emp_to_assign} بمدينة {assigned_city} بنجاح!")
+        st.success(f"Mitarbeiter {selected_emp_to_assign} wurde erfolgreich der Stadt {assigned_city} zugewiesen!")
         st.rerun()
 
       st.markdown("---")
-      st.subheader("تعديل الحد الأقصى للساعات الشهرية")
+
+      # ---------------------------------------------------------
+      # 2. Bearbeitung des monatlichen Stundenlimits (Separater Speichern-Button)
+      # ---------------------------------------------------------
+      st.subheader("Monatliches Stundenlimit bearbeiten")
       
-      # جلب القيمة الحالية لساعات العامل من قاعدة البيانات لعرضها كقيمة افتراضية
+      # Aktuellen Wert des ausgewählten Mitarbeiters aus Supabase abrufen
       current_emp_max_hours = 160.0
       try:
           res_emp_h = supabase.table("employees").select("max_hours").eq("name", selected_emp_to_assign).execute()
@@ -1309,43 +1315,54 @@ elif page == t["p5"]:
       except:
           pass
 
-      new_assigned_hours = st.number_input("الحد الأقصى للساعات الشهرية لهذا العامل:", min_value=0.0, value=current_emp_max_hours, step=5.0, key="edit_emp_hours")
+      new_assigned_hours = st.number_input(
+          "Maximalstunden pro Monat für diesen Mitarbeiter:", 
+          min_value=0.0, 
+          value=current_emp_max_hours, 
+          step=5.0, 
+          key=f"edit_hours_{selected_emp_to_assign}"
+      )
 
-      # زر حفظ الساعات لوحده
-      if st.button("حفظ الساعات المحددة"):
-        supabase.table("employees").update({"max_hours": new_assigned_hours}).eq("name", selected_emp_to_assign).execute()
-        st.success(f"تم تحديث الحد الأقصى لساعات {selected_emp_to_assign} إلى {new_assigned_hours} ساعة بنجاح!")
+      if st.button("Stundenlimit speichern"):
+        supabase.table("employees").upsert({
+            "name": selected_emp_to_assign, 
+            "max_hours": new_assigned_hours
+        }).execute()
+        st.success(f"Das Stundenlimit für {selected_emp_to_assign} wurde erfolgreich auf {new_assigned_hours} Std. aktualisiert!")
         st.rerun()
 
     st.markdown("---")
-    st.subheader(t["add_emp"])
+    # ---------------------------------------------------------
+    # 3. Neuen Mitarbeiter hinzufügen
+    # ---------------------------------------------------------
+    st.subheader("Neuen Mitarbeiter hinzufügen")
     new_emp_name = st.text_input("Name des Mitarbeiters:")
-    default_emp_city = st.selectbox("المدينة الأساسية للعامل الجديد:", cities_list, key="new_emp_city")
+    default_emp_city = st.selectbox("Hauptstadt für neuen Mitarbeiter:", cities_list, key="new_emp_city")
+    max_hours = st.number_input("Maximalstunden pro Monat:", min_value=0.0, value=160.0, step=5.0, key="new_emp_max_hours")
     
-    # حقل إدخال الساعات المحددة شهرياً للعامل الجديد
-    max_hours = st.number_input("الحد الأقصى للساعات الشهرية (Stunden pro Monat):", min_value=0.0, value=160.0, step=5.0, key="new_emp_max_hours")
-    
-    if st.button(t["add_btn"], key="add_emp_btn"):
+    if st.button("Mitarbeiter hinzufügen", key="add_emp_btn"):
       if new_emp_name and new_emp_name not in employees_list:
         employees_list.append(new_emp_name)
         save_employees(employees_list)
         set_employee_city(new_emp_name, default_emp_city)
         
-        # حفظ الساعات والمدينة في Supabase
         supabase.table("employees").upsert({
             "name": new_emp_name, 
             "max_hours": max_hours, 
             "city": default_emp_city
         }).execute()
         
-        st.success(t["success_msg"])
+        st.success(f"Mitarbeiter {new_emp_name} erfolgreich hinzugefügt!")
         st.rerun()
 
     st.markdown("---")
-    st.subheader(t["del_emp"])
+    # ---------------------------------------------------------
+    # 4. Mitarbeiter löschen
+    # ---------------------------------------------------------
+    st.subheader("Mitarbeiter löschen")
     if len(employees_list) > 0:
-      emp_to_delete = st.selectbox("Mitarbeiter löschen:", employees_list, key="del_emp_select")
-      if st.button(t["del_btn"], key="del_emp_btn"):
+      emp_to_delete = st.selectbox("Mitarbeiter auswählen zum Löschen:", employees_list, key="del_emp_select")
+      if st.button("Mitarbeiter löschen", key="del_emp_btn"):
         if len(employees_list) > 1:
           employees_list.remove(emp_to_delete)
           save_employees(employees_list)
@@ -1355,19 +1372,19 @@ elif page == t["p5"]:
           st.warning("Es muss mindestens ein Mitarbeiter bleiben.")
 
   with tab2:
-    st.subheader("إضافة وحذف المدن / Städte hinzufügen & löschen")
-    new_city_name = st.text_input("اسم المدينة الجديدة (Neue Stadt):")
-    if st.button("إضافة المدينة", key="add_city_btn"):
+    st.subheader("Städte hinzufügen & löschen")
+    new_city_name = st.text_input("Neue Stadt:")
+    if st.button("Stadt hinzufügen", key="add_city_btn"):
       if new_city_name and new_city_name not in cities_list:
         cities_list.append(new_city_name)
         save_cities(cities_list)
-        st.success(t["success_msg"])
+        st.success(f"Stadt {new_city_name} erfolgreich hinzugefügt!")
         st.rerun()
 
     st.markdown("---")
     if len(cities_list) > 0:
-      city_to_delete = st.selectbox("حذف مدينة (Stadt löschen):", cities_list, key="del_city_select")
-      if st.button("حذف المدينة المحددة", key="del_city_btn"):
+      city_to_delete = st.selectbox("Stadt zum Löschen auswählen:", cities_list, key="del_city_select")
+      if st.button("Stadt löschen", key="del_city_btn"):
         if len(cities_list) > 1:
           cities_list.remove(city_to_delete)
           save_cities(cities_list)
