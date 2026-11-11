@@ -812,6 +812,40 @@ elif page == t["p2"]:
   if city_employees:
     st.subheader(f"Tägliche Stunden für: {daily_emp} ({daily_month} {daily_year})")
 
+    # ==========================================================
+    # 💡 إضافة كود التحذير وحساب الساعات المتبقية للعامل هذا الشهر
+    # ==========================================================
+    try:
+        # 1. جلب الحد الأقصى المسموح للعامل من جدول employees
+        emp_max_limit = 160.0
+        emp_db_res = supabase.table("employees").select("max_hours").eq("name", daily_emp).execute()
+        if emp_db_res.data and emp_db_res.data[0].get("max_hours") is not None:
+            emp_max_limit = float(emp_db_res.data[0]["max_hours"])
+
+        # 2. جلب ساعات العامل المسجلة مسبقاً في نفس الشهر والسنة الحالية
+        emp_current_month_hours = 0.0
+        existing_rows_res = supabase.table("daily_hours").select("content").eq("emp", daily_emp).eq("month", daily_month).eq("year", int(daily_year)).execute()
+        if existing_rows_res.data:
+            content_json = existing_rows_res.data[0].get("content")
+            if content_json:
+                temp_df = pd.DataFrame(json.loads(content_json))
+                if "Gesamtstunden" in temp_df.columns:
+                    emp_current_month_hours = temp_df["Gesamtstunden"].astype(float).sum()
+
+        # حساب الساعات المتبقية
+        remaining_hrs = emp_max_limit - emp_current_month_hours
+
+        # إظهار التنبيه البصري بحسب حالة الساعات
+        if remaining_hrs <= 0:
+            st.error(f"🚨 تنبيه تجاوز الحد: العامل **{daily_emp}** استهلك كامل ساعاته الشهرية! (أنجز {emp_current_month_hours:.2f} من أصل {emp_max_limit} ساعة).")
+        elif remaining_hrs <= 15:
+            st.warning(f"⚠️ تنبيه قرب انتهاء الساعات: العامل **{daily_emp}** عمل {emp_current_month_hours:.2f} ساعة والمتبقي له **{remaining_hrs:.2f}** ساعة فقط.")
+        else:
+            st.info(f"💡 حالة ساعات العامل: أنجز {emp_current_month_hours:.2f} ساعة | متبقي له **{remaining_hrs:.2f}** ساعة لكي يصل إلى حده الأقصى ({emp_max_limit} ساعة).")
+    except Exception as e:
+        pass
+    # ==========================================================
+
     # تحديث هيكل البيانات اليومية ليشمل استراحة خاصة بكل مكان
     def load_custom_daily_hours(emp_name, month_str, year_val):
       try:
@@ -938,7 +972,6 @@ elif page == t["p2"]:
         st.success(t["success_msg"])
     with col_d3:
       st.metric(t["sum_label"], f"{total_daily_sum:.2f} St.")
-
 # ---------------------------------------------------------
 # الصفحة الثالثة: ملخص ساعات المواقع (Objekt-Stundenübersicht)
 # ---------------------------------------------------------
@@ -1161,26 +1194,44 @@ elif page == t["p5"]:
   tab1, tab2 = st.tabs(["إدارة العمال وتعيين المدن", "إدارة المدن (Städte verwalten)"])
 
   with tab1:
-    st.subheader("تعيين المدينة للعامل / Mitarbeiter-Stadtzuweisung")
+    st.subheader("تعيين المدينة وساعات العمل للعامل / Mitarbeiter-Stadtzuweisung")
     if employees_list and cities_list:
       selected_emp_to_assign = st.selectbox("اختر العامل:", employees_list, key="assign_emp")
       current_city = get_employee_city(selected_emp_to_assign)
       current_city_index = cities_list.index(current_city) if current_city in cities_list else 0
       
       assigned_city = st.selectbox("اختر المدينة:", cities_list, index=current_city_index, key="assign_city")
-      if st.button("حفظ ربط العامل بالمدينة"):
+      
+      # حقل تعديل الساعات للعامل المختار
+      current_hours = st.number_input("الحد الأقصى للساعات الشهرية لهذا العامل:", min_value=0, value=160, step=5, key="edit_emp_hours")
+
+      if st.button("حفظ ربط العامل بالمدينة والساعات"):
         set_employee_city(selected_emp_to_assign, assigned_city)
-        st.success(f"تم ربط العامل {selected_emp_to_assign} بمدينة {assigned_city} بنجاح!")
+        # تحديث الساعات في قاعدة البيانات
+        supabase.table("employees").update({"max_hours": current_hours}).eq("name", selected_emp_to_assign).execute()
+        st.success(f"تم تحديث بيانات العامل {selected_emp_to_assign} بنجاح!")
 
     st.markdown("---")
     st.subheader(t["add_emp"])
     new_emp_name = st.text_input("Name des Mitarbeiters:")
     default_emp_city = st.selectbox("المدينة الأساسية للعامل الجديد:", cities_list, key="new_emp_city")
+    
+    # حقل إدخال الساعات المحددة شهرياً للعامل الجديد
+    max_hours = st.number_input("الحد الأقصى للساعات الشهرية (Stunden pro Monat):", min_value=0, value=160, step=5, key="new_emp_max_hours")
+    
     if st.button(t["add_btn"], key="add_emp_btn"):
       if new_emp_name and new_emp_name not in employees_list:
         employees_list.append(new_emp_name)
         save_employees(employees_list)
         set_employee_city(new_emp_name, default_emp_city)
+        
+        # حفظ الساعات والمزيد في Supabase
+        supabase.table("employees").upsert({
+            "name": new_emp_name, 
+            "max_hours": max_hours, 
+            "city": default_emp_city
+        }).execute()
+        
         st.success(t["success_msg"])
         st.rerun()
 
@@ -1223,7 +1274,7 @@ elif page == t["p5"]:
 # ---------------------------------------------------------
 # الصفحة السادسة: ملخص الأشهر (Monatsübersicht) - مع خيار "جميع المدن"
 # ---------------------------------------------------------
-elif page == t["p6"]:
+Elif page == t["p6"]:
     st.title("📅 Clean & Care GmbH - Monatsübersicht")
     
     cities_list = [t["all_cities"]] + load_cities()
@@ -1237,6 +1288,19 @@ elif page == t["p6"]:
         summary_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="summary_year_select")
 
     allowed_emps = get_employees_by_city(summary_city)
+
+    # 1. جلب الحد الأقصى للساعات لكل عامل من جدول employees في Supabase
+    emp_max_hours_map = {}
+    try:
+        emp_res = supabase.table("employees").select("name, max_hours").execute()
+        if emp_res.data:
+            for e in emp_res.data:
+                e_name = e.get("name")
+                e_max = e.get("max_hours")
+                if e_name:
+                    emp_max_hours_map[e_name.strip()] = float(e_max) if e_max is not None else 160.0
+    except Exception:
+        pass
 
     rows = []
     try:
@@ -1287,9 +1351,16 @@ elif page == t["p6"]:
 
         if total_emp_combined > 0 and clean_emp_name not in processed_emps:
             processed_emps.add(clean_emp_name)
+            
+            # حساب الحد المتبقي
+            max_limit = emp_max_hours_map.get(clean_emp_name, 160.0)
+            remaining = max_limit - total_emp_combined
+            
             summary_data.append({
                 "Mitarbeiter": clean_emp_name,
-                "Gesamtstunden": f"{total_emp_combined:.2f} St."
+                "Gesamtstunden": round(total_emp_combined, 2),
+                "Max Stunden": round(max_limit, 2),
+                "Verbleibende Stunden": round(remaining, 2)
             })
             total_company_hours += total_emp_combined
 
@@ -1298,18 +1369,30 @@ elif page == t["p6"]:
             clean_name = emp_name.strip()
             if clean_name in allowed_emps:
                 processed_emps.add(clean_name)
+                
+                max_limit = emp_max_hours_map.get(clean_name, 160.0)
+                remaining = max_limit - zug_hrs
+                
                 summary_data.append({
                     "Mitarbeiter": clean_name,
-                    "Gesamtstunden": f"{zug_hrs:.2f} St."
+                    "Gesamtstunden": round(zug_hrs, 2),
+                    "Max Stunden": round(max_limit, 2),
+                    "Verbleibende Stunden": round(remaining, 2)
                 })
                 total_company_hours += zug_hrs
 
     if not summary_data:
-        summary_df = pd.DataFrame([{"Mitarbeiter": "Keine Stunden erfasst", "Gesamtstunden": "0.00 St."}])
+        summary_df = pd.DataFrame([{
+            "Mitarbeiter": "Keine Stunden erfasst", 
+            "Gesamtstunden": 0.0, 
+            "Max Stunden": 0.0, 
+            "Verbleibende Stunden": 0.0
+        }])
     else:
         summary_df = pd.DataFrame(summary_data)
 
-    st.dataframe(summary_df, use_container_width=True)
+    # عرض الجدول بتنسيق تفصيلي يوضح الساعات المنجزة والمتبقية
+    st.dataframe(summary_df, use_container_width=True, hide_index=True)
     st.markdown("---")
     
     col_s1, col_s2 = st.columns([2, 1])
