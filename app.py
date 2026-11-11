@@ -1186,95 +1186,6 @@ elif page == t["p4"]:
 # الصفحة الخامسة: إدارة العمال والمدن (Mitarbeiterverwaltung & Städte)
 # ---------------------------------------------------------
 elif page == t["p5"]:
-  st.title("👥 Clean & Care GmbH - Mitarbeiter- & Städtederverwaltung")
-  
-  employees_list = load_employees()
-  cities_list = load_cities()
-
-  tab1, tab2 = st.tabs(["إدارة العمال وتعيين المدن", "إدارة المدن (Städte verwalten)"])
-
-  with tab1:
-    st.subheader("تعيين المدينة وساعات العمل للعامل / Mitarbeiter-Stadtzuweisung")
-    if employees_list and cities_list:
-      selected_emp_to_assign = st.selectbox("اختر العامل:", employees_list, key="assign_emp")
-      current_city = get_employee_city(selected_emp_to_assign)
-      current_city_index = cities_list.index(current_city) if current_city in cities_list else 0
-      
-      assigned_city = st.selectbox("اختر المدينة:", cities_list, index=current_city_index, key="assign_city")
-      
-      # حقل تعديل الساعات للعامل المختار
-      current_hours = st.number_input("الحد الأقصى للساعات الشهرية لهذا العامل:", min_value=0, value=160, step=5, key="edit_emp_hours")
-
-      if st.button("حفظ ربط العامل بالمدينة والساعات"):
-        set_employee_city(selected_emp_to_assign, assigned_city)
-        # تحديث الساعات في قاعدة البيانات
-        supabase.table("employees").update({"max_hours": current_hours}).eq("name", selected_emp_to_assign).execute()
-        st.success(f"تم تحديث بيانات العامل {selected_emp_to_assign} بنجاح!")
-
-    st.markdown("---")
-    st.subheader(t["add_emp"])
-    new_emp_name = st.text_input("Name des Mitarbeiters:")
-    default_emp_city = st.selectbox("المدينة الأساسية للعامل الجديد:", cities_list, key="new_emp_city")
-    
-    # حقل إدخال الساعات المحددة شهرياً للعامل الجديد
-    max_hours = st.number_input("الحد الأقصى للساعات الشهرية (Stunden pro Monat):", min_value=0, value=160, step=5, key="new_emp_max_hours")
-    
-    if st.button(t["add_btn"], key="add_emp_btn"):
-      if new_emp_name and new_emp_name not in employees_list:
-        employees_list.append(new_emp_name)
-        save_employees(employees_list)
-        set_employee_city(new_emp_name, default_emp_city)
-        
-        # حفظ الساعات والمزيد في Supabase
-        supabase.table("employees").upsert({
-            "name": new_emp_name, 
-            "max_hours": max_hours, 
-            "city": default_emp_city
-        }).execute()
-        
-        st.success(t["success_msg"])
-        st.rerun()
-
-    st.markdown("---")
-    st.subheader(t["del_emp"])
-    if len(employees_list) > 0:
-      emp_to_delete = st.selectbox("Mitarbeiter löschen:", employees_list, key="del_emp_select")
-      if st.button(t["del_btn"], key="del_emp_btn"):
-        if len(employees_list) > 1:
-          employees_list.remove(emp_to_delete)
-          save_employees(employees_list)
-          st.success("Mitarbeiter erfolgreich gelöscht!")
-          st.rerun()
-        else:
-          st.warning("Es muss mindestens ein Mitarbeiter bleiben.")
-
-  with tab2:
-    st.subheader("إضافة وحذف المدن / Städte hinzufügen & löschen")
-    new_city_name = st.text_input("اسم المدينة الجديدة (Neue Stadt):")
-    if st.button("إضافة المدينة", key="add_city_btn"):
-      if new_city_name and new_city_name not in cities_list:
-        cities_list.append(new_city_name)
-        save_cities(cities_list)
-        st.success(t["success_msg"])
-        st.rerun()
-
-    st.markdown("---")
-    if len(cities_list) > 0:
-      city_to_delete = st.selectbox("حذف مدينة (Stadt löschen):", cities_list, key="del_city_select")
-      if st.button("حذف المدينة المحددة", key="del_city_btn"):
-        if len(cities_list) > 1:
-          cities_list.remove(city_to_delete)
-          save_cities(cities_list)
-          st.success("Stadt erfolgreich gelöscht!")
-          st.rerun()
-        else:
-          st.warning("Es muss mindestens eine Stadt bleiben.")
-
-
-# ---------------------------------------------------------
-# الصفحة السادسة: ملخص الأشهر (Monatsübersicht) - مع خيار "جميع المدن"
-# ---------------------------------------------------------
-elif page == t["p5"]:
   st.title("👥 Clean & Care GmbH - Mitarbeiter- & Städteverwaltung")
   
   employees_list = load_employees()
@@ -1393,6 +1304,136 @@ elif page == t["p5"]:
         else:
           st.warning("Es muss mindestens eine Stadt bleiben.")
 
+# ---------------------------------------------------------
+# الصفحة السادسة: ملخص الأشهر (Monatsübersicht) - مع خيار "جميع المدن"
+# ---------------------------------------------------------
+Elif page == t["p6"]:
+    st.title("📅 Clean & Care GmbH - Monatsübersicht")
+    
+    cities_list = [t["all_cities"]] + load_cities()
+
+    col_c, col1, col2 = st.columns(3)
+    with col_c:
+        summary_city = st.selectbox(t["city_label"], cities_list, key="summary_city_select")
+    with col1:
+        summary_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="summary_month_select")
+    with col2:
+        summary_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="summary_year_select")
+
+    allowed_emps = get_employees_by_city(summary_city)
+
+    # 1. جلب الحد الأقصى للساعات لكل عامل من جدول employees في Supabase
+    emp_max_hours_map = {}
+    try:
+        emp_res = supabase.table("employees").select("name, max_hours").execute()
+        if emp_res.data:
+            for e in emp_res.data:
+                e_name = e.get("name")
+                e_max = e.get("max_hours")
+                if e_name:
+                    emp_max_hours_map[e_name.strip()] = float(e_max) if e_max is not None else 160.0
+    except Exception:
+        pass
+
+    rows = []
+    try:
+        res_rows = supabase.table("daily_hours").select("emp, content").eq("month", summary_month).eq("year", int(summary_year)).execute()
+        rows = res_rows.data if res_rows.data else []
+    except Exception:
+        rows = []
+
+    zug_hours_per_emp = {}
+    try:
+        zug_res = supabase.table("trains_data").select("emp, content").eq("month", summary_month).eq("year", int(summary_year)).execute()
+        zug_rows = zug_res.data if zug_res.data else []
+        for z_row in zug_rows:
+            z_emp = z_row.get("emp")
+            if z_emp and z_row.get("content"):
+                try:
+                    z_df = pd.DataFrame(json.loads(z_row["content"]))
+                    if "Gesamtstunden" in z_df.columns:
+                        z_sum = z_df["Gesamtstunden"].astype(float).sum()
+                        zug_hours_per_emp[z_emp.strip()] = z_sum
+                except Exception:
+                    pass
+    except Exception:
+        zug_hours_per_emp = {}
+
+    summary_data = []
+    total_company_hours = 0.0
+    processed_emps = set()
+
+    for row in rows:
+        emp = row.get("emp")
+        if not emp:
+            continue
+        clean_emp_name = emp.strip()
+        
+        if clean_emp_name not in allowed_emps:
+            continue
+          
+        try:
+            emp_data = json.loads(row["content"])
+            emp_daily_df = pd.DataFrame(emp_data)
+            emp_daily_total = emp_daily_df["Gesamtstunden"].astype(float).sum() if "Gesamtstunden" in emp_daily_df.columns else 0.0
+        except Exception:
+            emp_daily_total = 0.0
+
+        emp_zug_total = zug_hours_per_emp.get(clean_emp_name, 0.0)
+        total_emp_combined = emp_daily_total + emp_zug_total
+
+        if total_emp_combined > 0 and clean_emp_name not in processed_emps:
+            processed_emps.add(clean_emp_name)
+            
+            # حساب الحد المتبقي
+            max_limit = emp_max_hours_map.get(clean_emp_name, 160.0)
+            remaining = max_limit - total_emp_combined
+            
+            summary_data.append({
+                "Mitarbeiter": clean_emp_name,
+                "Gesamtstunden": round(total_emp_combined, 2),
+                "Max Stunden": round(max_limit, 2),
+                "Verbleibende Stunden": round(remaining, 2)
+            })
+            total_company_hours += total_emp_combined
+
+    for emp_name, zug_hrs in zug_hours_per_emp.items():
+        if emp_name and emp_name.strip() not in processed_emps and zug_hrs > 0:
+            clean_name = emp_name.strip()
+            if clean_name in allowed_emps:
+                processed_emps.add(clean_name)
+                
+                max_limit = emp_max_hours_map.get(clean_name, 160.0)
+                remaining = max_limit - zug_hrs
+                
+                summary_data.append({
+                    "Mitarbeiter": clean_name,
+                    "Gesamtstunden": round(zug_hrs, 2),
+                    "Max Stunden": round(max_limit, 2),
+                    "Verbleibende Stunden": round(remaining, 2)
+                })
+                total_company_hours += zug_hrs
+
+    if not summary_data:
+        summary_df = pd.DataFrame([{
+            "Mitarbeiter": "Keine Stunden erfasst", 
+            "Gesamtstunden": 0.0, 
+            "Max Stunden": 0.0, 
+            "Verbleibende Stunden": 0.0
+        }])
+    else:
+        summary_df = pd.DataFrame(summary_data)
+
+    # عرض الجدول بتنسيق تفصيلي يوضح الساعات المنجزة والمتبقية
+    st.dataframe(summary_df, use_container_width=True, hide_index=True)
+    st.markdown("---")
+    
+    col_s1, col_s2 = st.columns([2, 1])
+    with col_s1:
+        pdf_summary_data = generate_summary_pdf(summary_month, summary_year, summary_df, total_company_hours)
+        st.download_button(t["pdf_btn"], pdf_summary_data, f"Monatsübersicht_{summary_month}_{summary_year}.pdf", "application/pdf", key="p6_pdf")
+    with col_s2:
+        st.metric("Gesamtsumme:", f"{total_company_hours:.2f} St.")
 
 # ---------------------------------------------------------
 # الصفحة السابعة: تذاكر المهام (Einsatz-Tickets)
