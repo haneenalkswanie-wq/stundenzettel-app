@@ -30,7 +30,8 @@ supabase = init_supabase()
 
 
 
-
+#login
+#-----
 
 def check_login():
     """
@@ -47,7 +48,7 @@ def check_login():
         st.subheader("🔐 تسجيل الدخول إلى النظام")
         
         # حقل إدخال كلمة المرور (يمكنك تغيير كلمة المرور حسب رغبتك)
-        password = st.text_input("أدخل كلمة المرور:", type="password")
+        password = st.text_input("أدخل كلمة المرور:", type="password", key="login_pass_input")
         
         if st.button("دخول"):
             # كلمة المرور الخاصة بكِ (يمكنك تعديلها هنا)
