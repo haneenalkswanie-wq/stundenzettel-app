@@ -1196,31 +1196,33 @@ elif page == t["p5"]:
   with tab1:
     if employees_list and cities_list:
       # ---------------------------------------------------------
-      # 1. Zuordnung der Stadt zum Mitarbeiter (Separater Speichern-Button)
+      # 1. قسم ربط المدينة (اختيار العامل + المدينة + زر حفظ المدينة)
       # ---------------------------------------------------------
       st.subheader("Mitarbeiter-Stadtzuweisung")
-      selected_emp_to_assign = st.selectbox("Mitarbeiter auswählen:", employees_list, key="assign_emp")
-      current_city = get_employee_city(selected_emp_to_assign)
+      selected_emp_for_city = st.selectbox("Mitarbeiter auswählen:", employees_list, key="assign_emp_city")
+      
+      current_city = get_employee_city(selected_emp_for_city)
       current_city_index = cities_list.index(current_city) if current_city in cities_list else 0
       
       assigned_city = st.selectbox("Stadt auswählen:", cities_list, index=current_city_index, key="assign_city")
       
       if st.button("Stadtzuweisung speichern"):
-        set_employee_city(selected_emp_to_assign, assigned_city)
-        st.success(f"Mitarbeiter {selected_emp_to_assign} wurde erfolgreich der Stadt {assigned_city} zugewiesen!")
+        set_employee_city(selected_emp_for_city, assigned_city)
+        st.success(f"Mitarbeiter {selected_emp_for_city} wurde erfolgreich der Stadt {assigned_city} zugewiesen!")
         st.rerun()
 
       st.markdown("---")
 
       # ---------------------------------------------------------
-      # 2. Bearbeitung des monatlichen Stundenlimits (Separater Speichern-Button)
+      # 2. قسم تعديل الساعات (اختيار العامل + خانة الساعات + زر حفظ الساعات)
       # ---------------------------------------------------------
       st.subheader("Monatliches Stundenlimit bearbeiten")
+      selected_emp_for_hours = st.selectbox("Mitarbeiter auswählen:", employees_list, key="assign_emp_hours")
       
-      # Aktuellen Wert des ausgewählten Mitarbeiters aus Supabase abrufen
+      # جلب القيمة الحالية لساعات العامل المختار في قسم الساعات
       current_emp_max_hours = 160.0
       try:
-          res_emp_h = supabase.table("employees").select("max_hours").eq("name", selected_emp_to_assign).execute()
+          res_emp_h = supabase.table("employees").select("max_hours").eq("name", selected_emp_for_hours).execute()
           if res_emp_h.data and res_emp_h.data[0].get("max_hours") is not None:
               current_emp_max_hours = float(res_emp_h.data[0]["max_hours"])
       except:
@@ -1231,20 +1233,20 @@ elif page == t["p5"]:
           min_value=0.0, 
           value=current_emp_max_hours, 
           step=5.0, 
-          key=f"edit_hours_{selected_emp_to_assign}"
+          key=f"edit_hours_{selected_emp_for_hours}"
       )
 
       if st.button("Stundenlimit speichern"):
         supabase.table("employees").upsert({
-            "name": selected_emp_to_assign, 
+            "name": selected_emp_for_hours, 
             "max_hours": new_assigned_hours
         }).execute()
-        st.success(f"Das Stundenlimit für {selected_emp_to_assign} wurde erfolgreich auf {new_assigned_hours} Std. aktualisiert!")
+        st.success(f"Das Stundenlimit für {selected_emp_for_hours} wurde erfolgreich auf {new_assigned_hours} Std. aktualisiert!")
         st.rerun()
 
     st.markdown("---")
     # ---------------------------------------------------------
-    # 3. Neuen Mitarbeiter hinzufügen
+    # 3. إضافة عامل جديد
     # ---------------------------------------------------------
     st.subheader("Neuen Mitarbeiter hinzufügen")
     new_emp_name = st.text_input("Name des Mitarbeiters:")
@@ -1268,7 +1270,7 @@ elif page == t["p5"]:
 
     st.markdown("---")
     # ---------------------------------------------------------
-    # 4. Mitarbeiter löschen
+    # 4. حذف عامل
     # ---------------------------------------------------------
     st.subheader("Mitarbeiter löschen")
     if len(employees_list) > 0:
