@@ -1237,14 +1237,13 @@ elif page == t["p5"]:
       )
 
       if st.button("Stundenlimit speichern"):
-        supabase.table("employees").upsert({
-            "name": selected_emp_for_hours, 
-            "max_hours": new_assigned_hours
-        }).execute()
-        st.success(f"Das Stundenlimit für {selected_emp_for_hours} wurde erfolgreich auf {new_assigned_hours} Std. aktualisiert!")
-        st.rerun()
-
-    st.markdown("---")
+        try:
+            supabase.table("employees").update({"max_hours": new_assigned_hours}).eq("name", selected_emp_for_hours).execute()  
+            st.success(f"Das Stundenlimit für {selected_emp_for_hours} wurde erfolgreich auf {new_assigned_hours} Std. aktualisiert!")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Fehler beim Speichern: {e}")
+     st.markdown("---")
     # ---------------------------------------------------------
     # 3. إضافة عامل جديد
     # ---------------------------------------------------------
