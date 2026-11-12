@@ -1220,7 +1220,7 @@ elif page == t["p5"]:
       selected_emp_for_hours = st.selectbox("Mitarbeiter auswählen:", employees_list, key="assign_emp_hours")
       
       # جلب القيمة الحالية لساعات العامل المختار في قسم الساعات
-      current_emp_max_hours = 160.0
+      current_emp_max_hours = 160
       try:
           res_emp_h = supabase.table("employees").select("max_hours").eq("name", selected_emp_for_hours).execute()
           if res_emp_h.data and res_emp_h.data[0].get("max_hours") is not None:
@@ -1230,9 +1230,9 @@ elif page == t["p5"]:
 
       new_assigned_hours = st.number_input(
           "Maximalstunden pro Monat für diesen Mitarbeiter:", 
-          min_value=0.0, 
+          min_value=0, 
           value=current_emp_max_hours, 
-          step=5.0, 
+          step=5, 
           key=f"edit_hours_{selected_emp_for_hours}"
       )
 
