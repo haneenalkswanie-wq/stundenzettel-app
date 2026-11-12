@@ -1243,7 +1243,7 @@ elif page == t["p5"]:
             st.rerun()
         except Exception as e:
             st.error(f"Fehler beim Speichern: {e}")
-     st.markdown("---")
+    st.markdown("---")
     # ---------------------------------------------------------
     # 3. إضافة عامل جديد
     # ---------------------------------------------------------
