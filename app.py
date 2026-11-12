@@ -1219,30 +1219,31 @@ elif page == t["p5"]:
       st.subheader("Monatliches Stundenlimit bearbeiten")
       selected_emp_for_hours = st.selectbox("Mitarbeiter auswählen:", employees_list, key="assign_emp_hours")
       
-      # جلب القيمة الحالية لساعات العامل المختار في قسم الساعات
+      # جلب القيمة الحالية للساعات كأرقام صحيحة
       current_emp_max_hours = 160
       try:
           res_emp_h = supabase.table("employees").select("max_hours").eq("name", selected_emp_for_hours).execute()
           if res_emp_h.data and res_emp_h.data[0].get("max_hours") is not None:
-              current_emp_max_hours = float(res_emp_h.data[0]["max_hours"])
+              current_emp_max_hours = int(res_emp_h.data[0]["max_hours"])
       except:
           pass
 
       new_assigned_hours = st.number_input(
           "Maximalstunden pro Monat für diesen Mitarbeiter:", 
           min_value=0, 
-          value=current_emp_max_hours, 
+          value=int(current_emp_max_hours), 
           step=5, 
           key=f"edit_hours_{selected_emp_for_hours}"
       )
 
       if st.button("Stundenlimit speichern"):
         try:
-            supabase.table("employees").update({"max_hours": new_assigned_hours}).eq("name", selected_emp_for_hours).execute()  
-            st.success(f"Das Stundenlimit für {selected_emp_for_hours} wurde erfolgreich auf {new_assigned_hours} Std. aktualisiert!")
+            supabase.table("employees").update({"max_hours": int(new_assigned_hours)}).eq("name", selected_emp_for_hours).execute()
+            st.success(f"Das Stundenlimit für {selected_emp_for_hours} wurde erfolgreich auf {int(new_assigned_hours)} Std. aktualisiert!")
             st.rerun()
         except Exception as e:
             st.error(f"Fehler beim Speichern: {e}")
+
     st.markdown("---")
     # ---------------------------------------------------------
     # 3. إضافة عامل جديد
@@ -1250,7 +1251,7 @@ elif page == t["p5"]:
     st.subheader("Neuen Mitarbeiter hinzufügen")
     new_emp_name = st.text_input("Name des Mitarbeiters:")
     default_emp_city = st.selectbox("Hauptstadt für neuen Mitarbeiter:", cities_list, key="new_emp_city")
-    max_hours = st.number_input("Maximalstunden pro Monat:", min_value=0.0, value=160.0, step=5.0, key="new_emp_max_hours")
+    max_hours = st.number_input("Maximalstunden pro Monat:", min_value=0, value=160, step=5, key="new_emp_max_hours")
     
     if st.button("Mitarbeiter hinzufügen", key="add_emp_btn"):
       if new_emp_name and new_emp_name not in employees_list:
@@ -1258,11 +1259,14 @@ elif page == t["p5"]:
         save_employees(employees_list)
         set_employee_city(new_emp_name, default_emp_city)
         
-        supabase.table("employees").upsert({
-            "name": new_emp_name, 
-            "max_hours": max_hours, 
-            "city": default_emp_city
-        }).execute()
+        try:
+            supabase.table("employees").insert({
+                "name": new_emp_name, 
+                "max_hours": int(max_hours), 
+                "city": default_emp_city
+            }).execute()
+        except:
+            pass
         
         st.success(f"Mitarbeiter {new_emp_name} erfolgreich hinzugefügt!")
         st.rerun()
