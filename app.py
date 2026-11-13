@@ -1455,20 +1455,21 @@ elif page == t["p7"]:
   with col2:
     ticket_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="ticket_year_select")
   with col3:
-    # قائمة منسدلة عامة لأماكن العمل (Ort) مرتبطة بالتاريخ والسنة لتصفية أو اختيار المكان
     selected_main_place = st.selectbox("Einsatzort auswählen:", places_list, key="main_place_select")
 
   st.subheader(f"Monats-Tickets ({ticket_month} {ticket_year})")
 
   tickets_df = load_tickets_data(ticket_month, ticket_year)
 
-  # التأكد من أن الجدول يحتوي دائماً على 50 سطراً مع 4 تيكتات ومحدد بالأعمدة المطلوبة
+  # التأكد من أن الجدول يحتوي على 50 سطراً وبنية 4 تيكتات أفقية (الخيار ب)
   import pandas as pd
-  if tickets_df is None or len(tickets_df) != 50:
+  if tickets_df is None or len(tickets_df) != 50 or "T1_Beginn" not in tickets_df.columns:
       data_dict = {
           "Ort": [selected_main_place] * 50,
-          "Beginn": [""] * 50,
-          "Ende": [""] * 50,
+          "T1_Beginn": [""] * 50, "T1_Ende": [""] * 50,
+          "T2_Beginn": [""] * 50, "T2_Ende": [""] * 50,
+          "T3_Beginn": [""] * 50, "T3_Ende": [""] * 50,
+          "T4_Beginn": [""] * 50, "T4_Ende": [""] * 50,
           "Bemerkung": [""] * 50,
           "Netto-Stunden": [0.0] * 50
       }
@@ -1488,29 +1489,35 @@ elif page == t["p7"]:
 
   total_tickets_sum = 0.0
   for index, row in edited_tickets_df.iterrows():
-    b_str = str(row.get("Beginn", "")).strip()
-    e_str = str(row.get("Ende", "")).strip()
-    net_hrs = 0.0
+    row_net = 0.0
+    # حساب الساعات للـ 4 تيكتات أفقياً في كل سطر
+    for i in range(1, 5):
+        b_str = str(row.get(f"T{i}_Beginn", "")).strip()
+        e_str = str(row.get(f"T{i}_Ende", "")).strip()
 
-    if b_str and e_str and b_str != "nan" and e_str != "nan":
-      for fmt in ("%H:%M", "%H.%M", "%H"):
-        try:
-          t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
-          t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
-          gh = (t2 - t1).total_seconds() / 3600
-          if gh > 0:
-            net_hrs = gh
-          break
-        except:
-          continue
+        if b_str and e_str and b_str != "nan" and e_str != "nan":
+          for fmt in ("%H:%M", "%H.%M", "%H"):
+            try:
+              t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
+              t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
+              gh = (t2 - t1).total_seconds() / 3600
+              if gh > 0:
+                row_net += gh
+              break
+            except:
+              continue
 
-    edited_tickets_df.at[index, "Netto-Stunden"] = round(net_hrs, 2)
-    total_tickets_sum += net_hrs
+    edited_tickets_df.at[index, "Netto-Stunden"] = round(row_net, 2)
+    total_tickets_sum += row_net
 
   st.markdown("---")
   col_t1, col_t2 = st.columns([2, 1])
   with col_t1:
-    pdf_tickets_data = generate_tickets_pdf(ticket_month, ticket_year, edited_tickets_df, total_tickets_sum)
+    pdf_df = edited_tickets_df.copy()
+    if "Datum" not in pdf_df.columns:
+      pdf_df["Datum"] = ""
+
+    pdf_tickets_data = generate_tickets_pdf(ticket_month, ticket_year, pdf_df, total_tickets_sum)
     st.download_button(t["pdf_btn"], pdf_tickets_data, f"Tickets_{ticket_month}_{ticket_year}.pdf", "application/pdf", key="p7_pdf_btn")
     if st.button("💾 Speichern / حفظ", key="tickets_save_btn"):
       save_tickets_data(ticket_month, ticket_year, edited_tickets_df)
