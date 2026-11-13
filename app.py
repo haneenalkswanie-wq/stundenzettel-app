@@ -1449,15 +1449,30 @@ elif page == t["p7"]:
 
   places_list = [""] + load_places()
 
-  col1, col2 = st.columns(2)
+  col1, col2, col3 = st.columns(3)
   with col1:
     ticket_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="ticket_month_select")
   with col2:
     ticket_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="ticket_year_select")
+  with col3:
+    # قائمة منسدلة عامة لأماكن العمل (Ort) مرتبطة بالتاريخ والسنة لتصفية أو اختيار المكان
+    selected_main_place = st.selectbox("Einsatzort auswählen:", places_list, key="main_place_select")
 
   st.subheader(f"Monats-Tickets ({ticket_month} {ticket_year})")
 
   tickets_df = load_tickets_data(ticket_month, ticket_year)
+
+  # التأكد من أن الجدول يحتوي دائماً على 50 سطراً مع 4 تيكتات ومحدد بالأعمدة المطلوبة
+  import pandas as pd
+  if tickets_df is None or len(tickets_df) != 50:
+      data_dict = {
+          "Ort": [selected_main_place] * 50,
+          "Beginn": [""] * 50,
+          "Ende": [""] * 50,
+          "Bemerkung": [""] * 50,
+          "Netto-Stunden": [0.0] * 50
+      }
+      tickets_df = pd.DataFrame(data_dict)
 
   edited_tickets_df = st.data_editor(
       tickets_df,
@@ -1502,7 +1517,6 @@ elif page == t["p7"]:
       st.success("Erfolgreich gespeichert! / تم الحفظ بنجاح")
   with col_t2:
     st.metric("Gesamtsumme:", f"{total_tickets_sum:.2f} St.")
-
 
 # ---------------------------------------------------------
 # الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - مربوطة بالمدن
