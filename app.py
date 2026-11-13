@@ -1447,30 +1447,24 @@ elif page == t["p7"]:
   st.title("🎫 Clean & Care GmbH - Einsatz-Tickets")
   st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
-  places_list = [""] + load_places()
-
-  col1, col2, col3 = st.columns(3)
+  col1, col2 = st.columns(2)
   with col1:
     ticket_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="ticket_month_select")
   with col2:
     ticket_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="ticket_year_select")
-  with col3:
-    selected_main_place = st.selectbox("Einsatzort auswählen:", places_list, key="main_place_select")
 
   st.subheader(f"Monats-Tickets ({ticket_month} {ticket_year})")
 
   tickets_df = load_tickets_data(ticket_month, ticket_year)
 
-  # التأكد من أن الجدول يحتوي على 50 سطراً وبنية 4 تيكتات أفقية (الخيار ب)
+  # التأكد من أن الجدول يحتوي على 50 سطراً مع الأعمدة الجديدة (لكل تيكت بدء، نهاية، وملاحظة خاصة)
   import pandas as pd
   if tickets_df is None or len(tickets_df) != 50 or "T1_Beginn" not in tickets_df.columns:
       data_dict = {
-          "Ort": [selected_main_place] * 50,
-          "T1_Beginn": [""] * 50, "T1_Ende": [""] * 50,
-          "T2_Beginn": [""] * 50, "T2_Ende": [""] * 50,
-          "T3_Beginn": [""] * 50, "T3_Ende": [""] * 50,
-          "T4_Beginn": [""] * 50, "T4_Ende": [""] * 50,
-          "Bemerkung": [""] * 50,
+          "T1_Beginn": [""] * 50, "T1_Ende": [""] * 50, "T1_Bemerkung": [""] * 50,
+          "T2_Beginn": [""] * 50, "T2_Ende": [""] * 50, "T2_Bemerkung": [""] * 50,
+          "T3_Beginn": [""] * 50, "T3_Ende": [""] * 50, "T3_Bemerkung": [""] * 50,
+          "T4_Beginn": [""] * 50, "T4_Ende": [""] * 50, "T4_Bemerkung": [""] * 50,
           "Netto-Stunden": [0.0] * 50
       }
       tickets_df = pd.DataFrame(data_dict)
@@ -1479,10 +1473,7 @@ elif page == t["p7"]:
       tickets_df,
       num_rows="fixed",
       use_container_width=True,
-      key=f"tickets_table_{ticket_month}_{ticket_year}",
-      column_config={
-          "Ort": st.column_config.SelectboxColumn("Ort", options=places_list),
-      }
+      key=f"tickets_table_{ticket_month}_{ticket_year}"
   )
 
   edited_tickets_df = edited_tickets_df.astype(object)
@@ -1513,12 +1504,20 @@ elif page == t["p7"]:
   st.markdown("---")
   col_t1, col_t2 = st.columns([2, 1])
   with col_t1:
+    # حقن الأعمدة الوهمية مؤقتاً لتجنب أي أخطاء في دالة الـ PDF
     pdf_df = edited_tickets_df.copy()
     if "Datum" not in pdf_df.columns:
       pdf_df["Datum"] = ""
+    if "Ticket-Nummer" not in pdf_df.columns:
+      pdf_df["Ticket-Nummer"] = [str(i+1) for i in range(len(pdf_df))]
+    if "Ort" not in pdf_df.columns:
+      pdf_df["Ort"] = ""
+    if "Bemerkung" not in pdf_df.columns:
+      pdf_df["Bemerkung"] = ""
 
     pdf_tickets_data = generate_tickets_pdf(ticket_month, ticket_year, pdf_df, total_tickets_sum)
     st.download_button(t["pdf_btn"], pdf_tickets_data, f"Tickets_{ticket_month}_{ticket_year}.pdf", "application/pdf", key="p7_pdf_btn")
+    
     if st.button("💾 Speichern / حفظ", key="tickets_save_btn"):
       save_tickets_data(ticket_month, ticket_year, edited_tickets_df)
       st.success("Erfolgreich gespeichert! / تم الحفظ بنجاح")
