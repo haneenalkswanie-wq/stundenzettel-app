@@ -1457,7 +1457,7 @@ elif page == t["p7"]:
 
   tickets_df = load_tickets_data(ticket_month, ticket_year)
 
-  # التأكد من أن الجدول يحتوي على 50 سطراً مع الأعمدة الجديدة (لكل تيكت بدء، نهاية، وملاحظة خاصة)
+  # التأكد من أن الجدول يحتوي على 50 سطراً مع الأعمدة الجديدة (لكل تيكت بدء، نهاية، وملاحظة مستقلة)
   import pandas as pd
   if tickets_df is None or len(tickets_df) != 50 or "T1_Beginn" not in tickets_df.columns:
       data_dict = {
@@ -1504,7 +1504,7 @@ elif page == t["p7"]:
   st.markdown("---")
   col_t1, col_t2 = st.columns([2, 1])
   with col_t1:
-    # حقن الأعمدة الوهمية مؤقتاً لتجنب أي أخطاء في دالة الـ PDF
+    # إنشاء نسخة مطابقة للجدول وحقن الأعمدة التي تتوقعها دالة الـ PDF تفادياً لأي KeyError نهائياً
     pdf_df = edited_tickets_df.copy()
     if "Datum" not in pdf_df.columns:
       pdf_df["Datum"] = ""
@@ -1512,8 +1512,11 @@ elif page == t["p7"]:
       pdf_df["Ticket-Nummer"] = [str(i+1) for i in range(len(pdf_df))]
     if "Ort" not in pdf_df.columns:
       pdf_df["Ort"] = ""
-    if "Bemerkung" not in pdf_df.columns:
-      pdf_df["Bemerkung"] = ""
+    
+    # ربط الأعمدة الأساسية للـ PDF بالتيكت الأول (T1) لمنع أي خطأ في الدالة القديمة
+    pdf_df["Beginn"] = pdf_df.get("T1_Beginn", "")
+    pdf_df["Ende"] = pdf_df.get("T1_Ende", "")
+    pdf_df["Bemerkung"] = pdf_df.get("T1_Bemerkung", "")
 
     pdf_tickets_data = generate_tickets_pdf(ticket_month, ticket_year, pdf_df, total_tickets_sum)
     st.download_button(t["pdf_btn"], pdf_tickets_data, f"Tickets_{ticket_month}_{ticket_year}.pdf", "application/pdf", key="p7_pdf_btn")
