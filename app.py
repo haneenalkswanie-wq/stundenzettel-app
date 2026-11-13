@@ -1468,17 +1468,21 @@ elif page == t["p7"]:
   st.title("🎫 Clean & Care GmbH - Einsatz-Tickets")
   st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
-  col1, col2 = st.columns(2)
+  places_list = [""] + load_places()
+
+  col1, col2, col3 = st.columns(3)
   with col1:
     ticket_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="ticket_month_select")
   with col2:
     ticket_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="ticket_year_select")
+  with col3:
+    selected_main_place = st.selectbox("Einsatzort auswählen:", places_list, key="main_place_select")
 
   st.subheader(f"Monats-Tickets ({ticket_month} {ticket_year})")
 
   tickets_df = load_tickets_data(ticket_month, ticket_year)
 
-  # التأكد من أن الجدول يحتوي على 50 سطراً مع الأعمدة الجديدة (لكل تيكت بدء، نهاية، وملاحظة مستقلة)
+  # التأكد من أن الجدول يحتوي على 50 سطراً مع الأعمدة (4 تيكتات أفقية وملاحظة لكل تيكت)
   import pandas as pd
   if tickets_df is None or len(tickets_df) != 50 or "T1_Beginn" not in tickets_df.columns:
       data_dict = {
@@ -1525,21 +1529,7 @@ elif page == t["p7"]:
   st.markdown("---")
   col_t1, col_t2 = st.columns([2, 1])
   with col_t1:
-    # إنشاء نسخة مطابقة للجدول وحقن الأعمدة التي تتوقعها دالة الـ PDF تفادياً لأي KeyError نهائياً
-    pdf_df = edited_tickets_df.copy()
-    if "Datum" not in pdf_df.columns:
-      pdf_df["Datum"] = ""
-    if "Ticket-Nummer" not in pdf_df.columns:
-      pdf_df["Ticket-Nummer"] = [str(i+1) for i in range(len(pdf_df))]
-    if "Ort" not in pdf_df.columns:
-      pdf_df["Ort"] = ""
-    
-    # ربط الأعمدة الأساسية للـ PDF بالتيكت الأول (T1) لمنع أي خطأ في الدالة القديمة
-    pdf_df["Beginn"] = pdf_df.get("T1_Beginn", "")
-    pdf_df["Ende"] = pdf_df.get("T1_Ende", "")
-    pdf_df["Bemerkung"] = pdf_df.get("T1_Bemerkung", "")
-
-    pdf_tickets_data = generate_tickets_pdf(ticket_month, ticket_year, pdf_df, total_tickets_sum)
+    pdf_tickets_data = generate_tickets_pdf(ticket_month, ticket_year, edited_tickets_df, total_tickets_sum)
     st.download_button(t["pdf_btn"], pdf_tickets_data, f"Tickets_{ticket_month}_{ticket_year}.pdf", "application/pdf", key="p7_pdf_btn")
     
     if st.button("💾 Speichern / حفظ", key="tickets_save_btn"):
