@@ -455,6 +455,7 @@ page = st.sidebar.radio(
 # ---------------------------------------------------------
 # دوال طباعة PDF باللغة الألمانية حصراً
 # ---------------------------------------------------------
+
 def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
@@ -657,20 +658,41 @@ def generate_tickets_pdf(month_str, year_val, df, total_hours):
   elements.append(Paragraph(f"<b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 15))
   
-  table_data = [["Datum", "Ort", "Ticket", "Beginn", "Ende", "Bemerkung", "Stunden"]]
-  for _, row in df.iterrows():
-    table_data.append([
-        str(row["Datum"]),
-        str(row["Ort"] if pd.notna(row["Ort"]) else ""),
-        str(row["Ticket-Nummer"] if pd.notna(row["Ticket-Nummer"]) else ""),
-        str(row["Beginn"] if pd.notna(row["Beginn"]) else ""),
-        str(row["Ende"] if pd.notna(row["Ende"]) else ""),
-        str(row["Bemerkung"] if pd.notna(row["Bemerkung"]) else ""),
-        str(row["Netto-Stunden"])
-    ])
-  table_data.append(["Summe:", "", "", "", "", "", f"{total_hours:.2f} St."])
+  table_data = [["Nr.", "Ticket", "Beginn", "Ende", "Bemerkung", "Stunden"]]
   
-  t_pdf = Table(table_data, colWidths=[40, 90, 70, 60, 60, 110, 70])
+  row_counter = 1
+  for _, row in df.iterrows():
+    for i in range(1, 5):
+      b_str = str(row.get(f"T{i}_Beginn", "")).strip()
+      e_str = str(row.get(f"T{i}_Ende", "")).strip()
+      bem_str = str(row.get(f"T{i}_Bemerkung", "")).strip()
+      
+      if b_str and e_str and b_str != "nan" and e_str != "nan":
+        net_h = 0.0
+        for fmt in ("%H:%M", "%H.%M", "%H"):
+          try:
+            t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
+            t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
+            gh = (t2 - t1).total_seconds() / 3600
+            if gh > 0:
+              net_h = gh
+            break
+          except:
+            continue
+        
+        table_data.append([
+            str(row_counter),
+            f"Ticket {i}",
+            b_str,
+            e_str,
+            bem_str,
+            f"{net_h:.2f} St."
+        ])
+        row_counter += 1
+
+  table_data.append(["Summe:", "", "", "", "", f"{total_hours:.2f} St."])
+  
+  t_pdf = Table(table_data, colWidths=[35, 60, 65, 65, 175, 100])
   t_pdf.setStyle(TableStyle([
       ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
       ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -685,7 +707,6 @@ def generate_tickets_pdf(month_str, year_val, df, total_hours):
   doc.build(elements)
   buffer.seek(0)
   return buffer.getvalue()
-
 
 # ---------------------------------------------------------
 # الصفحة الأولى: استمارة ساعات العمال (Mitarbeiter Stundenzettel)
