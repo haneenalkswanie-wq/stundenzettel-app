@@ -719,7 +719,7 @@ def generate_inventory_pdf(main_df, place_df, selected_place):
     pdf.cell(0, 8, "Am Messezentrum 6, 5020 Salzburg", ln=True, align="C")
     pdf.ln(5)
 
-    # 1. جدول المخزون الرئيسي
+    # 1. Hauptlager
     pdf.set_font("Arial", "B", 11)
     pdf.cell(0, 8, "1. Hauptlager (Aktueller Bestand):", ln=True)
     pdf.set_font("Arial", "B", 9)
@@ -742,7 +742,7 @@ def generate_inventory_pdf(main_df, place_df, selected_place):
             pdf.cell(40, 7, akt, 1)
             pdf.ln()
 
-    # 2. جدول المكان المحدد (إن وجد)
+    # 2. Objekt-Verteilung
     if selected_place and not place_df.empty:
         pdf.ln(8)
         pdf.set_font("Arial", "B", 11)
