@@ -1752,6 +1752,7 @@ elif page == t["p8"]:
 #Lager
 #---------------------------------------------
 elif page == t["p9"]: 
+elif page == "Lager & Material":  # أو t["p8"] حسب تعريفك في القائمة
   import pandas as pd
 
   st.title("📦 Clean & Care GmbH - Lager- & Materialverwaltung")
@@ -1828,8 +1829,6 @@ elif page == t["p9"]:
   places_list = [""] + load_places()
   selected_objekt = st.selectbox("Objekt / Ort auswählen:", places_list, key="inv_place_select")
 
-  place_items_df = pd.DataFrame(columns=["Materialname", "Kategorie", "Erhaltene Menge"])
-
   if selected_objekt:
       # جلب المواد المحفوظة في المخزن لاختيارها
       available_materials = [
@@ -1898,18 +1897,3 @@ elif page == t["p9"]:
               st.info("Für dieses Objekt wurden noch keine Materialien eingetragen.")
       except Exception as e:
           st.error(f"Fehler beim Laden der Objektdaten: {e}")
-
-  st.markdown("---")
-
-  # =========================================================
-  # الجزء الثالث: زر تصدير PDF المفعل
-  # =========================================================
-  pdf_inv_bytes = generate_inventory_pdf(edited_inv_df, place_items_df, selected_objekt)
-  file_label = f"Lagerbericht_{selected_objekt}.pdf" if selected_objekt else "Lagerbericht_Gesamt.pdf"
-  st.download_button(
-      label="📄 PDF-Bericht herunterladen",
-      data=pdf_inv_bytes,
-      file_name=file_label,
-      mime="application/pdf",
-      key="inv_pdf_download_btn"
-  )
