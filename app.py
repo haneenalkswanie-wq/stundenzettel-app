@@ -711,62 +711,6 @@ def generate_tickets_pdf(month_str, year_val, df, total_hours):
   return buffer.getvalue()
 
 
-
-def generate_inventory_pdf(main_df, place_df, selected_place):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, "Clean & Care GmbH - Lager- & Materialbericht", ln=True, align="C")
-    pdf.set_font("Arial", "", 10)
-    pdf.cell(0, 8, "Am Messezentrum 6, 5020 Salzburg", ln=True, align="C")
-    pdf.ln(5)
-
-    # 1. Hauptlager
-    pdf.set_font("Arial", "B", 11)
-    pdf.cell(0, 8, "1. Hauptlager (Aktueller Bestand):", ln=True)
-    pdf.set_font("Arial", "B", 9)
-    pdf.cell(65, 8, "Materialname", 1)
-    pdf.cell(45, 8, "Kategorie", 1)
-    pdf.cell(40, 8, "Gesamtbestand", 1)
-    pdf.cell(40, 8, "Im Lager", 1)
-    pdf.ln()
-
-    pdf.set_font("Arial", "", 9)
-    for _, row in main_df.iterrows():
-        mat = str(row["Materialname"]).strip()
-        if mat and mat != "nan":
-            cat = str(row["Kategorie"]).strip()
-            ges = str(row["Gesamtbestand"])
-            akt = str(row["Aktueller Bestand"])
-            pdf.cell(65, 7, mat[:30].encode("latin-1", "replace").decode("latin-1"), 1)
-            pdf.cell(45, 7, cat[:20].encode("latin-1", "replace").decode("latin-1"), 1)
-            pdf.cell(40, 7, ges, 1)
-            pdf.cell(40, 7, akt, 1)
-            pdf.ln()
-
-    # 2. Objekt-Verteilung
-    if selected_place and not place_df.empty:
-        pdf.ln(8)
-        pdf.set_font("Arial", "B", 11)
-        safe_place = selected_place.encode("latin-1", "replace").decode("latin-1")
-        pdf.cell(0, 8, f"2. Materialverteilung - Objekt: {safe_place}", ln=True)
-        pdf.set_font("Arial", "B", 9)
-        pdf.cell(80, 8, "Materialname", 1)
-        pdf.cell(60, 8, "Kategorie", 1)
-        pdf.cell(50, 8, "Erhaltene Menge", 1)
-        pdf.ln()
-
-        pdf.set_font("Arial", "", 9)
-        for _, row in place_df.iterrows():
-            mat = str(row["Materialname"]).strip()
-            cat = str(row["Kategorie"]).strip()
-            mng = str(row["Erhaltene Menge"])
-            pdf.cell(80, 7, mat[:35].encode("latin-1", "replace").decode("latin-1"), 1)
-            pdf.cell(60, 7, cat[:25].encode("latin-1", "replace").decode("latin-1"), 1)
-            pdf.cell(50, 7, mng, 1)
-            pdf.ln()
-
-    return pdf.output(dest="S").encode("latin-1")
 # ---------------------------------------------------------
 # الصفحة الأولى: استمارة ساعات العمال (Mitarbeiter Stundenzettel)
 # (تبقى مستقلة كما طلبت)
