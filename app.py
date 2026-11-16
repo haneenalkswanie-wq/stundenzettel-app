@@ -710,6 +710,8 @@ def generate_tickets_pdf(month_str, year_val, df, total_hours):
   buffer.seek(0)
   return buffer.getvalue()
 
+
+
 def generate_inventory_pdf(main_df, place_df, selected_place):
     pdf = FPDF()
     pdf.add_page()
