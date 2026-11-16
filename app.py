@@ -458,16 +458,6 @@ page = st.sidebar.radio(
 # دوال طباعة PDF باللغة الألمانية حصراً
 # ---------------------------------------------------------
 
-import io
-from datetime import datetime
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-import pandas as pd
-from fpdf import FPDF
-
-
 def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
@@ -523,6 +513,7 @@ def generate_daily_pdf(emp_name, month_str, year_val, df, total_hours):
   elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 10))
   
+  # أعمدة الجدول المحدثة لتشمل الاستراحة لكل مكان
   table_data = [["Tag", "Ort 1", "Std 1", "Pause 1", "Ort 2", "Std 2", "Pause 2", "Ort 3", "Std 3", "Pause 3", "Gesamt"]]
   for _, row in df.iterrows():
     table_data.append([
@@ -550,7 +541,6 @@ def generate_daily_pdf(emp_name, month_str, year_val, df, total_hours):
   doc.build(elements)
   buffer.seek(0)
   return buffer.getvalue()
-
 
 def generate_single_location_pdf(place_name, month_str, year_val, df, total_hours):
   buffer = io.BytesIO()
@@ -721,6 +711,7 @@ def generate_tickets_pdf(month_str, year_val, df, total_hours):
   return buffer.getvalue()
 
 
+
 def generate_inventory_pdf(main_df, place_df, selected_place):
     pdf = FPDF()
     pdf.add_page()
@@ -776,7 +767,6 @@ def generate_inventory_pdf(main_df, place_df, selected_place):
             pdf.ln()
 
     return pdf.output(dest="S").encode("latin-1")
-
 # ---------------------------------------------------------
 # الصفحة الأولى: استمارة ساعات العمال (Mitarbeiter Stundenzettel)
 # (تبقى مستقلة كما طلبت)
