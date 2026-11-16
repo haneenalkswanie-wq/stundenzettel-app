@@ -1696,7 +1696,6 @@ elif page == t["p8"]:
 #Lager
 #---------------------------------------------
 elif page == t["p9"]: 
-elif page == "Lager & Material":  # أو t["p8"] حسب تعريفك في القائمة
   import pandas as pd
 
   st.title("📦 Clean & Care GmbH - Lager- & Materialverwaltung")
