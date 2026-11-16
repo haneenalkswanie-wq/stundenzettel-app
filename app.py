@@ -1750,8 +1750,7 @@ elif page == t["p8"]:
 #---------------------------------------------
 #Lager
 #---------------------------------------------
-
- elif page == t["p9"]: 
+elif page == t["p9"]: 
   import pandas as pd
 
   st.title("📦 Clean & Care GmbH - Lager- & Materialverwaltung")
