@@ -494,6 +494,21 @@ def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
       ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
       ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
   ]))
+  # إضافة مسافة وفراغ التوقيعات في نهاية الـ PDF
+  elements.append(Spacer(1, 20))
+  signature_data = [
+      ["________________________________________", "________________________________________"],
+      ["Unterschrift Arbeitnehmer", "Unterschrift Arbeitgeber / GF"],
+      ["Datum: ___________________", "Datum: ___________________"]
+  ]
+  t_sig = Table(signature_data, colWidths=[250, 250])
+  t_sig.setStyle(TableStyle([
+      ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+      ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+      ('FONTSIZE', (0, 0), (-1, -1), 9),
+      ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+  ]))
+  elements.append(t_sig)
   elements.append(t_pdf)
   doc.build(elements)
   buffer.seek(0)
