@@ -710,6 +710,62 @@ def generate_tickets_pdf(month_str, year_val, df, total_hours):
   buffer.seek(0)
   return buffer.getvalue()
 
+def generate_inventory_pdf(main_df, place_df, selected_place):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, "Clean & Care GmbH - Lager- & Materialbericht", ln=True, align="C")
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(0, 8, "Am Messezentrum 6, 5020 Salzburg", ln=True, align="C")
+    pdf.ln(5)
+
+    # 1. جدول المخزون الرئيسي
+    pdf.set_font("Arial", "B", 11)
+    pdf.cell(0, 8, "1. Hauptlager (Aktueller Bestand):", ln=True)
+    pdf.set_font("Arial", "B", 9)
+    pdf.cell(65, 8, "Materialname", 1)
+    pdf.cell(45, 8, "Kategorie", 1)
+    pdf.cell(40, 8, "Gesamtbestand", 1)
+    pdf.cell(40, 8, "Im Lager", 1)
+    pdf.ln()
+
+    pdf.set_font("Arial", "", 9)
+    for _, row in main_df.iterrows():
+        mat = str(row["Materialname"]).strip()
+        if mat and mat != "nan":
+            cat = str(row["Kategorie"]).strip()
+            ges = str(row["Gesamtbestand"])
+            akt = str(row["Aktueller Bestand"])
+            pdf.cell(65, 7, mat[:30].encode("latin-1", "replace").decode("latin-1"), 1)
+            pdf.cell(45, 7, cat[:20].encode("latin-1", "replace").decode("latin-1"), 1)
+            pdf.cell(40, 7, ges, 1)
+            pdf.cell(40, 7, akt, 1)
+            pdf.ln()
+
+    # 2. جدول المكان المحدد (إن وجد)
+    if selected_place and not place_df.empty:
+        pdf.ln(8)
+        pdf.set_font("Arial", "B", 11)
+        safe_place = selected_place.encode("latin-1", "replace").decode("latin-1")
+        pdf.cell(0, 8, f"2. Materialverteilung - Objekt: {safe_place}", ln=True)
+        pdf.set_font("Arial", "B", 9)
+        pdf.cell(80, 8, "Materialname", 1)
+        pdf.cell(60, 8, "Kategorie", 1)
+        pdf.cell(50, 8, "Erhaltene Menge", 1)
+        pdf.ln()
+
+        pdf.set_font("Arial", "", 9)
+        for _, row in place_df.iterrows():
+            mat = str(row["Materialname"]).strip()
+            cat = str(row["Kategorie"]).strip()
+            mng = str(row["Erhaltene Menge"])
+            pdf.cell(80, 7, mat[:35].encode("latin-1", "replace").decode("latin-1"), 1)
+            pdf.cell(60, 7, cat[:25].encode("latin-1", "replace").decode("latin-1"), 1)
+            pdf.cell(50, 7, mng, 1)
+            pdf.ln()
+
+    return pdf.output(dest="S").encode("latin-1")
+
 # ---------------------------------------------------------
 # الصفحة الأولى: استمارة ساعات العمال (Mitarbeiter Stundenzettel)
 # (تبقى مستقلة كما طلبت)
@@ -1695,70 +1751,165 @@ elif page == t["p8"]:
 #Lager
 #---------------------------------------------
 
-elif page == t["p9"]:  # أو يمكنك ربطه بمفتاح t["p8"] لديكِ
+ elif page == t["p9"]: 
+  import pandas as pd
+
   st.title("📦 Clean & Care GmbH - Lager- & Materialverwaltung")
   st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
-  st.subheader("Verwaltung von Reinigungsmitteln und Materialien")
+  # =========================================================
+  # الجزء الأول: الجدول الرئيسي للمخزون (70 سطراً)
+  # =========================================================
+  st.subheader("1. Hauptlager (70 Zeilen)")
 
-  # جلب بيانات المخزون من Supabase
-  import pandas as pd
   inventory_data = []
   try:
-      res_inv = supabase.table("inventory").select("*").execute()
+      res_inv = supabase.table("inventory").select("*").order("id").execute()
       if res_inv.data:
           inventory_data = res_inv.data
   except Exception as e:
       st.error(f"Fehler beim Laden des Lagers: {e}")
 
-  # تحويل البيانات إلى DataFrame أو إنشاء جدول افتراضي إن كان فارغاً
-  if inventory_data:
-      inv_df = pd.DataFrame(inventory_data)
-      # الاحتفاظ بالأعمدة المطلوبة وتسميتها بالألمانية
-      if "id" in inv_df.columns:
-          inv_df = inv_df[["material", "category", "bestand", "einheit", "mindestbestand"]]
-      inv_df.columns = ["Material / Artikel", "Kategorie", "Lagerbestand", "Einheit", "Mindestbestand"]
-  else:
-      inv_df = pd.DataFrame({
-          "Material / Artikel": ["Allzweckreiniger (10L)", "Glasreiniger", "Müllsäcke (120L)", "Papierhandtücher"],
-          "Kategorie": ["Chemie", "Chemie", "Zubehör", "Hygiene"],
-          "Lagerbestand": [15, 8, 40, 25],
-          "Einheit": ["Kanister", "Flaschen", "Rollen", "Pakete"],
-          "Mindestbestand": [5, 3, 10, 5]
-      })
+  # تجهيز 70 سطراً (فارغة للإدخال اليدوي مع تعبئة المحفوظ مسبقاً)
+  rows_list = []
+  for i in range(70):
+      if i < len(inventory_data):
+          item = inventory_data[i]
+          rows_list.append({
+              "Nr.": i + 1,
+              "Materialname": item.get("material", ""),
+              "Kategorie": item.get("category", ""),
+              "Gesamtbestand": int(item.get("gesamtbestand") or 0),
+              "Aktueller Bestand": int(item.get("aktueller_bestand") or 0)
+          })
+      else:
+          rows_list.append({
+              "Nr.": i + 1,
+              "Materialname": "",
+              "Kategorie": "",
+              "Gesamtbestand": 0,
+              "Aktueller Bestand": 0
+          })
 
-  edited_inventory_df = st.data_editor(
+  inv_df = pd.DataFrame(rows_list)
+
+  edited_inv_df = st.data_editor(
       inv_df,
-      num_rows="dynamic",
+      num_rows="fixed",
       use_container_width=True,
-      key="supabase_inventory_table"
+      disabled=["Nr."],
+      key="main_inventory_70_table"
   )
 
-  col_inv1, col_inv2 = st.columns(2)
-  with col_inv1:
-    if st.button("💾 Lagerbestand in Supabase speichern", key="save_supabase_inventory_btn"):
+  if st.button("💾 Hauptlager speichern", key="save_main_inv_btn"):
       try:
-          # مسح البيانات القديمة مؤقتاً لإعادة إدراجها محدثة
           supabase.table("inventory").delete().neq("id", 0).execute()
-          
-          for _, row in edited_inventory_df.iterrows():
-              supabase.table("inventory").insert({
-                  "material": str(row["Material / Artikel"]),
-                  "category": str(row["Kategorie"]),
-                  "bestand": int(row["Lagerbestand"]) if pd.notna(row["Lagerbestand"]) else 0,
-                  "einheit": str(row["Einheit"]),
-                  "mindestbestand": int(row["Mindestbestand"]) if pd.notna(row["Mindestbestand"]) else 0
-              }).execute()
-              
-          st.success("Lagerbestand erfolgreich in Supabase gespeichert!")
+          for _, row in edited_inv_df.iterrows():
+              mat_name = str(row["Materialname"]).strip()
+              if mat_name and mat_name != "nan":
+                  supabase.table("inventory").insert({
+                      "material": mat_name,
+                      "category": str(row["Kategorie"]).strip(),
+                      "gesamtbestand": int(row["Gesamtbestand"]) if pd.notna(row["Gesamtbestand"]) else 0,
+                      "aktueller_bestand": int(row["Aktueller Bestand"]) if pd.notna(row["Aktueller Bestand"]) else 0
+                  }).execute()
+          st.success("Hauptlager erfolgreich gespeichert!")
           st.rerun()
       except Exception as e:
-          st.error(f"Fehler beim Speichern in Supabase: {e}")
+          st.error(f"Fehler beim Speichern: {e}")
 
-  with col_inv2:
-    # تنبيهات ذكية للمواد التي تقترب من النفاد
-    low_stock = edited_inventory_df[edited_inventory_df["Lagerbestand"] <= edited_inventory_df["Mindestbestand"]]
-    if not low_stock.empty:
-      st.warning(f"⚠️ Achtung: {len(low_stock)} Artikel haben den Mindestbestand unterschritten!")
-    else:
-      st.success("✅ Alle Bestände sind im grünen Bereich.")
+  st.markdown("---")
+
+  # =========================================================
+  # الجزء الثاني: توزيع المواد على الأماكن والخصم التلقائي
+  # =========================================================
+  st.subheader("2. Materialverteilung auf Objekte / Orte")
+
+  places_list = [""] + load_places()
+  selected_objekt = st.selectbox("Objekt / Ort auswählen:", places_list, key="inv_place_select")
+
+  place_items_df = pd.DataFrame(columns=["Materialname", "Kategorie", "Erhaltene Menge"])
+
+  if selected_objekt:
+      # جلب المواد المحفوظة في المخزن لاختيارها
+      available_materials = [
+          str(r["Materialname"]).strip() 
+          for _, r in edited_inv_df.iterrows() 
+          if str(r["Materialname"]).strip() and str(r["Materialname"]).strip() != "nan"
+      ]
+
+      # نموذج إضافة مادة للمكان المختار مع خصمها تلقائياً من المخزن
+      with st.container():
+          st.markdown(f"**Material an `{selected_objekt}` ausgeben:**")
+          c1, c2, c3 = st.columns([2, 1, 1])
+          with c1:
+              chosen_mat = st.selectbox("Material auswählen:", [""] + available_materials, key="dist_mat_select")
+          with c2:
+              dist_qty = st.number_input("Menge:", min_value=1, value=1, step=1, key="dist_qty_input")
+          with c3:
+              st.write("")
+              st.write("")
+              if st.button("➕ Hinzufügen & vom Lager abziehen", key="add_to_place_btn"):
+                  if chosen_mat:
+                      try:
+                          # 1. التحقق من الكمية المتوفرة في Supabase وخصمها
+                          res_m = supabase.table("inventory").select("*").eq("material", chosen_mat).execute()
+                          if res_m.data:
+                              db_item = res_m.data[0]
+                              current_stock = int(db_item.get("aktueller_bestand") or 0)
+                              mat_cat = db_item.get("category", "")
+
+                              if current_stock >= dist_qty:
+                                  new_stock = current_stock - int(dist_qty)
+                                  supabase.table("inventory").update({"aktueller_bestand": new_stock}).eq("id", db_item["id"]).execute()
+
+                                  # 2. إضافة أو تحديث الكمية المستلمة في جدول المكان
+                                  res_p = supabase.table("place_inventory").select("*").eq("place", selected_objekt).eq("material", chosen_mat).execute()
+                                  if res_p.data:
+                                      old_qty = int(res_p.data[0].get("menge") or 0)
+                                      supabase.table("place_inventory").update({"menge": old_qty + int(dist_qty)}).eq("id", res_p.data[0]["id"]).execute()
+                                  else:
+                                      supabase.table("place_inventory").insert({
+                                          "place": selected_objekt,
+                                          "material": chosen_mat,
+                                          "category": mat_cat,
+                                          "menge": int(dist_qty)
+                                      }).execute()
+
+                                  st.success(f"{dist_qty}x {chosen_mat} wurde an {selected_objekt} zugewiesen und vom Lager abgezogen!")
+                                  st.rerun()
+                              else:
+                                  st.error(f"Nicht genug Bestand im Lager! Verfügbar: {current_stock}")
+                          else:
+                              st.warning("Bitte speichern Sie das Hauptlager zuerst, bevor Sie Material verteilen.")
+                      except Exception as e:
+                          st.error(f"Fehler bei der Verteilung: {e}")
+
+      # عرض جدول المواد المستلمة لهذا المكان
+      st.markdown(f"**Bereits erhaltene Materialien in `{selected_objekt}`:**")
+      try:
+          res_place_inv = supabase.table("place_inventory").select("*").eq("place", selected_objekt).execute()
+          if res_place_inv.data:
+              p_df = pd.DataFrame(res_place_inv.data)
+              place_items_df = p_df[["material", "category", "menge"]].copy()
+              place_items_df.columns = ["Materialname", "Kategorie", "Erhaltene Menge"]
+              st.dataframe(place_items_df, use_container_width=True, hide_index=True)
+          else:
+              st.info("Für dieses Objekt wurden noch keine Materialien eingetragen.")
+      except Exception as e:
+          st.error(f"Fehler beim Laden der Objektdaten: {e}")
+
+  st.markdown("---")
+
+  # =========================================================
+  # الجزء الثالث: زر تصدير PDF المفعل
+  # =========================================================
+  pdf_inv_bytes = generate_inventory_pdf(edited_inv_df, place_items_df, selected_objekt)
+  file_label = f"Lagerbericht_{selected_objekt}.pdf" if selected_objekt else "Lagerbericht_Gesamt.pdf"
+  st.download_button(
+      label="📄 PDF-Bericht herunterladen",
+      data=pdf_inv_bytes,
+      file_name=file_label,
+      mime="application/pdf",
+      key="inv_pdf_download_btn"
+  )
