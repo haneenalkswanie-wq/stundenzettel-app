@@ -1689,3 +1689,74 @@ elif page == t["p8"]:
             st.metric("Gesamtsumme:", f"{total_trains_sum:.2f} St.")
     else:
         st.warning("لا يوجد عمال مرتبطون بهذه المدينة حالياً.")
+#---------------------------------------------
+#Lager
+#---------------------------------------------
+
+elif page == "Lager & Material":  # أو يمكنك ربطه بمفتاح t["p8"] لديكِ
+  st.title("📦 Clean & Care GmbH - Lager- & Materialverwaltung")
+  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
+
+  st.subheader("Verwaltung von Reinigungsmitteln und Materialien")
+
+  # جلب بيانات المخزون من Supabase
+  import pandas as pd
+  inventory_data = []
+  try:
+      res_inv = supabase.table("inventory").select("*").execute()
+      if res_inv.data:
+          inventory_data = res_inv.data
+  except Exception as e:
+      st.error(f"Fehler beim Laden des Lagers: {e}")
+
+  # تحويل البيانات إلى DataFrame أو إنشاء جدول افتراضي إن كان فارغاً
+  if inventory_data:
+      inv_df = pd.DataFrame(inventory_data)
+      # الاحتفاظ بالأعمدة المطلوبة وتسميتها بالألمانية
+      if "id" in inv_df.columns:
+          inv_df = inv_df[["material", "category", "bestand", "einheit", "mindestbestand"]]
+      inv_df.columns = ["Material / Artikel", "Kategorie", "Lagerbestand", "Einheit", "Mindestbestand"]
+  else:
+      inv_df = pd.DataFrame({
+          "Material / Artikel": ["Allzweckreiniger (10L)", "Glasreiniger", "Müllsäcke (120L)", "Papierhandtücher"],
+          "Kategorie": ["Chemie", "Chemie", "Zubehör", "Hygiene"],
+          "Lagerbestand": [15, 8, 40, 25],
+          "Einheit": ["Kanister", "Flaschen", "Rollen", "Pakete"],
+          "Mindestbestand": [5, 3, 10, 5]
+      })
+
+  edited_inventory_df = st.data_editor(
+      inv_df,
+      num_rows="dynamic",
+      use_container_width=True,
+      key="supabase_inventory_table"
+  )
+
+  col_inv1, col_inv2 = st.columns(2)
+  with col_inv1:
+    if st.button("💾 Lagerbestand in Supabase speichern", key="save_supabase_inventory_btn"):
+      try:
+          # مسح البيانات القديمة مؤقتاً لإعادة إدراجها محدثة
+          supabase.table("inventory").delete().neq("id", 0).execute()
+          
+          for _, row in edited_inventory_df.iterrows():
+              supabase.table("inventory").insert({
+                  "material": str(row["Material / Artikel"]),
+                  "category": str(row["Kategorie"]),
+                  "bestand": int(row["Lagerbestand"]) if pd.notna(row["Lagerbestand"]) else 0,
+                  "einheit": str(row["Einheit"]),
+                  "mindestbestand": int(row["Mindestbestand"]) if pd.notna(row["Mindestbestand"]) else 0
+              }).execute()
+              
+          st.success("Lagerbestand erfolgreich in Supabase gespeichert!")
+          st.rerun()
+      except Exception as e:
+          st.error(f"Fehler beim Speichern in Supabase: {e}")
+
+  with col_inv2:
+    # تنبيهات ذكية للمواد التي تقترب من النفاد
+    low_stock = edited_inventory_df[edited_inventory_df["Lagerbestand"] <= edited_inventory_df["Mindestbestand"]]
+    if not low_stock.empty:
+      st.warning(f"⚠️ Achtung: {len(low_stock)} Artikel haben den Mindestbestand unterschritten!")
+    else:
+      st.success("✅ Alle Bestände sind im grünen Bereich.")
