@@ -391,6 +391,7 @@ if not is_arabic:
         "p6": "📅 Monatsübersicht",
         "p7": "🎫 Einsatz-Tickets",
         "p8": "🚆 Zug-Fahrten (Züge)",
+        "p9": "📦 Lager & Material",
         "emp_label": "Mitarbeiter wählen:",
         "month_label": "Monat auswählen:",
         "year_label": "Jahr auswählen:",
@@ -448,6 +449,7 @@ page = st.sidebar.radio(
         t["p6"],
         t["p7"],
         t["p8"],
+        t["p9"],
     ],
 )
 
@@ -1693,7 +1695,7 @@ elif page == t["p8"]:
 #Lager
 #---------------------------------------------
 
-elif page == "Lager & Material":  # أو يمكنك ربطه بمفتاح t["p8"] لديكِ
+elif page == "t[p9]":  # أو يمكنك ربطه بمفتاح t["p8"] لديكِ
   st.title("📦 Clean & Care GmbH - Lager- & Materialverwaltung")
   st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
