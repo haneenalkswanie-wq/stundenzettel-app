@@ -494,6 +494,7 @@ def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
       ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
       ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
   ]))
+  elements.append(t_pdf)
   # إضافة مسافة وفراغ التوقيعات في نهاية الـ PDF
   elements.append(Spacer(1, 20))
   signature_data = [
@@ -509,7 +510,6 @@ def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
       ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
   ]))
   elements.append(t_sig)
-  elements.append(t_pdf)
   doc.build(elements)
   buffer.seek(0)
   return buffer.getvalue()
