@@ -1695,7 +1695,7 @@ elif page == t["p8"]:
 #Lager
 #---------------------------------------------
 
-elif page == "t[p9]":  # أو يمكنك ربطه بمفتاح t["p8"] لديكِ
+elif page == t["p9"]:  # أو يمكنك ربطه بمفتاح t["p8"] لديكِ
   st.title("📦 Clean & Care GmbH - Lager- & Materialverwaltung")
   st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
