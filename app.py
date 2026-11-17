@@ -1435,7 +1435,6 @@ elif page == t["p6"]:
     processed_emps = set()
 
     # معالجة بيانات الموظفين من الجدول اليومي وجدول القطارات معاً
-    # أولاً: جمع كل محتويات الجدول اليومي لكل موظف
     emp_daily_days_map = {}
     emp_daily_hours_map = {}
 
@@ -1496,7 +1495,7 @@ elif page == t["p6"]:
             
             summary_data.append({
                 "Mitarbeiter": clean_emp_name,
-                "Letzter Arbeitstag": last_work_date,
+                "Stunden bis": last_work_date,
                 "Gesamtstunden": round(total_emp_combined, 2),
                 "Max Stunden": round(max_limit, 2),
                 "Verbleibende Stunden": round(remaining, 2)
@@ -1506,7 +1505,7 @@ elif page == t["p6"]:
     if not summary_data:
         summary_df = pd.DataFrame([{
             "Mitarbeiter": "Keine Stunden erfasst",
-            "Letzter Arbeitstag": "-",
+            "Stunden bis": "-",
             "Gesamtstunden": 0.0, 
             "Max Stunden": 0.0, 
             "Verbleibende Stunden": 0.0
