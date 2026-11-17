@@ -1393,6 +1393,7 @@ elif page == t["p6"]:
     except Exception:
         pass
 
+    # 2. جلب الساعات اليومية من جدول daily_hours
     rows = []
     try:
         res_rows = supabase.table("daily_hours").select("emp, content").eq("month", summary_month).eq("year", int(summary_year)).execute()
@@ -1400,63 +1401,96 @@ elif page == t["p6"]:
     except Exception:
         rows = []
 
+    # 3. جلب بيانات القطارات وتخزين ساعات وإيهامات الأيام لكل موظف
     zug_hours_per_emp = {}
+    zug_days_per_emp = {}
     try:
         zug_res = supabase.table("trains_data").select("emp, content").eq("month", summary_month).eq("year", int(summary_year)).execute()
         zug_rows = zug_res.data if zug_res.data else []
         for z_row in zug_rows:
             z_emp = z_row.get("emp")
             if z_emp and z_row.get("content"):
+                clean_z_emp = z_emp.strip()
                 try:
                     z_df = pd.DataFrame(json.loads(z_row["content"]))
                     if "Gesamtstunden" in z_df.columns:
-                        z_sum = z_df["Gesamtstunden"].astype(float).sum()
-                        zug_hours_per_emp[z_emp.strip()] = z_sum
+                        z_df["Gesamtstunden"] = pd.to_numeric(z_df["Gesamtstunden"], errors="coerce").fillna(0)
+                        z_sum = z_df["Gesamtstunden"].sum()
+                        zug_hours_per_emp[clean_z_emp] = z_sum
+                        
+                        # جمع أيام العمل الخاصة بالقطارات التي فيها ساعات > 0
+                        if "Datum" in z_df.columns:
+                            z_df["Datum_Num"] = pd.to_numeric(z_df["Datum"], errors="coerce")
+                            z_worked = z_df[z_df["Gesamtstunden"] > 0]["Datum_Num"].dropna().tolist()
+                            if clean_z_emp not in zug_days_per_emp:
+                                zug_days_per_emp[clean_z_emp] = []
+                            zug_days_per_emp[clean_z_emp].extend(z_worked)
                 except Exception:
                     pass
     except Exception:
-        zug_hours_per_emp = {}
+        pass
 
     summary_data = []
     total_company_hours = 0.0
     processed_emps = set()
+
+    # معالجة بيانات الموظفين من الجدول اليومي وجدول القطارات معاً
+    # أولاً: جمع كل محتويات الجدول اليومي لكل موظف
+    emp_daily_days_map = {}
+    emp_daily_hours_map = {}
 
     for row in rows:
         emp = row.get("emp")
         if not emp:
             continue
         clean_emp_name = emp.strip()
-        
         if clean_emp_name not in allowed_emps:
             continue
-          
-        last_work_date = "-"
+
         try:
             emp_data = json.loads(row["content"])
             emp_daily_df = pd.DataFrame(emp_data)
             
-            # حساب إجمالي الساعات
             emp_daily_total = emp_daily_df["Gesamtstunden"].astype(float).sum() if "Gesamtstunden" in emp_daily_df.columns else 0.0
+            emp_daily_hours_map[clean_emp_name] = emp_daily_total
             
-            # استخراج آخر يوم عمل بدقة (أكبر رقم يوم يحتوي على ساعات دوام > 0)
             if "Gesamtstunden" in emp_daily_df.columns and "Datum" in emp_daily_df.columns:
                 emp_daily_df["Gesamtstunden"] = pd.to_numeric(emp_daily_df["Gesamtstunden"], errors="coerce").fillna(0)
                 emp_daily_df["Datum_Num"] = pd.to_numeric(emp_daily_df["Datum"], errors="coerce")
                 
-                worked_days = emp_daily_df[emp_daily_df["Gesamtstunden"] > 0]["Datum_Num"]
-                if not worked_days.empty:
-                    last_day_val = int(worked_days.max())
-                    last_work_date = str(last_day_val)
+                worked_days = emp_daily_df[emp_daily_df["Gesamtstunden"] > 0]["Datum_Num"].dropna().tolist()
+                if clean_emp_name not in emp_daily_days_map:
+                    emp_daily_days_map[clean_emp_name] = []
+                emp_daily_days_map[clean_emp_name].extend(worked_days)
         except Exception:
-            emp_daily_total = 0.0
+            pass
 
+    # دمج أسماء جميع الموظفين الموجودين في الساعات أو القطارات
+    all_target_emps = set(list(emp_daily_hours_map.keys()) + list(zug_hours_per_emp.keys()))
+
+    for clean_emp_name in all_target_emps:
+        if clean_emp_name not in allowed_emps:
+            continue
+            
+        processed_emps.add(clean_emp_name)
+        
+        emp_daily_total = emp_daily_hours_map.get(clean_emp_name, 0.0)
         emp_zug_total = zug_hours_per_emp.get(clean_emp_name, 0.0)
         total_emp_combined = emp_daily_total + emp_zug_total
 
-        if total_emp_combined > 0 and clean_emp_name not in processed_emps:
-            processed_emps.add(clean_emp_name)
-            
-            # حساب الحد المتبقي
+        if total_emp_combined > 0:
+            # دمج أيام العمل من جدول الساعات اليومية ومن جدول القطارات لمعرفة الأحدث
+            all_worked_days = []
+            if clean_emp_name in emp_daily_days_map:
+                all_worked_days.extend(emp_daily_days_map[clean_emp_name])
+            if clean_emp_name in zug_days_per_emp:
+                all_worked_days.extend(zug_days_per_emp[clean_emp_name])
+
+            last_work_date = "-"
+            if all_worked_days:
+                max_day_val = int(max(all_worked_days))
+                last_work_date = str(max_day_val)
+
             max_limit = emp_max_hours_map.get(clean_emp_name, 160.0)
             remaining = max_limit - total_emp_combined
             
@@ -1469,24 +1503,6 @@ elif page == t["p6"]:
             })
             total_company_hours += total_emp_combined
 
-    for emp_name, zug_hrs in zug_hours_per_emp.items():
-        if emp_name and emp_name.strip() not in processed_emps and zug_hrs > 0:
-            clean_name = emp_name.strip()
-            if clean_name in allowed_emps:
-                processed_emps.add(clean_name)
-                
-                max_limit = emp_max_hours_map.get(clean_name, 160.0)
-                remaining = max_limit - zug_hrs
-                
-                summary_data.append({
-                    "Mitarbeiter": clean_name,
-                    "Letzter Arbeitstag": "-",
-                    "Gesamtstunden": round(zug_hrs, 2),
-                    "Max Stunden": round(max_limit, 2),
-                    "Verbleibende Stunden": round(remaining, 2)
-                })
-                total_company_hours += zug_hrs
-
     if not summary_data:
         summary_df = pd.DataFrame([{
             "Mitarbeiter": "Keine Stunden erfasst",
@@ -1498,7 +1514,6 @@ elif page == t["p6"]:
     else:
         summary_df = pd.DataFrame(summary_data)
 
-    # عرض الجدول بتنسيق تفصيلي
     st.dataframe(summary_df, use_container_width=True, hide_index=True)
     st.markdown("---")
     
@@ -1508,7 +1523,6 @@ elif page == t["p6"]:
         st.download_button(t["pdf_btn"], pdf_summary_data, f"Monatsübersicht_{summary_month}_{summary_year}.pdf", "application/pdf", key="p6_pdf")
     with col_s2:
         st.metric("Gesamtsumme:", f"{total_company_hours:.2f} St.")
-
 # ---------------------------------------------------------
 # الصفحة السابعة: تذاكر المهام (Einsatz-Tickets)
 # ---------------------------------------------------------
