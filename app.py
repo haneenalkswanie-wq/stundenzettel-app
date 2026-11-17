@@ -1420,10 +1420,23 @@ elif page == t["p6"]:
         if clean_emp_name not in allowed_emps:
             continue
           
+        last_work_date = "-"
         try:
             emp_data = json.loads(row["content"])
             emp_daily_df = pd.DataFrame(emp_data)
+            
+            # حساب إجمالي الساعات
             emp_daily_total = emp_daily_df["Gesamtstunden"].astype(float).sum() if "Gesamtstunden" in emp_daily_df.columns else 0.0
+            
+            # استخراج آخر يوم عمل بدقة (أكبر رقم يوم يحتوي على ساعات دوام > 0)
+            if "Gesamtstunden" in emp_daily_df.columns and "Datum" in emp_daily_df.columns:
+                emp_daily_df["Gesamtstunden"] = pd.to_numeric(emp_daily_df["Gesamtstunden"], errors="coerce").fillna(0)
+                emp_daily_df["Datum_Num"] = pd.to_numeric(emp_daily_df["Datum"], errors="coerce")
+                
+                worked_days = emp_daily_df[emp_daily_df["Gesamtstunden"] > 0]["Datum_Num"]
+                if not worked_days.empty:
+                    last_day_val = int(worked_days.max())
+                    last_work_date = str(last_day_val)
         except Exception:
             emp_daily_total = 0.0
 
@@ -1439,6 +1452,7 @@ elif page == t["p6"]:
             
             summary_data.append({
                 "Mitarbeiter": clean_emp_name,
+                "Letzter Arbeitstag": last_work_date,
                 "Gesamtstunden": round(total_emp_combined, 2),
                 "Max Stunden": round(max_limit, 2),
                 "Verbleibende Stunden": round(remaining, 2)
@@ -1456,6 +1470,7 @@ elif page == t["p6"]:
                 
                 summary_data.append({
                     "Mitarbeiter": clean_name,
+                    "Letzter Arbeitstag": "-",
                     "Gesamtstunden": round(zug_hrs, 2),
                     "Max Stunden": round(max_limit, 2),
                     "Verbleibende Stunden": round(remaining, 2)
@@ -1464,7 +1479,8 @@ elif page == t["p6"]:
 
     if not summary_data:
         summary_df = pd.DataFrame([{
-            "Mitarbeiter": "Keine Stunden erfasst", 
+            "Mitarbeiter": "Keine Stunden erfasst",
+            "Letzter Arbeitstag": "-",
             "Gesamtstunden": 0.0, 
             "Max Stunden": 0.0, 
             "Verbleibende Stunden": 0.0
@@ -1472,7 +1488,7 @@ elif page == t["p6"]:
     else:
         summary_df = pd.DataFrame(summary_data)
 
-    # عرض الجدول بتنسيق تفصيلي يوضح الساعات المنجزة والمتبقية
+    # عرض الجدول بتنسيق تفصيلي
     st.dataframe(summary_df, use_container_width=True, hide_index=True)
     st.markdown("---")
     
