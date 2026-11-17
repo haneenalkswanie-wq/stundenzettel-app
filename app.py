@@ -853,16 +853,14 @@ elif page == t["p2"]:
     st.subheader(f"Tägliche Stunden für: {daily_emp} ({daily_month} {daily_year})")
 
     # ==========================================================
-    # 💡 إضافة كود التحذير وحساب الساعات المتبقية للعامل هذا الشهر
+    # 💡 التحذير وحساب الساعات المتبقية للعامل هذا الشهر
     # ==========================================================
     try:
-        # 1. جلب الحد الأقصى المسموح للعامل من جدول employees
         emp_max_limit = 160.0
-        emp_db_res = supabase.table("employees").select("max_hours").eq("name", daily_emp).execute()
+        emp_db_res = supabase.table("employees").select("max_hours").eq("name", daily_emp.strip()).execute()
         if emp_db_res.data and emp_db_res.data[0].get("max_hours") is not None:
             emp_max_limit = float(emp_db_res.data[0]["max_hours"])
 
-        # 2. جلب ساعات العامل المسجلة مسبقاً في نفس الشهر والسنة الحالية
         emp_current_month_hours = 0.0
         existing_rows_res = supabase.table("daily_hours").select("content").eq("emp", daily_emp).eq("month", daily_month).eq("year", int(daily_year)).execute()
         if existing_rows_res.data:
@@ -872,21 +870,19 @@ elif page == t["p2"]:
                 if "Gesamtstunden" in temp_df.columns:
                     emp_current_month_hours = temp_df["Gesamtstunden"].astype(float).sum()
 
-        # حساب الساعات المتبقية
         remaining_hrs = emp_max_limit - emp_current_month_hours
 
-        # إظهار التنبيه البصري بحسب حالة الساعات
         if remaining_hrs <= 0:
             st.error(f"🚨 تنبيه تجاوز الحد: العامل **{daily_emp}** استهلك كامل ساعاته الشهرية! (أنجز {emp_current_month_hours:.2f} من أصل {emp_max_limit} ساعة).")
         elif remaining_hrs <= 15:
             st.warning(f"⚠️ تنبيه قرب انتهاء الساعات: العامل **{daily_emp}** عمل {emp_current_month_hours:.2f} ساعة والمتبقي له **{remaining_hrs:.2f}** ساعة فقط.")
         else:
             st.info(f"💡 حالة ساعات العامل: أنجز {emp_current_month_hours:.2f} ساعة | متبقي له **{remaining_hrs:.2f}** ساعة لكي يصل إلى حده الأقصى ({emp_max_limit} ساعة).")
-    except Exception as e:
+    except Exception:
         pass
     # ==========================================================
 
-    # تحديث هيكل البيانات اليومية ليشمل استراحة خاصة بكل مكان
+    # تحديث هيكل البيانات اليومية ليشمل 4 أماكن واستراحة خاصة بكل مكان
     def load_custom_daily_hours(emp_name, month_str, year_val):
       try:
         res = supabase.table("daily_hours").select("content").eq("emp", emp_name).eq("month", month_str).eq("year", int(year_val)).execute()
@@ -894,28 +890,33 @@ elif page == t["p2"]:
           data = json.loads(res.data[0]["content"])
           df = pd.DataFrame(data)
           
-          # 1. أولاً: نقل قيم استراحة العمود القديم (Pause) إلى Pause 1 إن وجدت
           if "Pause" in df.columns:
             for idx, val in enumerate(df["Pause"]):
               if pd.notna(val) and str(val).strip() != "" and str(val).strip() != "nan":
                 if "Pause 1" not in df.columns or pd.isna(df.loc[idx, "Pause 1"]) or str(df.loc[idx, "Pause 1"]).strip() in ["", "nan"]:
                   df.loc[idx, "Pause 1"] = val
-            # 2. ثانياً: حذف العمود القديم نهائياً لكي لا يظهر أبداً
             df = df.drop(columns=["Pause"])
 
-          # التأكد من وجود كافة الأعمدة الجديدة
-          for i in range(1, 4):
+          # التأكد من وجود كافة الأعمدة للأماكن الأربعة (1 إلى 4)
+          for i in range(1, 5):
+            if f"Ort {i}" not in df.columns:
+              df[f"Ort {i}"] = ""
+            if f"Beginn {i}" not in df.columns:
+              df[f"Beginn {i}"] = ""
+            if f"Ende {i}" not in df.columns:
+              df[f"Ende {i}"] = ""
             if f"Pause {i}" not in df.columns:
               df[f"Pause {i}"] = ""
             if f"Hrs{i}" not in df.columns:
               df[f"Hrs{i}"] = ""
               
-          # ترتيب الأعمدة بشكل منظم وجميل بجانب بعضها
+          # ترتيب الأعمدة بشكل منظم للأماكن الأربعة
           cols_order = [
               "Datum", 
               "Ort 1", "Beginn 1", "Ende 1", "Pause 1", "Hrs1",
               "Ort 2", "Beginn 2", "Ende 2", "Pause 2", "Hrs2",
               "Ort 3", "Beginn 3", "Ende 3", "Pause 3", "Hrs3",
+              "Ort 4", "Beginn 4", "Ende 4", "Pause 4", "Hrs4",
               "Gesamtstunden"
           ]
           existing_cols = [c for c in cols_order if c in df.columns]
@@ -923,7 +924,7 @@ elif page == t["p2"]:
           df = df[existing_cols + other_cols]
           
           return df
-      except:
+      except Exception:
         pass
       
       days_data = []
@@ -934,6 +935,7 @@ elif page == t["p2"]:
                 "Ort 1": "", "Beginn 1": "", "Ende 1": "", "Pause 1": "", "Hrs1": "",
                 "Ort 2": "", "Beginn 2": "", "Ende 2": "", "Pause 2": "", "Hrs2": "",
                 "Ort 3": "", "Beginn 3": "", "Ende 3": "", "Pause 3": "", "Hrs3": "",
+                "Ort 4": "", "Beginn 4": "", "Ende 4": "", "Pause 4": "", "Hrs4": "",
                 "Gesamtstunden": 0.0,
             }
         )
@@ -950,6 +952,7 @@ elif page == t["p2"]:
             "Ort 1": st.column_config.SelectboxColumn("Ort 1", options=places_list),
             "Ort 2": st.column_config.SelectboxColumn("Ort 2", options=places_list),
             "Ort 3": st.column_config.SelectboxColumn("Ort 3", options=places_list),
+            "Ort 4": st.column_config.SelectboxColumn("Ort 4", options=places_list),
         }
     )
 
@@ -959,7 +962,8 @@ elif page == t["p2"]:
     for index, row in edited_daily_df.iterrows():
       net_day_total = 0.0
       
-      for i in range(1, 4):
+      # حساب الساعات والاستراحة للأماكن الأربعة (1 إلى 4)
+      for i in range(1, 5):
         b_str = str(row.get(f"Beginn {i}", "")).strip()
         e_str = str(row.get(f"Ende {i}", "")).strip()
         p_str = str(row.get(f"Pause {i}", "")).strip()
@@ -977,15 +981,14 @@ elif page == t["p2"]:
 
               gh = (t2 - t1).total_seconds() / 3600
               if gh > 0:
-                # حساب استراحة هذا المكان بالذات
                 if p_str and p_str != "nan" and p_str != "":
                   try:
                     break_val = float(p_str.replace(",", "."))
-                  except:
+                  except Exception:
                     break_val = 0.0
                 hrs = max(0.0, gh - break_val)
               break
-            except:
+            except Exception:
               continue
 
         if break_val > 0:
@@ -1003,7 +1006,6 @@ elif page == t["p2"]:
     st.markdown("---")
     col_d1, col_d2, col_d3 = st.columns([2, 1, 1])
     with col_d1:
-      # دالة الطباعة المحدثة إذا احتجت لتعديل شكل PDF لاحقاً
       pdf_daily_data = generate_daily_pdf(daily_emp, daily_month, daily_year, edited_daily_df, total_daily_sum)
       st.download_button(t["pdf_btn"], pdf_daily_data, f"Tägliche_Stunden_{daily_emp}_{daily_month}_{daily_year}.pdf", "application/pdf", key="p2_pdf")
     with col_d2:
