@@ -1428,9 +1428,12 @@ elif page == t["p6"]:
             
             # البحث عن آخر يوم عمل يحتوي على ساعات > 0
             if "Gesamtstunden" in emp_daily_df.columns and "Datum" in emp_daily_df.columns:
-                valid_days = emp_daily_df[emp_daily_df["Gesamtstunden"].astype(float) > 0]
+                valid_days = emp_daily_df[emp_daily_df["Gesamtstunden"].astype(float) > 0].copy()
                 if not valid_days.empty:
-                    last_work_date = str(valid_days["Datum"].max())
+                    valid_df["Day_Num"] = pd.to_numeric(valid_df["Datum"], errors="coerce")
+                    max_day = valid_df["Day_Num"].max()
+                    if pd.notna(max_day):
+                        last_work_date = f"Tag [int(max_day)]"
         except Exception:
             emp_daily_total = 0.0
 
