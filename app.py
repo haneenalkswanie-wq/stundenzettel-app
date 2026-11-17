@@ -856,11 +856,13 @@ elif page == t["p2"]:
     # 💡 إضافة كود التحذير وحساب الساعات المتبقية للعامل هذا الشهر
     # ==========================================================
     try:
+        # 1. جلب الحد الأقصى المسموح للعامل من جدول employees
         emp_max_limit = 160.0
         emp_db_res = supabase.table("employees").select("max_hours").eq("name", daily_emp).execute()
         if emp_db_res.data and emp_db_res.data[0].get("max_hours") is not None:
             emp_max_limit = float(emp_db_res.data[0]["max_hours"])
 
+        # 2. جلب ساعات العامل المسجلة مسبقاً في نفس الشهر والسنة الحالية
         emp_current_month_hours = 0.0
         existing_rows_res = supabase.table("daily_hours").select("content").eq("emp", daily_emp).eq("month", daily_month).eq("year", int(daily_year)).execute()
         if existing_rows_res.data:
@@ -870,8 +872,10 @@ elif page == t["p2"]:
                 if "Gesamtstunden" in temp_df.columns:
                     emp_current_month_hours = temp_df["Gesamtstunden"].astype(float).sum()
 
+        # حساب الساعات المتبقية
         remaining_hrs = emp_max_limit - emp_current_month_hours
 
+        # إظهار التنبيه البصري بحسب حالة الساعات
         if remaining_hrs <= 0:
             st.error(f"🚨 تنبيه تجاوز الحد: العامل **{daily_emp}** استهلك كامل ساعاته الشهرية! (أنجز {emp_current_month_hours:.2f} من أصل {emp_max_limit} ساعة).")
         elif remaining_hrs <= 15:
@@ -882,6 +886,7 @@ elif page == t["p2"]:
         pass
     # ==========================================================
 
+    # تحديث هيكل البيانات اليومية ليشمل استراحة خاصة بكل مكان
     def load_custom_daily_hours(emp_name, month_str, year_val):
       try:
         res = supabase.table("daily_hours").select("content").eq("emp", emp_name).eq("month", month_str).eq("year", int(year_val)).execute()
@@ -889,19 +894,23 @@ elif page == t["p2"]:
           data = json.loads(res.data[0]["content"])
           df = pd.DataFrame(data)
           
+          # 1. أولاً: نقل قيم استراحة العمود القديم (Pause) إلى Pause 1 إن وجدت
           if "Pause" in df.columns:
             for idx, val in enumerate(df["Pause"]):
               if pd.notna(val) and str(val).strip() != "" and str(val).strip() != "nan":
                 if "Pause 1" not in df.columns or pd.isna(df.loc[idx, "Pause 1"]) or str(df.loc[idx, "Pause 1"]).strip() in ["", "nan"]:
                   df.loc[idx, "Pause 1"] = val
+            # 2. ثانياً: حذف العمود القديم نهائياً لكي لا يظهر أبداً
             df = df.drop(columns=["Pause"])
 
+          # التأكد من وجود كافة الأعمدة الجديدة
           for i in range(1, 4):
             if f"Pause {i}" not in df.columns:
               df[f"Pause {i}"] = ""
             if f"Hrs{i}" not in df.columns:
               df[f"Hrs{i}"] = ""
               
+          # ترتيب الأعمدة بشكل منظم وجميل بجانب بعضها
           cols_order = [
               "Datum", 
               "Ort 1", "Beginn 1", "Ende 1", "Pause 1", "Hrs1",
@@ -932,31 +941,8 @@ elif page == t["p2"]:
 
     daily_df = load_custom_daily_hours(daily_emp, daily_month, daily_year)
 
-    # دالة لتحديد أيام العطل (السبت والأحد) وتلوينها باللون الأحمر
-    months_map_de_to_num = {
-        "Januar": 1, "Februar": 2, "März": 3, "April": 4, "Mai": 5, "Juni": 6,
-        "Juli": 7, "August": 8, "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
-    }
-    
-    def highlight_weekends(row):
-      styles = [''] * len(row)
-      try:
-        day_num = int(row["Datum"])
-        m_num = months_map_de_to_num.get(daily_month, 1)
-        y_num = int(daily_year)
-        dt = datetime(y_num, m_num, day_num)
-        # إذا كان اليوم سبت (5) أو أحد (6)
-        if dt.weekday() in [5, 6]:
-          return ['color: #ff4b4b; font-weight: bold;' if col == 'Datum' else '' for col in row.index]
-      except:
-        pass
-      return styles
-
-    # عرض الجدول مع تلوين السبت والأحد باللون الأحمر
-    styled_daily_df = daily_df.style.apply(highlight_weekends, axis=1)
-
     edited_daily_df = st.data_editor(
-        styled_daily_df,
+        daily_df,
         num_rows="fixed",
         use_container_width=True,
         key=f"daily_table_{daily_emp}_{daily_month}_{daily_year}",
@@ -991,6 +977,7 @@ elif page == t["p2"]:
 
               gh = (t2 - t1).total_seconds() / 3600
               if gh > 0:
+                # حساب استراحة هذا المكان بالذات
                 if p_str and p_str != "nan" and p_str != "":
                   try:
                     break_val = float(p_str.replace(",", "."))
@@ -1016,6 +1003,7 @@ elif page == t["p2"]:
     st.markdown("---")
     col_d1, col_d2, col_d3 = st.columns([2, 1, 1])
     with col_d1:
+      # دالة الطباعة المحدثة إذا احتجت لتعديل شكل PDF لاحقاً
       pdf_daily_data = generate_daily_pdf(daily_emp, daily_month, daily_year, edited_daily_df, total_daily_sum)
       st.download_button(t["pdf_btn"], pdf_daily_data, f"Tägliche_Stunden_{daily_emp}_{daily_month}_{daily_year}.pdf", "application/pdf", key="p2_pdf")
     with col_d2:
