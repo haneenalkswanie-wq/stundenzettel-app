@@ -1539,65 +1539,93 @@ elif page == t["p7"]:
   with col3:
     selected_main_place = st.selectbox("Einsatzort auswählen:", places_list, key="main_place_select")
 
-  st.subheader(f"Monats-Tickets ({ticket_month} {ticket_year})")
+  if not selected_main_place:
+    st.warning("⚠️ Bitte wähle zuerst einen Einsatzort aus, um die Tickets anzuzeigen.")
+  else:
+    st.subheader(f"Monats-Tickets ({selected_main_place} - {ticket_month} {ticket_year})")
 
-  tickets_df = load_tickets_data(ticket_month, ticket_year)
+    # تحميل بيانات التيكتات الخاصة بهذا المكان بالذات (تأكدي أن دالة التحميل تقبل اسم المكان أو تم تعديلها أدناه)
+    # ملاحظة: إذا كانت دالة load_tickets_data تأخذ الشهر والسنة فقط، سنضيف لها المكان أو نمرره في البحث
+    def load_place_tickets(place, month, year):
+        try:
+            res = supabase.table("tickets_data").select("content").eq("place", place).eq("month", month).eq("year", int(year)).execute()
+            if res.data and len(res.data) > 0:
+                return pd.DataFrame(json.loads(res.data[0]["content"]))
+        except Exception:
+            pass
+        return None
 
-  # التأكد من أن الجدول يحتوي على 50 سطراً مع الأعمدة (4 تيكتات أفقية وملاحظة لكل تيكت)
-  import pandas as pd
-  if tickets_df is None or len(tickets_df) != 50 or "T1_Beginn" not in tickets_df.columns:
-      data_dict = {
-          "T1_Beginn": [""] * 50, "T1_Ende": [""] * 50, "T1_Bemerkung": [""] * 50,
-          "T2_Beginn": [""] * 50, "T2_Ende": [""] * 50, "T2_Bemerkung": [""] * 50,
-          "T3_Beginn": [""] * 50, "T3_Ende": [""] * 50, "T3_Bemerkung": [""] * 50,
-          "T4_Beginn": [""] * 50, "T4_Ende": [""] * 50, "T4_Bemerkung": [""] * 50,
-          "Netto-Stunden": [0.0] * 50
-      }
-      tickets_df = pd.DataFrame(data_dict)
+    tickets_df = load_place_tickets(selected_main_place, ticket_month, ticket_year)
 
-  edited_tickets_df = st.data_editor(
-      tickets_df,
-      num_rows="fixed",
-      use_container_width=True,
-      key=f"tickets_table_{ticket_month}_{ticket_year}"
-  )
+    # التأكد من أن الجدول يحتوي على 50 سطراً مع الأعمدة المطلوبة
+    import pandas as pd
+    if tickets_df is None or len(tickets_df) != 50 or "T1_Beginn" not in tickets_df.columns:
+        data_dict = {
+            "T1_Beginn": [""] * 50, "T1_Ende": [""] * 50, "T1_Bemerkung": [""] * 50,
+            "T2_Beginn": [""] * 50, "T2_Ende": [""] * 50, "T2_Bemerkung": [""] * 50,
+            "T3_Beginn": [""] * 50, "T3_Ende": [""] * 50, "T3_Bemerkung": [""] * 50,
+            "T4_Beginn": [""] * 50, "T4_Ende": [""] * 50, "T4_Bemerkung": [""] * 50,
+            "Netto-Stunden": [0.0] * 50
+        }
+        tickets_df = pd.DataFrame(data_dict)
 
-  edited_tickets_df = edited_tickets_df.astype(object)
+    # جعل مفتاح الجدول فريداً لكل مكان حتى لا تتداخل البيانات
+    edited_tickets_df = st.data_editor(
+        tickets_df,
+        num_rows="fixed",
+        use_container_width=True,
+        key=f"tickets_table_{selected_main_place}_{ticket_month}_{ticket_year}"
+    )
 
-  total_tickets_sum = 0.0
-  for index, row in edited_tickets_df.iterrows():
-    row_net = 0.0
-    # حساب الساعات للـ 4 تيكتات أفقياً في كل سطر
-    for i in range(1, 5):
-        b_str = str(row.get(f"T{i}_Beginn", "")).strip()
-        e_str = str(row.get(f"T{i}_Ende", "")).strip()
+    edited_tickets_df = edited_tickets_df.astype(object)
 
-        if b_str and e_str and b_str != "nan" and e_str != "nan":
-          for fmt in ("%H:%M", "%H.%M", "%H"):
+    total_tickets_sum = 0.0
+    for index, row in edited_tickets_df.iterrows():
+      row_net = 0.0
+      # حساب الساعات للـ 4 تيكتات أفقياً في كل سطر
+      for i in range(1, 5):
+          b_str = str(row.get(f"T{i}_Beginn", "")).strip()
+          e_str = str(row.get(f"T{i}_Ende", "")).strip()
+
+          if b_str and e_str and b_str != "nan" and e_str != "nan":
+            for fmt in ("%H:%M", "%H.%M", "%H"):
+              try:
+                t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
+                t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
+                gh = (t2 - t1).total_seconds() / 3600
+                if gh > 0:
+                  row_net += gh
+                break
+              except:
+                continue
+
+      edited_tickets_df.at[index, "Netto-Stunden"] = round(row_net, 2)
+      total_tickets_sum += row_net
+
+    st.markdown("---")
+    col_t1, col_t2 = st.columns([2, 1])
+    with col_t1:
+      pdf_tickets_data = generate_tickets_pdf(ticket_month, ticket_year, edited_tickets_df, total_tickets_sum)
+      st.download_button(t["pdf_btn"], pdf_tickets_data, f"Tickets_{selected_main_place}_{ticket_month}_{ticket_year}.pdf", "application/pdf", key="p7_pdf_btn")
+      
+      if st.button("💾 Speichern / حفظ", key="tickets_save_btn"):
+        # حفظ البيانات الخاصة بهذا المكان في قاعدة البيانات
+        def save_place_tickets(place, month, year, df):
             try:
-              t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
-              t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
-              gh = (t2 - t1).total_seconds() / 3600
-              if gh > 0:
-                row_net += gh
-              break
-            except:
-              continue
+                content_str = df.to_json(orient="records")
+                # التحقق إذا كانت السجل موجود مسبقاً
+                existing = supabase.table("tickets_data").select("id").eq("place", place).eq("month", month).eq("year", int(year)).execute()
+                if existing.data and len(existing.data) > 0:
+                    supabase.table("tickets_data").update({"content": content_str}).eq("place", place).eq("month", month).eq("year", int(year)).execute()
+                else:
+                    supabase.table("tickets_data").insert({"place": place, "month": month, "year": int(year), "content": content_str}).execute()
+            except Exception as e:
+                st.error(f"Fehler beim Speichern: {e}")
 
-    edited_tickets_df.at[index, "Netto-Stunden"] = round(row_net, 2)
-    total_tickets_sum += row_net
-
-  st.markdown("---")
-  col_t1, col_t2 = st.columns([2, 1])
-  with col_t1:
-    pdf_tickets_data = generate_tickets_pdf(ticket_month, ticket_year, edited_tickets_df, total_tickets_sum)
-    st.download_button(t["pdf_btn"], pdf_tickets_data, f"Tickets_{ticket_month}_{ticket_year}.pdf", "application/pdf", key="p7_pdf_btn")
-    
-    if st.button("💾 Speichern / حفظ", key="tickets_save_btn"):
-      save_tickets_data(ticket_month, ticket_year, edited_tickets_df)
-      st.success("Erfolgreich gespeichert! / تم الحفظ بنجاح")
-  with col_t2:
-    st.metric("Gesamtsumme:", f"{total_tickets_sum:.2f} St.")
+        save_place_tickets(selected_main_place, ticket_month, ticket_year, edited_tickets_df)
+        st.success("Erfolgreich gespeichert! / تم الحفظ بنجاح")
+    with col_t2:
+      st.metric("Gesamtsumme:", f"{total_tickets_sum:.2f} St.")
 
 # ---------------------------------------------------------
 # الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - مربوطة بالمدن
