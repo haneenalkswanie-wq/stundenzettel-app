@@ -1544,8 +1544,6 @@ elif page == t["p7"]:
   else:
     st.subheader(f"Monats-Tickets ({selected_main_place} - {ticket_month} {ticket_year})")
 
-    # تحميل بيانات التيكتات الخاصة بهذا المكان بالذات (تأكدي أن دالة التحميل تقبل اسم المكان أو تم تعديلها أدناه)
-    # ملاحظة: إذا كانت دالة load_tickets_data تأخذ الشهر والسنة فقط، سنضيف لها المكان أو نمرره في البحث
     def load_place_tickets(place, month, year):
         try:
             res = supabase.table("tickets_data").select("content").eq("place", place).eq("month", month).eq("year", int(year)).execute()
@@ -1557,7 +1555,6 @@ elif page == t["p7"]:
 
     tickets_df = load_place_tickets(selected_main_place, ticket_month, ticket_year)
 
-    # التأكد من أن الجدول يحتوي على 50 سطراً مع الأعمدة المطلوبة
     import pandas as pd
     if tickets_df is None or len(tickets_df) != 50 or "T1_Beginn" not in tickets_df.columns:
         data_dict = {
@@ -1569,7 +1566,6 @@ elif page == t["p7"]:
         }
         tickets_df = pd.DataFrame(data_dict)
 
-    # جعل مفتاح الجدول فريداً لكل مكان حتى لا تتداخل البيانات
     edited_tickets_df = st.data_editor(
         tickets_df,
         num_rows="fixed",
@@ -1582,7 +1578,6 @@ elif page == t["p7"]:
     total_tickets_sum = 0.0
     for index, row in edited_tickets_df.iterrows():
       row_net = 0.0
-      # حساب الساعات للـ 4 تيكتات أفقياً في كل سطر
       for i in range(1, 5):
           b_str = str(row.get(f"T{i}_Beginn", "")).strip()
           e_str = str(row.get(f"T{i}_Ende", "")).strip()
@@ -1609,21 +1604,20 @@ elif page == t["p7"]:
       st.download_button(t["pdf_btn"], pdf_tickets_data, f"Tickets_{selected_main_place}_{ticket_month}_{ticket_year}.pdf", "application/pdf", key="p7_pdf_btn")
       
       if st.button("💾 Speichern / حفظ", key="tickets_save_btn"):
-        # حفظ البيانات الخاصة بهذا المكان في قاعدة البيانات
         def save_place_tickets(place, month, year, df):
             try:
                 content_str = df.to_json(orient="records")
-                # التحقق إذا كانت السجل موجود مسبقاً
-                existing = supabase.table("tickets_data").select("id").eq("place", place).eq("month", month).eq("year", int(year)).execute()
+                # التحقق باستخدام عمود place بدلاً من id
+                existing = supabase.table("tickets_data").select("place").eq("place", place).eq("month", month).eq("year", int(year)).execute()
                 if existing.data and len(existing.data) > 0:
                     supabase.table("tickets_data").update({"content": content_str}).eq("place", place).eq("month", month).eq("year", int(year)).execute()
                 else:
                     supabase.table("tickets_data").insert({"place": place, "month": month, "year": int(year), "content": content_str}).execute()
+                st.success("Erfolgreich gespeichert! / تم الحفظ بنجاح")
             except Exception as e:
                 st.error(f"Fehler beim Speichern: {e}")
 
         save_place_tickets(selected_main_place, ticket_month, ticket_year, edited_tickets_df)
-        st.success("Erfolgreich gespeichert! / تم الحفظ بنجاح")
     with col_t2:
       st.metric("Gesamtsumme:", f"{total_tickets_sum:.2f} St.")
 
