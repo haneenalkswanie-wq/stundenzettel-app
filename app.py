@@ -1556,12 +1556,13 @@ elif page == t["p7"]:
     tickets_df = load_place_tickets(selected_main_place, ticket_month, ticket_year)
 
     import pandas as pd
-    if tickets_df is None or len(tickets_df) != 50 or "T1_Beginn" not in tickets_df.columns:
+    # التحقق من وجود الأعمدة الجديدة (أرقام التيكتات) وإلا يتم إعادة بناء الجدول بـ 50 سطراً وهيكل منظم
+    if tickets_df is None or len(tickets_df) != 50 or "T1_Nr" not in tickets_df.columns:
         data_dict = {
-            "T1_Beginn": [""] * 50, "T1_Ende": [""] * 50, "T1_Bemerkung": [""] * 50,
-            "T2_Beginn": [""] * 50, "T2_Ende": [""] * 50, "T2_Bemerkung": [""] * 50,
-            "T3_Beginn": [""] * 50, "T3_Ende": [""] * 50, "T3_Bemerkung": [""] * 50,
-            "T4_Beginn": [""] * 50, "T4_Ende": [""] * 50, "T4_Bemerkung": [""] * 50,
+            "T1_Nr": [""] * 50, "T1_Beginn": [""] * 50, "T1_Ende": [""] * 50, "T1_Bemerkung": [""] * 50,
+            "T2_Nr": [""] * 50, "T2_Beginn": [""] * 50, "T2_Ende": [""] * 50, "T2_Bemerkung": [""] * 50,
+            "T3_Nr": [""] * 50, "T3_Beginn": [""] * 50, "T3_Ende": [""] * 50, "T3_Bemerkung": [""] * 50,
+            "T4_Nr": [""] * 50, "T4_Beginn": [""] * 50, "T4_Ende": [""] * 50, "T4_Bemerkung": [""] * 50,
             "Netto-Stunden": [0.0] * 50
         }
         tickets_df = pd.DataFrame(data_dict)
@@ -1578,6 +1579,7 @@ elif page == t["p7"]:
     total_tickets_sum = 0.0
     for index, row in edited_tickets_df.iterrows():
       row_net = 0.0
+      # حساب الساعات للـ 4 تيكتات أفقياً في كل سطر
       for i in range(1, 5):
           b_str = str(row.get(f"T{i}_Beginn", "")).strip()
           e_str = str(row.get(f"T{i}_Ende", "")).strip()
@@ -1607,7 +1609,6 @@ elif page == t["p7"]:
         def save_place_tickets(place, month, year, df):
             try:
                 content_str = df.to_json(orient="records")
-                # التحقق باستخدام عمود place بدلاً من id
                 existing = supabase.table("tickets_data").select("place").eq("place", place).eq("month", month).eq("year", int(year)).execute()
                 if existing.data and len(existing.data) > 0:
                     supabase.table("tickets_data").update({"content": content_str}).eq("place", place).eq("month", month).eq("year", int(year)).execute()
@@ -1620,7 +1621,6 @@ elif page == t["p7"]:
         save_place_tickets(selected_main_place, ticket_month, ticket_year, edited_tickets_df)
     with col_t2:
       st.metric("Gesamtsumme:", f"{total_tickets_sum:.2f} St.")
-
 # ---------------------------------------------------------
 # الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - مربوطة بالمدن
 # ---------------------------------------------------------
