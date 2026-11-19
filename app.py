@@ -1783,10 +1783,18 @@ elif page == t["p9"]:
   st.subheader("1. Hauptlager (70 Zeilen)")
 
   inventory_data = []
+  old_stock_map = {}
   try:
       res_inv = supabase.table("inventory").select("*").order("id").execute()
       if res_inv.data:
           inventory_data = res_inv.data
+          for item in inventory_data:
+              m_name = str(item.get("material") or "").strip()
+              if m_name:
+                  old_stock_map[m_name] = {
+                      "gesamt": int(item.get("gesamtbestand") or 0),
+                      "aktuell": int(item.get("aktueller_bestand") or 0)
+                  }
   except Exception as e:
       st.error(f"Fehler beim Laden des Lagers: {e}")
 
@@ -1827,11 +1835,18 @@ elif page == t["p9"]:
           for _, row in edited_inv_df.iterrows():
               mat_name = str(row["Materialname"]).strip()
               if mat_name and mat_name != "nan":
+                  ges_val = int(row["Gesamtbestand"]) if pd.notna(row["Gesamtbestand"]) else 0
+                  akt_val = int(row["Aktueller Bestand"]) if pd.notna(row["Aktueller Bestand"]) else 0
+
+                  # إذا تم إدخال Gesamtbestand وكان Aktueller Bestand صفراً ولم يكن له رصيد سابق محفوظ
+                  if akt_val == 0 and ges_val > 0 and mat_name not in old_stock_map:
+                      akt_val = ges_val
+
                   supabase.table("inventory").insert({
                       "material": mat_name,
                       "category": str(row["Kategorie"]).strip(),
-                      "gesamtbestand": int(row["Gesamtbestand"]) if pd.notna(row["Gesamtbestand"]) else 0,
-                      "aktueller_bestand": int(row["Aktueller Bestand"]) if pd.notna(row["Aktueller Bestand"]) else 0
+                      "gesamtbestand": ges_val,
+                      "aktueller_bestand": akt_val
                   }).execute()
           st.success("Hauptlager erfolgreich gespeichert!")
           st.rerun()
