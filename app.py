@@ -1790,15 +1790,14 @@ elif page == t["p9"]:
   except Exception as e:
       st.error(f"Fehler beim Laden des Lagers: {e}")
 
-  # تجهيز 70 سطراً (فارغة للإدخال اليدوي مع تعبئة المحفوظ مسبقاً)
   rows_list = []
   for i in range(70):
       if i < len(inventory_data):
           item = inventory_data[i]
           rows_list.append({
               "Nr.": i + 1,
-              "Materialname": item.get("material", ""),
-              "Kategorie": item.get("category", ""),
+              "Materialname": str(item.get("material") or "").strip(),
+              "Kategorie": str(item.get("category") or "").strip(),
               "Gesamtbestand": int(item.get("gesamtbestand") or 0),
               "Aktueller Bestand": int(item.get("aktueller_bestand") or 0)
           })
@@ -1817,22 +1816,30 @@ elif page == t["p9"]:
       inv_df,
       num_rows="fixed",
       use_container_width=True,
-      disabled=["Nr."],
+      disabled=["Nr.", "Aktueller Bestand"],
       key="main_inventory_70_table"
   )
 
   if st.button("💾 Hauptlager speichern", key="save_main_inv_btn"):
       try:
+          # جلب كل الكميات الموزعة حالياً على الأماكن لحساب المتبقي بدقة
+          distributed_map = {}
+          res_all_dist = supabase.table("place_inventory").select("material, menge").execute()
+          if res_all_dist.data:
+              for d_item in res_all_dist.data:
+                  m_key = str(d_item.get("material") or "").strip()
+                  distributed_map[m_key] = distributed_map.get(m_key, 0) + int(d_item.get("menge") or 0)
+
           supabase.table("inventory").delete().neq("id", 0).execute()
+          seen_materials = set()
+
           for _, row in edited_inv_df.iterrows():
               mat_name = str(row["Materialname"]).strip()
-              if mat_name and mat_name != "nan":
+              if mat_name and mat_name != "nan" and mat_name not in seen_materials:
+                  seen_materials.add(mat_name)
                   ges_val = int(row["Gesamtbestand"]) if pd.notna(row["Gesamtbestand"]) else 0
-                  akt_val = int(row["Aktueller Bestand"]) if pd.notna(row["Aktueller Bestand"]) else 0
-
-                  # تعبئة Aktueller Bestand تلقائياً من Gesamtbestand إذا كان صفراً
-                  if akt_val == 0 and ges_val > 0:
-                      akt_val = ges_val
+                  already_dist = distributed_map.get(mat_name, 0)
+                  akt_val = max(0, ges_val - already_dist)
 
                   supabase.table("inventory").insert({
                       "material": mat_name,
@@ -1840,7 +1847,7 @@ elif page == t["p9"]:
                       "gesamtbestand": ges_val,
                       "aktueller_bestand": akt_val
                   }).execute()
-          st.success("Hauptlager erfolgreich gespeichert!")
+          st.success("Hauptlager erfolgreich gespeichert und Bestände synchronisiert!")
           st.rerun()
       except Exception as e:
           st.error(f"Fehler beim Speichern: {e}")
@@ -1856,28 +1863,29 @@ elif page == t["p9"]:
   selected_objekt = st.selectbox("Objekt / Ort auswählen:", places_list, key="inv_place_select")
 
   if selected_objekt:
-      # جلب المواد المحفوظة في المخزن لاختيارها
-      available_materials = [
-          str(r["Materialname"]).strip() 
-          for _, r in edited_inv_df.iterrows() 
-          if str(r["Materialname"]).strip() and str(r["Materialname"]).strip() != "nan"
-      ]
+      # جلب المواد المحفوظة فعلياً في قاعدة البيانات فقط
+      saved_materials_map = {}
+      for item in inventory_data:
+          m_name = str(item.get("material") or "").strip()
+          if m_name:
+              saved_materials_map[m_name] = int(item.get("aktueller_bestand") or 0)
 
-      # نموذج إضافة مادة للمكان المختار مع خصمها تلقائياً من المخزن
+      material_options = [""] + [f"{m} (Verfügbar: {qty})" for m, qty in saved_materials_map.items()]
+
       with st.container():
           st.markdown(f"**Material an `{selected_objekt}` ausgeben:**")
           c1, c2, c3 = st.columns([2, 1, 1])
           with c1:
-              chosen_mat = st.selectbox("Material auswählen:", [""] + available_materials, key="dist_mat_select")
+              chosen_option = st.selectbox("Material auswählen:", material_options, key="dist_mat_select")
           with c2:
               dist_qty = st.number_input("Menge:", min_value=1, value=1, step=1, key="dist_qty_input")
           with c3:
               st.write("")
               st.write("")
               if st.button("➕ Hinzufügen & vom Lager abziehen", key="add_to_place_btn"):
-                  if chosen_mat:
+                  if chosen_option:
+                      chosen_mat = chosen_option.split(" (Verfügbar:")[0].strip()
                       try:
-                          # 1. التحقق من الكمية المتوفرة في Supabase وخصمها
                           res_m = supabase.table("inventory").select("*").eq("material", chosen_mat).execute()
                           if res_m.data:
                               db_item = res_m.data[0]
@@ -1888,7 +1896,6 @@ elif page == t["p9"]:
                                   new_stock = current_stock - int(dist_qty)
                                   supabase.table("inventory").update({"aktueller_bestand": new_stock}).eq("id", db_item["id"]).execute()
 
-                                  # 2. إضافة أو تحديث الكمية المستلمة في جدول المكان
                                   res_p = supabase.table("place_inventory").select("*").eq("place", selected_objekt).eq("material", chosen_mat).execute()
                                   if res_p.data:
                                       old_qty = int(res_p.data[0].get("menge") or 0)
