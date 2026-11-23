@@ -851,45 +851,64 @@ elif page == t["p2"]:
 
   if city_employees:
     st.subheader(f"Tägliche Stunden für: {daily_emp} ({daily_month} {daily_year})")
+    clean_emp_name = daily_emp.strip()
+
+    # جلب سجل الساعات اليومية مرة واحدة فقط لهذا العامل والشهر والسنة
+    raw_content_json = None
+    try:
+      existing_rows_res = (
+          supabase.table("daily_hours")
+          .select("content")
+          .eq("emp", clean_emp_name)
+          .eq("month", daily_month)
+          .eq("year", int(daily_year))
+          .limit(1)
+          .execute()
+      )
+      if existing_rows_res.data:
+        raw_content_json = existing_rows_res.data[0].get("content")
+    except Exception:
+      raw_content_json = None
 
     # ==========================================================
     # 💡 التحذير وحساب الساعات المتبقية للعامل هذا الشهر
     # ==========================================================
     try:
-        emp_max_limit = 160.0
-        emp_db_res = supabase.table("employees").select("max_hours").eq("name", daily_emp.strip()).execute()
-        if emp_db_res.data and emp_db_res.data[0].get("max_hours") is not None:
-            emp_max_limit = float(emp_db_res.data[0]["max_hours"])
+      emp_max_limit = 160.0
+      emp_db_res = (
+          supabase.table("employees")
+          .select("max_hours")
+          .eq("name", clean_emp_name)
+          .limit(1)
+          .execute()
+      )
+      if emp_db_res.data and emp_db_res.data[0].get("max_hours") is not None:
+        emp_max_limit = float(emp_db_res.data[0]["max_hours"])
 
-        emp_current_month_hours = 0.0
-        existing_rows_res = supabase.table("daily_hours").select("content").eq("emp", daily_emp).eq("month", daily_month).eq("year", int(daily_year)).execute()
-        if existing_rows_res.data:
-            content_json = existing_rows_res.data[0].get("content")
-            if content_json:
-                temp_df = pd.DataFrame(json.loads(content_json))
-                if "Gesamtstunden" in temp_df.columns:
-                    emp_current_month_hours = temp_df["Gesamtstunden"].astype(float).sum()
+      emp_current_month_hours = 0.0
+      if raw_content_json:
+        temp_df = pd.DataFrame(json.loads(raw_content_json))
+        if "Gesamtstunden" in temp_df.columns:
+          emp_current_month_hours = pd.to_numeric(temp_df["Gesamtstunden"], errors="coerce").fillna(0.0).sum()
 
-        remaining_hrs = emp_max_limit - emp_current_month_hours
+      remaining_hrs = emp_max_limit - emp_current_month_hours
 
-        if remaining_hrs <= 0:
-            st.error(f"🚨 تنبيه تجاوز الحد: العامل **{daily_emp}** استهلك كامل ساعاته الشهرية! (أنجز {emp_current_month_hours:.2f} من أصل {emp_max_limit} ساعة).")
-        elif remaining_hrs <= 15:
-            st.warning(f"⚠️ تنبيه قرب انتهاء الساعات: العامل **{daily_emp}** عمل {emp_current_month_hours:.2f} ساعة والمتبقي له **{remaining_hrs:.2f}** ساعة فقط.")
-        else:
-            st.info(f"💡 حالة ساعات العامل: أنجز {emp_current_month_hours:.2f} ساعة | متبقي له **{remaining_hrs:.2f}** ساعة لكي يصل إلى حده الأقصى ({emp_max_limit} ساعة).")
+      if remaining_hrs <= 0:
+        st.error(f"🚨 تنبيه تجاوز الحد: العامل **{daily_emp}** استهلك كامل ساعاته الشهرية! (أنجز {emp_current_month_hours:.2f} من أصل {emp_max_limit} ساعة).")
+      elif remaining_hrs <= 15:
+        st.warning(f"⚠️ تنبيه قرب انتهاء الساعات: العامل **{daily_emp}** عمل {emp_current_month_hours:.2f} ساعة والمتبقي له **{remaining_hrs:.2f}** ساعة فقط.")
+      else:
+        st.info(f"💡 حالة ساعات العامل: أنجز {emp_current_month_hours:.2f} ساعة | متبقي له **{remaining_hrs:.2f}** ساعة لكي يصل إلى حده الأقصى ({emp_max_limit} ساعة).")
     except Exception:
-        pass
+      pass
     # ==========================================================
 
-    # تحديث هيكل البيانات اليومية ليشمل 4 أماكن واستراحة خاصة بكل مكان
-    def load_custom_daily_hours(emp_name, month_str, year_val):
-      try:
-        res = supabase.table("daily_hours").select("content").eq("emp", emp_name).eq("month", month_str).eq("year", int(year_val)).execute()
-        if res.data and len(res.data) > 0:
-          data = json.loads(res.data[0]["content"])
+    def build_daily_hours_df(content_json):
+      if content_json:
+        try:
+          data = json.loads(content_json)
           df = pd.DataFrame(data)
-          
+
           if "Pause" in df.columns:
             for idx, val in enumerate(df["Pause"]):
               if pd.notna(val) and str(val).strip() != "" and str(val).strip() != "nan":
@@ -897,22 +916,14 @@ elif page == t["p2"]:
                   df.loc[idx, "Pause 1"] = val
             df = df.drop(columns=["Pause"])
 
-          # التأكد من وجود كافة الأعمدة للأماكن الأربعة (1 إلى 4)
           for i in range(1, 5):
-            if f"Ort {i}" not in df.columns:
-              df[f"Ort {i}"] = ""
-            if f"Beginn {i}" not in df.columns:
-              df[f"Beginn {i}"] = ""
-            if f"Ende {i}" not in df.columns:
-              df[f"Ende {i}"] = ""
-            if f"Pause {i}" not in df.columns:
-              df[f"Pause {i}"] = ""
-            if f"Hrs{i}" not in df.columns:
-              df[f"Hrs{i}"] = ""
-              
-          # ترتيب الأعمدة بشكل منظم للأماكن الأربعة
+            for col_prefix in ["Ort ", "Beginn ", "Ende ", "Pause ", "Hrs"]:
+              col_name = f"{col_prefix}{i}" if col_prefix != "Hrs" else f"Hrs{i}"
+              if col_name not in df.columns:
+                df[col_name] = ""
+
           cols_order = [
-              "Datum", 
+              "Datum",
               "Ort 1", "Beginn 1", "Ende 1", "Pause 1", "Hrs1",
               "Ort 2", "Beginn 2", "Ende 2", "Pause 2", "Hrs2",
               "Ort 3", "Beginn 3", "Ende 3", "Pause 3", "Hrs3",
@@ -921,33 +932,30 @@ elif page == t["p2"]:
           ]
           existing_cols = [c for c in cols_order if c in df.columns]
           other_cols = [c for c in df.columns if c not in existing_cols]
-          df = df[existing_cols + other_cols]
-          
-          return df
-      except Exception:
-        pass
-      
-      days_data = []
-      for day in range(1, 32):
-        days_data.append(
-            {
-                "Datum": str(day),
-                "Ort 1": "", "Beginn 1": "", "Ende 1": "", "Pause 1": "", "Hrs1": "",
-                "Ort 2": "", "Beginn 2": "", "Ende 2": "", "Pause 2": "", "Hrs2": "",
-                "Ort 3": "", "Beginn 3": "", "Ende 3": "", "Pause 3": "", "Hrs3": "",
-                "Ort 4": "", "Beginn 4": "", "Ende 4": "", "Pause 4": "", "Hrs4": "",
-                "Gesamtstunden": 0.0,
-            }
-        )
+          return df[existing_cols + other_cols]
+        except Exception:
+          pass
+
+      days_data = [
+          {
+              "Datum": str(day),
+              "Ort 1": "", "Beginn 1": "", "Ende 1": "", "Pause 1": "", "Hrs1": "",
+              "Ort 2": "", "Beginn 2": "", "Ende 2": "", "Pause 2": "", "Hrs2": "",
+              "Ort 3": "", "Beginn 3": "", "Ende 3": "", "Pause 3": "", "Hrs3": "",
+              "Ort 4": "", "Beginn 4": "", "Ende 4": "", "Pause 4": "", "Hrs4": "",
+              "Gesamtstunden": 0.0,
+          }
+          for day in range(1, 32)
+      ]
       return pd.DataFrame(days_data)
 
-    daily_df = load_custom_daily_hours(daily_emp, daily_month, daily_year)
+    daily_df = build_daily_hours_df(raw_content_json)
 
     edited_daily_df = st.data_editor(
         daily_df,
         num_rows="fixed",
         use_container_width=True,
-        key=f"daily_table_{daily_emp}_{daily_month}_{daily_year}",
+        key=f"daily_table_{clean_emp_name}_{daily_month}_{daily_year}",
         column_config={
             "Ort 1": st.column_config.SelectboxColumn("Ort 1", options=places_list),
             "Ort 2": st.column_config.SelectboxColumn("Ort 2", options=places_list),
@@ -961,17 +969,16 @@ elif page == t["p2"]:
     total_daily_sum = 0.0
     for index, row in edited_daily_df.iterrows():
       net_day_total = 0.0
-      
-      # حساب الساعات والاستراحة للأماكن الأربعة (1 إلى 4)
+
       for i in range(1, 5):
         b_str = str(row.get(f"Beginn {i}", "")).strip()
         e_str = str(row.get(f"Ende {i}", "")).strip()
         p_str = str(row.get(f"Pause {i}", "")).strip()
-        
+
         hrs = 0.0
         break_val = 0.0
 
-        if b_str and e_str and b_str != "nan" and e_str != "nan":
+        if b_str and e_str and b_str not in ("nan", "None") and e_str not in ("nan", "None"):
           for fmt in ("%H:%M", "%H.%M", "%H"):
             try:
               t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
@@ -981,7 +988,7 @@ elif page == t["p2"]:
 
               gh = (t2 - t1).total_seconds() / 3600
               if gh > 0:
-                if p_str and p_str != "nan" and p_str != "":
+                if p_str and p_str not in ("nan", "None", ""):
                   try:
                     break_val = float(p_str.replace(",", "."))
                   except Exception:
@@ -993,9 +1000,8 @@ elif page == t["p2"]:
 
         if break_val > 0:
           edited_daily_df.at[index, f"Pause {i}"] = str(break_val)
-        else:
-          if not p_str or p_str == "nan":
-            edited_daily_df.at[index, f"Pause {i}"] = ""
+        elif not p_str or p_str in ("nan", "None"):
+          edited_daily_df.at[index, f"Pause {i}"] = ""
 
         edited_daily_df.at[index, f"Hrs{i}"] = round(hrs, 2) if hrs > 0 else ""
         net_day_total += hrs
@@ -1006,14 +1012,15 @@ elif page == t["p2"]:
     st.markdown("---")
     col_d1, col_d2, col_d3 = st.columns([2, 1, 1])
     with col_d1:
-      pdf_daily_data = generate_daily_pdf(daily_emp, daily_month, daily_year, edited_daily_df, total_daily_sum)
-      st.download_button(t["pdf_btn"], pdf_daily_data, f"Tägliche_Stunden_{daily_emp}_{daily_month}_{daily_year}.pdf", "application/pdf", key="p2_pdf")
+      pdf_daily_data = generate_daily_pdf(clean_emp_name, daily_month, daily_year, edited_daily_df, total_daily_sum)
+      st.download_button(t["pdf_btn"], pdf_daily_data, f"Tägliche_Stunden_{clean_emp_name}_{daily_month}_{daily_year}.pdf", "application/pdf", key="p2_pdf")
     with col_d2:
       if st.button(t["save_btn"], key="p2_save"):
-        save_daily_emp_hours(daily_emp, daily_month, daily_year, edited_daily_df)
+        save_daily_emp_hours(clean_emp_name, daily_month, daily_year, edited_daily_df)
         st.success(t["success_msg"])
     with col_d3:
       st.metric(t["sum_label"], f"{total_daily_sum:.2f} St.")
+
 # ---------------------------------------------------------
 # الصفحة الثالثة: ملخص ساعات المواقع (Objekt-Stundenübersicht)
 # ---------------------------------------------------------
