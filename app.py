@@ -1250,26 +1250,38 @@ elif page == t["p5"]:
       
       if st.button("Stadtzuweisung speichern"):
         set_employee_city(selected_emp_for_city, assigned_city)
+        # تأكيد حفظ المدينة في جدول employees دون تصفير max_hours
+        try:
+            clean_emp = selected_emp_for_city.strip()
+            res_chk = supabase.table("employees").select("max_hours").eq("name", clean_emp).execute()
+            existing_max = res_chk.data[0].get("max_hours") if res_chk.data else None
+            payload_city = {"name": clean_emp, "city": assigned_city}
+            if existing_max is not None:
+                payload_city["max_hours"] = int(existing_max)
+            supabase.table("employees").upsert(payload_city, on_conflict="name").execute()
+        except Exception as e:
+            st.warning(f"Hinweis zur Datenbank-Synchronisierung: {e}")
         st.success(f"Mitarbeiter {selected_emp_for_city} wurde erfolgreich der Stadt {assigned_city} zugewiesen!")
         st.rerun()
 
       st.markdown("---")
 
       # ---------------------------------------------------------
-      # 2. قسم تعديل الساعات (اختيار العامل + خانة الساعات + زر حفظ الساعات - معدل ومحصن)
+      # 2. قسم تعديل الساعات (اختيار العامل + خانة الساعات + زر حفظ الساعات)
       # ---------------------------------------------------------
       st.subheader("Monatliches Stundenlimit bearbeiten")
       selected_emp_for_hours = st.selectbox("Mitarbeiter auswählen:", employees_list, key="assign_emp_hours")
-      
-      # جلب القيمة الحالية للساعات من قاعدة البيانات وتخزينها في session_state لتثبيتها
-      hours_key = f"db_hours_{selected_emp_for_hours}"
+      clean_name_hours = selected_emp_for_hours.strip()
+      hours_key = f"db_hours_{clean_name_hours}"
+
+      # جلب القيمة الحالية من قاعدة البيانات عند أول دخول للموظف
       if hours_key not in st.session_state:
           current_emp_max_hours = 160
           try:
-              res_emp_h = supabase.table("employees").select("max_hours").eq("name", selected_emp_for_hours.strip()).execute()
+              res_emp_h = supabase.table("employees").select("max_hours").eq("name", clean_name_hours).execute()
               if res_emp_h.data and res_emp_h.data[0].get("max_hours") is not None:
                   current_emp_max_hours = int(res_emp_h.data[0]["max_hours"])
-          except:
+          except Exception:
               pass
           st.session_state[hours_key] = current_emp_max_hours
 
@@ -1278,22 +1290,20 @@ elif page == t["p5"]:
           min_value=0, 
           value=int(st.session_state[hours_key]), 
           step=5, 
-          key=f"edit_hours_input_{selected_emp_for_hours}"
+          key=f"edit_hours_input_{clean_name_hours}"
       )
 
       if st.button("Stundenlimit speichern"):
         try:
-            clean_name = selected_emp_for_hours.strip()
+            emp_city_val = get_employee_city(clean_name_hours)
+            supabase.table("employees").upsert({
+                "name": clean_name_hours,
+                "max_hours": int(new_assigned_hours),
+                "city": emp_city_val
+            }, on_conflict="name").execute()
             
-            # محاولة التحديث في Supabase مع تنظيف الاسم
-            res_update = supabase.table("employees").update({"max_hours": int(new_assigned_hours)}).eq("name", clean_name).execute()
-            
-            # إذا لم يكن الموظف موجوداً كصف في جدول employees، نقوم بإنشائه تلقائياً لمنع ظهور NULL
-            if not res_update.data:
-                supabase.table("employees").insert({"name": clean_name, "max_hours": int(new_assigned_hours)}).execute()
-            
-            st.session_state[hours_key] = int(new_assigned_hours)  # تحديث القيمة في الذاكرة لتثبيتها فوراً
-            st.success(f"Das Stundenlimit für {clean_name} wurde erfolgreich auf {int(new_assigned_hours)} Std. aktualisiert!")
+            st.session_state[hours_key] = int(new_assigned_hours)
+            st.success(f"Das Stundenlimit für {clean_name_hours} wurde erfolgreich auf {int(new_assigned_hours)} Std. aktualisiert!")
             st.rerun()
         except Exception as e:
             st.error(f"Fehler beim Speichern: {e}")
@@ -1308,21 +1318,23 @@ elif page == t["p5"]:
     max_hours = st.number_input("Maximalstunden pro Monat:", min_value=0, value=160, step=5, key="new_emp_max_hours")
     
     if st.button("Mitarbeiter hinzufügen", key="add_emp_btn"):
-      if new_emp_name and new_emp_name not in employees_list:
-        employees_list.append(new_emp_name)
+      clean_new_emp = new_emp_name.strip()
+      if clean_new_emp and clean_new_emp not in employees_list:
+        employees_list.append(clean_new_emp)
         save_employees(employees_list)
-        set_employee_city(new_emp_name, default_emp_city)
+        set_employee_city(clean_new_emp, default_emp_city)
         
         try:
-            supabase.table("employees").insert({
-                "name": new_emp_name.strip(), 
+            supabase.table("employees").upsert({
+                "name": clean_new_emp, 
                 "max_hours": int(max_hours), 
                 "city": default_emp_city
-            }).execute()
-        except:
-            pass
+            }, on_conflict="name").execute()
+            st.session_state[f"db_hours_{clean_new_emp}"] = int(max_hours)
+        except Exception as e:
+            st.warning(f"Mitarbeiter lokal gespeichert, aber DB-Eintrag prüfen: {e}")
         
-        st.success(f"Mitarbeiter {new_emp_name} erfolgreich hinzugefügt!")
+        st.success(f"Mitarbeiter {clean_new_emp} erfolgreich hinzugefügt!")
         st.rerun()
 
     st.markdown("---")
@@ -1362,6 +1374,7 @@ elif page == t["p5"]:
           st.rerun()
         else:
           st.warning("Es muss mindestens eine Stadt bleiben.")
+
 # ---------------------------------------------------------
 # الصفحة السادسة: ملخص الأشهر (Monatsübersicht) - مع خيار "جميع المدن"
 # ---------------------------------------------------------
