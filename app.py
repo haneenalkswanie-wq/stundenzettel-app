@@ -1257,15 +1257,12 @@ elif page == t["p5"]:
       
       if st.button("Stadtzuweisung speichern"):
         set_employee_city(selected_emp_for_city, assigned_city)
-        # تأكيد حفظ المدينة في جدول employees دون تصفير max_hours
         try:
             clean_emp = selected_emp_for_city.strip()
-            res_chk = supabase.table("employees").select("max_hours").eq("name", clean_emp).execute()
-            existing_max = res_chk.data[0].get("max_hours") if res_chk.data else None
-            payload_city = {"name": clean_emp, "city": assigned_city}
-            if existing_max is not None:
-                payload_city["max_hours"] = int(existing_max)
-            supabase.table("employees").upsert(payload_city, on_conflict="name").execute()
+            supabase.table("employees").upsert({
+                "name": clean_emp,
+                "city": assigned_city
+            }, on_conflict="name").execute()
         except Exception as e:
             st.warning(f"Hinweis zur Datenbank-Synchronisierung: {e}")
         st.success(f"Mitarbeiter {selected_emp_for_city} wurde erfolgreich der Stadt {assigned_city} zugewiesen!")
@@ -1281,11 +1278,10 @@ elif page == t["p5"]:
       clean_name_hours = selected_emp_for_hours.strip()
       hours_key = f"db_hours_{clean_name_hours}"
 
-      # جلب القيمة الحالية من قاعدة البيانات عند أول دخول للموظف
       if hours_key not in st.session_state:
           current_emp_max_hours = 160
           try:
-              res_emp_h = supabase.table("employees").select("max_hours").eq("name", clean_name_hours).execute()
+              res_emp_h = supabase.table("employees").select("max_hours").eq("name", clean_name_hours).limit(1).execute()
               if res_emp_h.data and res_emp_h.data[0].get("max_hours") is not None:
                   current_emp_max_hours = int(res_emp_h.data[0]["max_hours"])
           except Exception:
@@ -1317,12 +1313,11 @@ elif page == t["p5"]:
 
     st.markdown("---")
     # ---------------------------------------------------------
-    # 3. إضافة عامل جديد
+    # 3. إضافة عامل جديد (الاسم + المدينة فقط بدون الساعات)
     # ---------------------------------------------------------
     st.subheader("Neuen Mitarbeiter hinzufügen")
     new_emp_name = st.text_input("Name des Mitarbeiters:")
     default_emp_city = st.selectbox("Hauptstadt für neuen Mitarbeiter:", cities_list, key="new_emp_city")
-    max_hours = st.number_input("Maximalstunden pro Monat:", min_value=0, value=160, step=5, key="new_emp_max_hours")
     
     if st.button("Mitarbeiter hinzufügen", key="add_emp_btn"):
       clean_new_emp = new_emp_name.strip()
@@ -1333,11 +1328,9 @@ elif page == t["p5"]:
         
         try:
             supabase.table("employees").upsert({
-                "name": clean_new_emp, 
-                "max_hours": int(max_hours), 
+                "name": clean_new_emp,
                 "city": default_emp_city
             }, on_conflict="name").execute()
-            st.session_state[f"db_hours_{clean_new_emp}"] = int(max_hours)
         except Exception as e:
             st.warning(f"Mitarbeiter lokal gespeichert, aber DB-Eintrag prüfen: {e}")
         
@@ -1381,7 +1374,6 @@ elif page == t["p5"]:
           st.rerun()
         else:
           st.warning("Es muss mindestens eine Stadt bleiben.")
-
 # ---------------------------------------------------------
 # الصفحة السادسة: ملخص الأشهر (Monatsübersicht) - مع خيار "جميع المدن"
 # ---------------------------------------------------------
