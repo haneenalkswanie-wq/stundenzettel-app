@@ -1961,8 +1961,14 @@ elif page == t["p10"]:
   st.title("👕 Clean & Care GmbH - Arbeitskleidung")
   st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
+  shoe_and_cloth_sizes = [
+      "",
+      "XS", "S", "M", "L", "XL", "XXL", "XXXL", "4XL",
+      "36", "38", "40", "41", "42", "43", "44", "45", "46", "48"
+  ]
+
   # =========================================================
-  # 1. جدول مخزون الملابس الرئيسي (مع المقاسات)
+  # 1. جدول مخزون الملابس الرئيسي (مع المقاسات ومقاسات الأحذية 40-45)
   # =========================================================
   st.subheader("1. Kleiderlager (Bestand nach Größe)")
 
@@ -2004,7 +2010,7 @@ elif page == t["p10"]:
       key="clothing_inventory_table",
       column_config={
           "Größe": st.column_config.SelectboxColumn(
-              "Größe", options=["", "XS", "S", "M", "L", "XL", "XXL", "XXXL", "36", "38", "40", "42", "44", "46", "48"]
+              "Größe", options=shoe_and_cloth_sizes
           )
       }
   )
@@ -2049,7 +2055,7 @@ elif page == t["p10"]:
   st.markdown("---")
 
   # =========================================================
-  # 2. تسليم الملابس للعمال حسب المدينة والعامل
+  # 2. تسليم الملابس والأحذية للعمال حسب المدينة والعامل
   # =========================================================
   st.subheader("2. Kleidung an Mitarbeiter ausgeben")
 
