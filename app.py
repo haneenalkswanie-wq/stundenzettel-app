@@ -1967,97 +1967,110 @@ elif page == t["p10"]:
       "36", "38", "40", "41", "42", "43", "44", "45", "46", "48"
   ]
 
-  # =========================================================
-  # 1. جدول مخزون الملابس الرئيسي (مع المقاسات ومقاسات الأحذية 40-45)
-  # =========================================================
-  st.subheader("1. Kleiderlager (Bestand nach Größe)")
-
-  clothing_data = []
-  try:
-    res_cloth = supabase.table("clothing_inventory").select("*").order("id").execute()
-    if res_cloth.data:
-      clothing_data = res_cloth.data
-  except Exception as e:
-    st.error(f"Fehler beim Laden des Kleiderlagers: {e}")
-
-  cloth_rows = []
-  for i in range(40):
-    if i < len(clothing_data):
-      item = clothing_data[i]
-      cloth_rows.append({
-          "Nr.": i + 1,
-          "Kleidungsstück": str(item.get("item_name") or "").strip(),
-          "Größe": str(item.get("size") or "").strip(),
-          "Gesamtbestand": int(item.get("gesamtbestand") or 0),
-          "Aktueller Bestand": int(item.get("aktueller_bestand") or 0),
-      })
-    else:
-      cloth_rows.append({
-          "Nr.": i + 1,
-          "Kleidungsstück": "",
-          "Größe": "",
-          "Gesamtbestand": 0,
-          "Aktueller Bestand": 0,
-      })
-
-  cloth_df = pd.DataFrame(cloth_rows)
-
-  edited_cloth_df = st.data_editor(
-      cloth_df,
-      num_rows="fixed",
-      use_container_width=True,
-      disabled=["Nr.", "Aktueller Bestand"],
-      key="clothing_inventory_table",
-      column_config={
-          "Größe": st.column_config.SelectboxColumn(
-              "Größe", options=shoe_and_cloth_sizes
-          )
-      }
-  )
-
-  if st.button("💾 Kleiderlager speichern", key="save_clothing_btn"):
+  # تحميل بيانات المخزون مرة واحدة في session_state لتسريع التنقل بين المدن والعمال
+  if "cloth_inv_cache" not in st.session_state:
     try:
-      dist_cloth_map = {}
-      res_all_emp_cloth = supabase.table("employee_clothing").select("item_name, size, menge").execute()
-      if res_all_emp_cloth.data:
-        for d in res_all_emp_cloth.data:
-          k = (str(d.get("item_name") or "").strip(), str(d.get("size") or "").strip())
-          dist_cloth_map[k] = dist_cloth_map.get(k, 0) + int(d.get("menge") or 0)
-
-      supabase.table("clothing_inventory").delete().neq("id", 0).execute()
-      seen_items = set()
-      to_insert = []
-
-      for _, row in edited_cloth_df.iterrows():
-        c_name = str(row["Kleidungsstück"]).strip()
-        c_size = str(row["Größe"]).strip()
-        if c_name and c_name != "nan" and (c_name, c_size) not in seen_items:
-          seen_items.add((c_name, c_size))
-          ges_val = int(row["Gesamtbestand"]) if pd.notna(row["Gesamtbestand"]) else 0
-          already_given = dist_cloth_map.get((c_name, c_size), 0)
-          akt_val = max(0, ges_val - already_given)
-
-          to_insert.append({
-              "item_name": c_name,
-              "size": c_size,
-              "gesamtbestand": ges_val,
-              "aktueller_bestand": akt_val
-          })
-
-      if to_insert:
-        supabase.table("clothing_inventory").insert(to_insert).execute()
-
-      st.success("Kleiderlager erfolgreich gespeichert!")
-      st.rerun()
+      res_cloth = supabase.table("clothing_inventory").select("*").order("id").execute()
+      st.session_state["cloth_inv_cache"] = res_cloth.data if res_cloth.data else []
     except Exception as e:
-      st.error(f"Fehler beim Speichern: {e}")
+      st.error(f"Fehler beim Laden des Kleiderlagers: {e}")
+      st.session_state["cloth_inv_cache"] = []
+
+  clothing_data = st.session_state["cloth_inv_cache"]
+
+  # =========================================================
+  # 1. جدول مخزون الملابس الرئيسي (مع المقاسات ومقاسات الأحذية 40-45 و 4XL)
+  # =========================================================
+  with st.expander("1. Kleiderlager (Bestand nach Größe)", expanded=True):
+    cloth_rows = []
+    for i in range(40):
+      if i < len(clothing_data):
+        item = clothing_data[i]
+        cloth_rows.append({
+            "Nr.": i + 1,
+            "Kleidungsstück": str(item.get("item_name") or "").strip(),
+            "Größe": str(item.get("size") or "").strip(),
+            "Gesamtbestand": int(item.get("gesamtbestand") or 0),
+            "Aktueller Bestand": int(item.get("aktueller_bestand") or 0),
+        })
+      else:
+        cloth_rows.append({
+            "Nr.": i + 1,
+            "Kleidungsstück": "",
+            "Größe": "",
+            "Gesamtbestand": 0,
+            "Aktueller Bestand": 0,
+        })
+
+    cloth_df = pd.DataFrame(cloth_rows)
+
+    edited_cloth_df = st.data_editor(
+        cloth_df,
+        num_rows="fixed",
+        use_container_width=True,
+        disabled=["Nr.", "Aktueller Bestand"],
+        key="clothing_inventory_table",
+        column_config={
+            "Größe": st.column_config.SelectboxColumn(
+                "Größe", options=shoe_and_cloth_sizes
+            )
+        }
+    )
+
+    if st.button("💾 Kleiderlager speichern", key="save_clothing_btn"):
+      try:
+        dist_cloth_map = {}
+        res_all_emp_cloth = supabase.table("employee_clothing").select("item_name, size, menge").execute()
+        if res_all_emp_cloth.data:
+          for d in res_all_emp_cloth.data:
+            k = (str(d.get("item_name") or "").strip(), str(d.get("size") or "").strip())
+            dist_cloth_map[k] = dist_cloth_map.get(k, 0) + int(d.get("menge") or 0)
+
+        seen_items = set()
+        to_insert = []
+
+        for _, row in edited_cloth_df.iterrows():
+          c_name = str(row["Kleidungsstück"]).strip()
+          c_size = str(row["Größe"]).strip()
+          if c_name and c_name != "nan" and (c_name, c_size) not in seen_items:
+            seen_items.add((c_name, c_size))
+            ges_val = int(row["Gesamtbestand"]) if pd.notna(row["Gesamtbestand"]) else 0
+            already_given = dist_cloth_map.get((c_name, c_size), 0)
+            akt_val = max(0, ges_val - already_given)
+
+            to_insert.append({
+                "item_name": c_name,
+                "size": c_size,
+                "gesamtbestand": ges_val,
+                "aktueller_bestand": akt_val
+            })
+
+        supabase.table("clothing_inventory").delete().neq("id", 0).execute()
+        if to_insert:
+          res_inserted = supabase.table("clothing_inventory").insert(to_insert).execute()
+          st.session_state["cloth_inv_cache"] = res_inserted.data if res_inserted.data else []
+        else:
+          st.session_state["cloth_inv_cache"] = []
+
+        st.success("Kleiderlager erfolgreich gespeichert!")
+        st.rerun()
+      except Exception as e:
+        st.error(f"Fehler beim Speichern: {e}")
 
   st.markdown("---")
 
   # =========================================================
-  # 2. تسليم الملابس والأحذية للعمال حسب المدينة والعامل
+  # 2. تسليم الملابس والأحذية للعمال حسب المدينة والعامل (سريع)
   # =========================================================
   st.subheader("2. Kleidung an Mitarbeiter ausgeben")
+
+  if "all_emp_cloth_cache" not in st.session_state:
+    try:
+      res_all_ec = supabase.table("employee_clothing").select("*").order("id", desc=True).execute()
+      st.session_state["all_emp_cloth_cache"] = res_all_ec.data if res_all_ec.data else []
+    except Exception as e:
+      st.error(f"Fehler beim Laden der Mitarbeiterkleidung: {e}")
+      st.session_state["all_emp_cloth_cache"] = []
 
   cities_list = [""] + load_cities()
   selected_city_cloth = st.selectbox("Stadt auswählen:", cities_list, key="cloth_city_select")
@@ -2104,15 +2117,23 @@ elif page == t["p10"]:
                 new_stock = current_stock - int(cloth_qty)
                 supabase.table("clothing_inventory").update({"aktueller_bestand": new_stock}).eq("id", db_item["id"]).execute()
 
-                supabase.table("employee_clothing").insert({
+                new_rec = {
                     "employee_name": clean_emp,
                     "city": selected_city_cloth,
                     "item_name": db_item["item_name"],
                     "size": db_item["size"],
                     "menge": int(cloth_qty),
                     "ausgabedatum": issue_date.strftime("%d.%m.%Y")
-                }).execute()
+                }
+                supabase.table("employee_clothing").insert(new_rec).execute()
 
+                # تحديث الكاش محلياً للمخزون والملابس المسلمة بدون إعادة تحميل كاملة
+                for cached_item in st.session_state.get("cloth_inv_cache", []):
+                  if cached_item.get("id") == db_item.get("id"):
+                    cached_item["aktueller_bestand"] = new_stock
+                    break
+
+                st.session_state["all_emp_cloth_cache"].insert(0, new_rec)
                 st.success(f"{cloth_qty}x {db_item['item_name']} ({db_item['size']}) an {clean_emp} ausgegeben!")
                 st.rerun()
               else:
@@ -2121,13 +2142,13 @@ elif page == t["p10"]:
               st.error(f"Fehler bei der Ausgabe: {e}")
 
       st.markdown(f"**Bereits erhaltene Kleidung von `{clean_emp}`:**")
-      try:
-        res_emp_items = supabase.table("employee_clothing").select("*").eq("employee_name", clean_emp).order("id", desc=True).execute()
-        if res_emp_items.data:
-          emp_c_df = pd.DataFrame(res_emp_items.data)[["item_name", "size", "menge", "ausgabedatum"]]
-          emp_c_df.columns = ["Kleidungsstück", "Größe", "Menge", "Datum"]
-          st.dataframe(emp_c_df, use_container_width=True, hide_index=True)
-        else:
-          st.info("Dieser Mitarbeiter hat noch keine Arbeitskleidung erhalten.")
-      except Exception as e:
-        st.error(f"Fehler beim Laden der Mitarbeiterkleidung: {e}")
+      emp_items = [
+          r for r in st.session_state.get("all_emp_cloth_cache", [])
+          if str(r.get("employee_name") or "").strip() == clean_emp
+      ]
+      if emp_items:
+        emp_c_df = pd.DataFrame(emp_items)[["item_name", "size", "menge", "ausgabedatum"]]
+        emp_c_df.columns = ["Kleidungsstück", "Größe", "Menge", "Datum"]
+        st.dataframe(emp_c_df, use_container_width=True, hide_index=True)
+      else:
+        st.info("Dieser Mitarbeiter hat noch keine Arbeitskleidung erhalten.")
