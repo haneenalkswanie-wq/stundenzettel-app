@@ -392,6 +392,7 @@ if not is_arabic:
         "p7": "🎫 Einsatz-Tickets",
         "p8": "🚆 Zug-Fahrten (Züge)",
         "p9": "📦 Lager & Material",
+        "p10": "👕 Arbeitskleidung",
         "emp_label": "Mitarbeiter wählen:",
         "month_label": "Monat auswählen:",
         "year_label": "Jahr auswählen:",
@@ -420,6 +421,10 @@ else:
         "p6": "📅 ملخص الأشهر (Monatsübersicht)",
         "p7": "🎫 تذاكر المهام (Einsatz-Tickets)",
         "p8": "🚆 جدول القطارات (Zug-Fahrten)",
+        "p7": "🎫 Einsatz-Tickets",
+        "p8": "🚆 Zug-Fahrten (Züge)",
+        "p9": "📦 Lager & Material",
+        "p10": "👕 Arbeitskleidung",
         "emp_label": "Mitarbeiter wählen:",
         "month_label": "Monat auswählen:",
         "year_label": "Jahr auswählen:",
@@ -450,6 +455,7 @@ page = st.sidebar.radio(
         t["p7"],
         t["p8"],
         t["p9"],
+        t["p10"],
     ],
 )
 
@@ -1942,3 +1948,259 @@ elif page == t["p9"]:
               st.info("Für dieses Objekt wurden noch keine Materialien eingetragen.")
       except Exception as e:
           st.error(f"Fehler beim Laden der Objektdaten: {e}")
+
+
+#---------------------------------------------------
+#kleidung
+#---------------------------------------------------
+
+elif page == t["p10"]:
+  import pandas as pd
+  from datetime import date
+
+  st.title("👕 Clean & Care GmbH - Arbeitskleidung")
+  st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
+
+  # =========================================================
+  # 1. جدول مخزون الملابس الرئيسي (مع المقاسات)
+  # =========================================================
+  st.subheader("1. Kleiderlager (Bestand nach Größe)")
+
+  clothing_data = []
+  try:
+    res_cloth = supabase.table("clothing_inventory").select("*").order("id").execute()
+    if res_cloth.data:
+      clothing_data = res_cloth.data
+  except Exception as e:
+    st.error(f"Fehler beim Laden des Kleiderlagers: {e}")
+
+  cloth_rows = []
+  for i in range(40):
+    if i < len(clothing_data):
+      item = clothing_data[i]
+      cloth_rows.append({
+          "Nr.": i + 1,
+          "Kleidungsstück": str(item.get("item_name") or "").strip(),
+          "Größe": str(item.get("size") or "").strip(),
+          "Gesamtbestand": int(item.get("gesamtbestand") or 0),
+          "Aktueller Bestand": int(item.get("aktueller_bestand") or 0),
+      })
+    else:
+      cloth_rows.append({
+          "Nr.": i + 1,
+          "Kleidungsstück": "",
+          "Größe": "",
+          "Gesamtbestand": 0,
+          "Aktueller Bestand": 0,
+      })
+
+  cloth_df = pd.DataFrame(cloth_rows)
+
+  edited_cloth_df = st.data_editor(
+      cloth_df,
+      num_rows="fixed",
+      use_container_width=True,
+      disabled=["Nr.", "Aktueller Bestand"],
+      key="clothing_inventory_table",
+      column_config={
+          "Größe": st.column_config.SelectboxColumn(
+              "Größe", options=["", "XS", "S", "M", "L", "XL", "XXL", "XXXL", "36", "38", "40", "42", "44", "46", "48"]
+          )
+      }
+  )
+
+  if st.button("💾 Kleiderlager speichern", key="save_clothing_btn"):
+    try:
+      dist_cloth_map = {}
+      res_all_emp_cloth = supabase.table("employee_clothing").select("item_name, size, menge").execute()
+      if res_all_emp_cloth.data:
+        for d in res_all_emp_cloth.data:
+          k = (str(d.get("item_name") or "").strip(), str(d.get("size") or "").strip())
+          dist_cloth_map[k] = dist_cloth_map.get(k, 0) + int(d.get("menge") or 0)
+
+      supabase.table("clothing_inventory").delete().neq("id", 0).execute()
+      seen_items = set()
+      to_insert = []
+
+      for _, row in edited_cloth_df.iterrows():
+        c_name = str(row["Kleidungsstück"]).strip()
+        c_size = str(row["Größe"]).strip()
+        if c_name and c_name != "nan" and (c_name, c_size) not in seen_items:
+          seen_items.add((c_name, c_size))
+          ges_val = int(row["Gesamtbestand"]) if pd.notna(row["Gesamtbestand"]) else 0
+          already_given = dist_cloth_map.get((c_name, c_size), 0)
+          akt_val = max(0, ges_val - already_given)
+
+          to_insert.append({
+              "item_name": c_name,
+              "size": c_size,
+              "gesamtbestand": ges_val,
+              "aktueller_bestand": akt_val
+          })
+
+      if to_insert:
+        supabase.table("clothing_inventory").insert(to_insert).execute()
+
+      st.success("Kleiderlager erfolgreich gespeichert!")
+      st.rerun()
+    except Exception as e:
+      st.error(f"Fehler beim Speichern: {e}")
+
+  st.markdown("---")
+
+  # =========================================================
+  # 2. جدول تسليم الملابس للعمال (قائمة منسدلة للمدن + قائمة للعمال)
+  # =========================================================
+  st.subheader("2. Kleidung an Mitarbeiter ausgeben (Tabelle)")
+
+  employees_list = load_employees()
+  cities_list = load_cities()
+
+  # تجهيز خيارات القطع والمقاسات المتوفرة في المخزن
+  cloth_options = [""]
+  cloth_lookup = {}
+  for item in clothing_data:
+    c_name = str(item.get("item_name") or "").strip()
+    c_size = str(item.get("size") or "").strip()
+    c_qty = int(item.get("aktueller_bestand") or 0)
+    if c_name:
+      label = f"{c_name} | Größe: {c_size} (Verfügbar: {c_qty})"
+      cloth_options.append(label)
+      cloth_lookup[label] = item
+
+  # جلب السجلات المحفوظة مسبقاً للعمال
+  saved_emp_cloth = []
+  try:
+    res_ec = supabase.table("employee_clothing").select("*").order("id").execute()
+    if res_ec.data:
+      saved_emp_cloth = res_ec.data
+  except Exception as e:
+    st.error(f"Fehler beim Laden der Ausgabetabelle: {e}")
+
+  # مطابقة الاسم والمقاس مع التسمية الظاهرة في القائمة المنسدلة
+  item_size_to_label = {}
+  for lbl, obj in cloth_lookup.items():
+    item_size_to_label[(str(obj["item_name"]).strip(), str(obj["size"]).strip())] = lbl
+
+  emp_cloth_rows = []
+  for rec in saved_emp_cloth:
+    i_name = str(rec.get("item_name") or "").strip()
+    i_size = str(rec.get("size") or "").strip()
+    emp_name_val = str(rec.get("employee_name") or "").strip()
+    city_val = str(rec.get("city") or "").strip() or get_employee_city(emp_name_val)
+    lbl_match = item_size_to_label.get((i_name, i_size), f"{i_name} | Größe: {i_size}" if i_name else "")
+
+    emp_cloth_rows.append({
+        "Stadt": city_val if city_val in cities_list else (cities_list[0] if cities_list else ""),
+        "Mitarbeiter": emp_name_val if emp_name_val in employees_list else "",
+        "Kleidungsstück & Größe": lbl_match,
+        "Menge": int(rec.get("menge") or 1),
+        "Datum": str(rec.get("ausgabedatum") or date.today().strftime("%d.%m.%Y")),
+    })
+
+  # إضافة سطر فارغ جاهز للإدخال المباشر في نهاية الجدول
+  emp_cloth_rows.append({
+      "Stadt": cities_list[0] if cities_list else "",
+      "Mitarbeiter": "",
+      "Kleidungsstück & Größe": "",
+      "Menge": 1,
+      "Datum": date.today().strftime("%d.%m.%Y"),
+  })
+
+  emp_cloth_df = pd.DataFrame(emp_cloth_rows)
+
+  # توحيد خيارات العمود لتشمل أي قطعة محفوظة مسبقاً حتى لو نفد رصيدها
+  all_select_options = list(dict.fromkeys(cloth_options + [r["Kleidungsstück & Größe"] for r in emp_cloth_rows if r["Kleidungsstück & Größe"]]))
+
+  edited_emp_cloth_df = st.data_editor(
+      emp_cloth_df,
+      num_rows="dynamic",
+      use_container_width=True,
+      key="emp_clothing_assignment_table",
+      column_config={
+          "Stadt": st.column_config.SelectboxColumn(
+              "Stadt",
+              options=cities_list,
+              required=True,
+          ),
+          "Mitarbeiter": st.column_config.SelectboxColumn(
+              "Mitarbeiter",
+              options=[""] + employees_list,
+              required=True,
+          ),
+          "Kleidungsstück & Größe": st.column_config.SelectboxColumn(
+              "Kleidungsstück & Größe",
+              options=all_select_options,
+              required=True,
+          ),
+          "Menge": st.column_config.NumberColumn(
+              "Menge",
+              min_value=1,
+              step=1,
+              default=1,
+          ),
+          "Datum": st.column_config.TextColumn("Datum"),
+      }
+  )
+
+  if st.button("💾 Ausgabe speichern & Bestand aktualisieren", key="save_emp_cloth_table_btn"):
+    try:
+      # تجميع الكميات الجديدة المخصصة لكل قطعة ومقاس للتحقق من توفرها في المخزون الكلي
+      new_totals_needed = {}
+      valid_rows_to_save = []
+
+      for _, row in edited_emp_cloth_df.iterrows():
+        emp_n = str(row.get("Mitarbeiter") or "").strip()
+        city_n = str(row.get("Stadt") or "").strip()
+        cloth_lbl = str(row.get("Kleidungsstück & Größe") or "").strip()
+        qty_v = int(row.get("Menge") or 0) if pd.notna(row.get("Menge")) else 0
+        date_v = str(row.get("Datum") or date.today().strftime("%d.%m.%Y")).strip()
+
+        if emp_n and emp_n != "nan" and cloth_lbl and cloth_lbl != "nan" and qty_v > 0:
+          # استخراج اسم القطعة والمقاس من النص
+          clean_part = cloth_lbl.split(" (Verfügbar:")[0].strip()
+          if " | Größe: " in clean_part:
+            p_name, p_size = clean_part.split(" | Größe: ", 1)
+          else:
+            p_name, p_size = clean_part, ""
+
+          p_name = p_name.strip()
+          p_size = p_size.strip()
+
+          new_totals_needed[(p_name, p_size)] = new_totals_needed.get((p_name, p_size), 0) + qty_v
+          valid_rows_to_save.append({
+              "employee_name": emp_n,
+              "city": city_n,
+              "item_name": p_name,
+              "size": p_size,
+              "menge": qty_v,
+              "ausgabedatum": date_v
+          })
+
+      # التحقق من أن إجمالي الكميات لا يتجاوز Gesamtbestand في المخزون
+      stock_error = False
+      inv_updates = []
+      for item in clothing_data:
+        k = (str(item.get("item_name") or "").strip(), str(item.get("size") or "").strip())
+        ges_b = int(item.get("gesamtbestand") or 0)
+        needed = new_totals_needed.get(k, 0)
+        if needed > ges_b:
+          st.error(f"Nicht genug Bestand für {k[0]} (Größe {k[1]}): Benötigt {needed}, Gesamtbestand nur {ges_b}!")
+          stock_error = True
+        else:
+          inv_updates.append((item["id"], ges_b - needed))
+
+      if not stock_error:
+        # حفظ جدول تسليم العمال دفعة واحدة
+        supabase.table("employee_clothing").delete().neq("id", 0).execute()
+        if valid_rows_to_save:
+          supabase.table("employee_clothing").insert(valid_rows_to_save).execute()
+
+        # تحديث الأرصدة المتبقية في جدول مخزون الملابس
+        for inv_id, new_akt in inv_updates:
+          supabase.table("clothing_inventory").update({"aktueller_bestand": new_akt}).eq("id", inv_id).execute()
+
+        st.success("Kleidungsausgabe erfolgreich gespeichert und Lagerbestand aktualisiert!")
+        st.rerun()
+    except Exception as e:
+      st.error(f"Fehler beim Speichern der Ausgabe: {e}")
