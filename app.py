@@ -571,24 +571,25 @@ def generate_daily_pdf(emp_name, month_str, year_val, df, total_hours):
   elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 10))
   
-  # أعمدة الجدول المحدثة لتشمل الاستراحة لكل مكان
-  table_data = [["Tag", "Ort 1", "Std 1", "Pause 1", "Ort 2", "Std 2", "Pause 2", "Ort 3", "Std 3", "Pause 3", "Gesamt"]]
+  # أعمدة الجدول المحدثة لتشمل المكان الرابع والاستراحة لكل مكان
+  table_data = [["Tag", "Ort 1", "Std 1", "Pause 1", "Ort 2", "Std 2", "Pause 2", "Ort 3", "Std 3", "Pause 3", "Ort 4", "Std 4", "Pause 4", "Gesamt"]]
   for _, row in df.iterrows():
     table_data.append([
         str(row["Datum"]),
-        str(row["Ort 1"] if pd.notna(row["Ort 1"]) else ""), str(row.get("Hrs1", "")), str(row.get("Pause 1", "")),
-        str(row["Ort 2"] if pd.notna(row["Ort 2"]) else ""), str(row.get("Hrs2", "")), str(row.get("Pause 2", "")),
-        str(row["Ort 3"] if pd.notna(row["Ort 3"]) else ""), str(row.get("Hrs3", "")), str(row.get("Pause 3", "")),
+        str(row["Ort 1"] if pd.notna(row.get("Ort 1")) else ""), str(row.get("Hrs1", "")), str(row.get("Pause 1", "")),
+        str(row["Ort 2"] if pd.notna(row.get("Ort 2")) else ""), str(row.get("Hrs2", "")), str(row.get("Pause 2", "")),
+        str(row["Ort 3"] if pd.notna(row.get("Ort 3")) else ""), str(row.get("Hrs3", "")), str(row.get("Pause 3", "")),
+        str(row["Ort 4"] if pd.notna(row.get("Ort 4")) else ""), str(row.get("Hrs4", "")), str(row.get("Pause 4", "")),
         str(row["Gesamtstunden"])
     ])
-  table_data.append(["Summe:", "", "", "", "", "", "", "", "", "", f"{total_hours:.2f} St."])
+  table_data.append(["Summe:", "", "", "", "", "", "", "", "", "", "", "", "", f"{total_hours:.2f} St."])
   
-  t_pdf = Table(table_data, colWidths=[25, 75, 35, 45, 75, 35, 45, 75, 35, 45, 55])
+  t_pdf = Table(table_data, colWidths=[22, 62, 28, 36, 62, 28, 36, 62, 28, 36, 62, 28, 36, 48])
   t_pdf.setStyle(TableStyle([
       ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
       ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
       ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-      ('FONTSIZE', (0, 0), (-1, -1), 7),
+      ('FONTSIZE', (0, 0), (-1, -1), 6.5),
       ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
       ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor("#666666")),
       ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f0f0f0")),
@@ -768,7 +769,6 @@ def generate_tickets_pdf(month_str, year_val, df, total_hours):
   buffer.seek(0)
   return buffer.getvalue()
 
-
 # ---------------------------------------------------------
 # الصفحة الأولى: استمارة ساعات العمال (Mitarbeiter Stundenzettel)
 # (تبقى مستقلة كما طلبت)
@@ -872,6 +872,8 @@ if page == t["p1"]:
 #----------------------------------------------------------
 
 elif page == t["p2"]:
+  from datetime import date
+
   st.title("📝 Clean & Care GmbH - Tägliche Stunden")
   st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
@@ -895,6 +897,24 @@ elif page == t["p2"]:
   if city_employees:
     st.subheader(f"Tägliche Stunden für: {daily_emp} ({daily_month} {daily_year})")
     clean_emp_name = daily_emp.strip()
+
+    month_num_map = {
+        "Januar": 1, "Februar": 2, "März": 3, "April": 4, "Mai": 5, "Juni": 6,
+        "Juli": 7, "August": 8, "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
+    }
+    weekday_short_de = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+
+    def get_weekday_label(day_val, month_name, year_num):
+      m_idx = month_num_map.get(month_name, 1)
+      try:
+        d_obj = date(int(year_num), int(m_idx), int(day_val))
+        wd = d_obj.weekday()
+        w_name = weekday_short_de[wd]
+        if wd in (5, 6):
+          return f"{w_name} (WE)"
+        return w_name
+      except Exception:
+        return "-"
 
     # جلب سجل الساعات اليومية مرة واحدة فقط لهذا العامل والشهر والسنة
     raw_content_json = None
@@ -967,8 +987,13 @@ elif page == t["p2"]:
               if col_name not in df.columns:
                 df[col_name] = ""
 
+          df["Wochentag"] = [
+              get_weekday_label(r.get("Datum", idx + 1), daily_month, daily_year)
+              for idx, r in df.iterrows()
+          ]
+
           cols_order = [
-              "Datum",
+              "Datum", "Wochentag",
               "Ort 1", "Beginn 1", "Ende 1", "Pause 1", "Hrs1",
               "Ort 2", "Beginn 2", "Ende 2", "Pause 2", "Hrs2",
               "Ort 3", "Beginn 3", "Ende 3", "Pause 3", "Hrs3",
@@ -984,6 +1009,7 @@ elif page == t["p2"]:
       days_data = [
           {
               "Datum": str(day),
+              "Wochentag": get_weekday_label(day, daily_month, daily_year),
               "Ort 1": "", "Beginn 1": "", "Ende 1": "", "Pause 1": "", "Hrs1": "",
               "Ort 2": "", "Beginn 2": "", "Ende 2": "", "Pause 2": "", "Hrs2": "",
               "Ort 3": "", "Beginn 3": "", "Ende 3": "", "Pause 3": "", "Hrs3": "",
@@ -1000,6 +1026,7 @@ elif page == t["p2"]:
         daily_df,
         num_rows="fixed",
         use_container_width=True,
+        disabled=["Datum", "Wochentag"],
         key=f"daily_table_{clean_emp_name}_{daily_month}_{daily_year}",
         column_config={
             "Ort 1": st.column_config.SelectboxColumn("Ort 1", options=places_list),
@@ -1206,66 +1233,73 @@ elif page == t["p4"]:
   with col3:
     place_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="place_year_select")
 
-  if places_list:
+  if places_list and selected_place:
+    clean_selected_place = str(selected_place).strip().lower()
     st.subheader(f"Mitarbeiter-Stunden für Ort: {selected_place} ({place_month} {place_year})")
 
     try:
       res_rows = supabase.table("daily_hours").select("emp, content").eq("month", place_month).eq("year", int(place_year)).execute()
       rows = res_rows.data if res_rows.data else []
-    except:
+    except Exception:
       rows = []
 
     place_data_rows = []
     for row in rows:
-      emp = row["emp"]
+      emp = str(row.get("emp") or "").strip()
+      if not emp:
+        continue
       try:
-        emp_data = json.loads(row["content"])
+        raw_c = row.get("content")
+        if not raw_c:
+          continue
+        emp_data = json.loads(raw_c) if isinstance(raw_c, str) else raw_c
         emp_daily_df = pd.DataFrame(emp_data)
         emp_place_hours = 0.0
-        
+
         for _, r in emp_daily_df.iterrows():
-          for i in range(1, 4):
+          # فحص Ort 1 إلى Ort 4 ليشمل المكان الرابع أيضاً
+          for i in range(1, 5):
             loc_name = str(r.get(f"Ort {i}", "")).strip()
             b_str = str(r.get(f"Beginn {i}", "")).strip()
             e_str = str(r.get(f"Ende {i}", "")).strip()
             loc_hrs = 0.0
-            
-            if b_str and e_str and b_str != "nan" and e_str != "nan":
+
+            if b_str and e_str and b_str.lower() != "nan" and e_str.lower() != "nan":
               for fmt in ("%H:%M", "%H.%M", "%H"):
                 try:
                   t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
                   t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
+                  if t2 < t1:
+                    t2 += timedelta(days=1)
                   gh = (t2 - t1).total_seconds() / 3600
                   if gh > 0:
                     loc_hrs = gh
                     break
-                except:
+                except Exception:
                   continue
-                  
-            # قراءة استراحة هذا الموقع المحدد (Pause 1, 2, 3)
+
+            # قراءة استراحة هذا الموقع المحددة (Pause 1, 2, 3, 4)
             p_input = str(r.get(f"Pause {i}", "")).strip()
             break_val = 0.0
-            if p_input and p_input not in ["none", "nan", ""]:
+            if p_input and p_input.lower() not in ["none", "nan", ""]:
               try:
                 break_val = float(p_input.replace(",", "."))
-              except:
+              except Exception:
                 break_val = 0.0
-                
+
             # صافي ساعات هذا الموقع (بعد خصم استراحة هذا الموقع فقط)
             net_loc_hrs = max(0.0, loc_hrs - break_val)
-            
-            # إذا كان هذا هو المكان المطلوب، أضف صافي ساعاته مباشرة
-            if loc_name.lower() == selected_place.strip().lower() and net_loc_hrs > 0:
+
+            if loc_name.lower() == clean_selected_place and net_loc_hrs > 0:
               emp_place_hours += net_loc_hrs
-              
+
         if emp_place_hours > 0:
-          clean_emp_name = emp.strip()
-          existing_row = next((r for r in place_data_rows if r["Mitarbeiter"].strip().lower() == clean_emp_name.lower()), None)
+          existing_row = next((r for r in place_data_rows if r["Mitarbeiter"].strip().lower() == emp.lower()), None)
           if existing_row:
             existing_row["Stunden"] = round(existing_row["Stunden"] + emp_place_hours, 2)
           else:
-            place_data_rows.append({"Mitarbeiter": clean_emp_name, "Stunden": round(emp_place_hours, 2)})
-      except:
+            place_data_rows.append({"Mitarbeiter": emp, "Stunden": round(emp_place_hours, 2)})
+      except Exception:
         pass
 
     if not place_data_rows:
@@ -1400,7 +1434,7 @@ elif page == t["p5"]:
 # ---------------------------------------------------------
 elif page == t["p6"]:
     st.title("📅 Clean & Care GmbH - Monatsübersicht")
-    
+
     cities_list = [t["all_cities"]] + load_cities()
 
     col_c, col1, col2 = st.columns(3)
@@ -1411,9 +1445,12 @@ elif page == t["p6"]:
     with col2:
         summary_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="summary_year_select")
 
-    allowed_emps = get_employees_by_city(summary_city)
+    if summary_city == t["all_cities"]:
+        allowed_emps = load_employees()
+    else:
+        allowed_emps = get_employees_by_city(summary_city)
 
-    # 1. جلب الحد الأقصى للساعات لكل عامل من جدول employees في Supabase
+    # 1. جلب الحد الأقصى للساعات لكل عامل من جدول employees في Supabase (بدون فرض 160)
     emp_max_hours_map = {}
     try:
         emp_res = supabase.table("employees").select("name, max_hours").execute()
@@ -1421,8 +1458,8 @@ elif page == t["p6"]:
             for e in emp_res.data:
                 e_name = e.get("name")
                 e_max = e.get("max_hours")
-                if e_name:
-                    emp_max_hours_map[e_name.strip()] = float(e_max) if e_max is not None else 160.0
+                if e_name and e_max is not None:
+                    emp_max_hours_map[str(e_name).strip()] = float(e_max)
     except Exception:
         pass
 
@@ -1434,7 +1471,7 @@ elif page == t["p6"]:
     except Exception:
         rows = []
 
-    # 3. جلب بيانات القطارات وتخزين ساعات وإيهامات الأيام لكل موظف
+    # 3. جلب بيانات القطارات وتخزين ساعات وأيام العمل لكل موظف
     zug_hours_per_emp = {}
     zug_days_per_emp = {}
     try:
@@ -1443,21 +1480,18 @@ elif page == t["p6"]:
         for z_row in zug_rows:
             z_emp = z_row.get("emp")
             if z_emp and z_row.get("content"):
-                clean_z_emp = z_emp.strip()
+                clean_z_emp = str(z_emp).strip()
                 try:
                     z_df = pd.DataFrame(json.loads(z_row["content"]))
                     if "Gesamtstunden" in z_df.columns:
-                        z_df["Gesamtstunden"] = pd.to_numeric(z_df["Gesamtstunden"], errors="coerce").fillna(0)
-                        z_sum = z_df["Gesamtstunden"].sum()
-                        zug_hours_per_emp[clean_z_emp] = z_sum
-                        
-                        # جمع أيام العمل الخاصة بالقطارات التي فيها ساعات > 0
+                        z_df["Gesamtstunden"] = pd.to_numeric(z_df["Gesamtstunden"], errors="coerce").fillna(0.0)
+                        z_sum = float(z_df["Gesamtstunden"].sum())
+                        zug_hours_per_emp[clean_z_emp] = zug_hours_per_emp.get(clean_z_emp, 0.0) + z_sum
+
                         if "Datum" in z_df.columns:
                             z_df["Datum_Num"] = pd.to_numeric(z_df["Datum"], errors="coerce")
                             z_worked = z_df[z_df["Gesamtstunden"] > 0]["Datum_Num"].dropna().tolist()
-                            if clean_z_emp not in zug_days_per_emp:
-                                zug_days_per_emp[clean_z_emp] = []
-                            zug_days_per_emp[clean_z_emp].extend(z_worked)
+                            zug_days_per_emp.setdefault(clean_z_emp, []).extend(z_worked)
                 except Exception:
                     pass
     except Exception:
@@ -1465,9 +1499,7 @@ elif page == t["p6"]:
 
     summary_data = []
     total_company_hours = 0.0
-    processed_emps = set()
 
-    # معالجة بيانات الموظفين من الجدول اليومي وجدول القطارات معاً
     emp_daily_days_map = {}
     emp_daily_hours_map = {}
 
@@ -1475,63 +1507,54 @@ elif page == t["p6"]:
         emp = row.get("emp")
         if not emp:
             continue
-        clean_emp_name = emp.strip()
+        clean_emp_name = str(emp).strip()
         if clean_emp_name not in allowed_emps:
             continue
 
         try:
             emp_data = json.loads(row["content"])
             emp_daily_df = pd.DataFrame(emp_data)
-            
-            emp_daily_total = emp_daily_df["Gesamtstunden"].astype(float).sum() if "Gesamtstunden" in emp_daily_df.columns else 0.0
-            emp_daily_hours_map[clean_emp_name] = emp_daily_total
-            
-            if "Gesamtstunden" in emp_daily_df.columns and "Datum" in emp_daily_df.columns:
-                emp_daily_df["Gesamtstunden"] = pd.to_numeric(emp_daily_df["Gesamtstunden"], errors="coerce").fillna(0)
-                emp_daily_df["Datum_Num"] = pd.to_numeric(emp_daily_df["Datum"], errors="coerce")
-                
-                worked_days = emp_daily_df[emp_daily_df["Gesamtstunden"] > 0]["Datum_Num"].dropna().tolist()
-                if clean_emp_name not in emp_daily_days_map:
-                    emp_daily_days_map[clean_emp_name] = []
-                emp_daily_days_map[clean_emp_name].extend(worked_days)
+
+            if "Gesamtstunden" in emp_daily_df.columns:
+                emp_daily_df["Gesamtstunden"] = pd.to_numeric(emp_daily_df["Gesamtstunden"], errors="coerce").fillna(0.0)
+                emp_daily_total = float(emp_daily_df["Gesamtstunden"].sum())
+                emp_daily_hours_map[clean_emp_name] = emp_daily_hours_map.get(clean_emp_name, 0.0) + emp_daily_total
+
+                if "Datum" in emp_daily_df.columns:
+                    emp_daily_df["Datum_Num"] = pd.to_numeric(emp_daily_df["Datum"], errors="coerce")
+                    worked_days = emp_daily_df[emp_daily_df["Gesamtstunden"] > 0]["Datum_Num"].dropna().tolist()
+                    emp_daily_days_map.setdefault(clean_emp_name, []).extend(worked_days)
         except Exception:
             pass
 
-    # دمج أسماء جميع الموظفين الموجودين في الساعات أو القطارات
-    all_target_emps = set(list(emp_daily_hours_map.keys()) + list(zug_hours_per_emp.keys()))
+    all_target_emps = sorted(set(list(emp_daily_hours_map.keys()) + list(zug_hours_per_emp.keys())))
 
     for clean_emp_name in all_target_emps:
         if clean_emp_name not in allowed_emps:
             continue
-            
-        processed_emps.add(clean_emp_name)
-        
+
         emp_daily_total = emp_daily_hours_map.get(clean_emp_name, 0.0)
         emp_zug_total = zug_hours_per_emp.get(clean_emp_name, 0.0)
         total_emp_combined = emp_daily_total + emp_zug_total
 
         if total_emp_combined > 0:
-            # دمج أيام العمل من جدول الساعات اليومية ومن جدول القطارات لمعرفة الأحدث
-            all_worked_days = []
-            if clean_emp_name in emp_daily_days_map:
-                all_worked_days.extend(emp_daily_days_map[clean_emp_name])
-            if clean_emp_name in zug_days_per_emp:
-                all_worked_days.extend(zug_days_per_emp[clean_emp_name])
+            all_worked_days = emp_daily_days_map.get(clean_emp_name, []) + zug_days_per_emp.get(clean_emp_name, [])
+            last_work_date = str(int(max(all_worked_days))) if all_worked_days else "-"
 
-            last_work_date = "-"
-            if all_worked_days:
-                max_day_val = int(max(all_worked_days))
-                last_work_date = str(max_day_val)
+            max_limit = emp_max_hours_map.get(clean_emp_name)
+            if max_limit is not None:
+                remaining = round(max_limit - total_emp_combined, 2)
+                max_display = round(max_limit, 2)
+            else:
+                remaining = "-"
+                max_display = "-"
 
-            max_limit = emp_max_hours_map.get(clean_emp_name, 160.0)
-            remaining = max_limit - total_emp_combined
-            
             summary_data.append({
                 "Mitarbeiter": clean_emp_name,
                 "Stunden bis": last_work_date,
                 "Gesamtstunden": round(total_emp_combined, 2),
-                "Max Stunden": round(max_limit, 2),
-                "Verbleibende Stunden": round(remaining, 2)
+                "Max Stunden": max_display,
+                "Verbleibende Stunden": remaining
             })
             total_company_hours += total_emp_combined
 
@@ -1539,8 +1562,8 @@ elif page == t["p6"]:
         summary_df = pd.DataFrame([{
             "Mitarbeiter": "Keine Stunden erfasst",
             "Stunden bis": "-",
-            "Gesamtstunden": 0.0, 
-            "Max Stunden": 0.0, 
+            "Gesamtstunden": 0.0,
+            "Max Stunden": 0.0,
             "Verbleibende Stunden": 0.0
         }])
     else:
@@ -1548,13 +1571,14 @@ elif page == t["p6"]:
 
     st.dataframe(summary_df, use_container_width=True, hide_index=True)
     st.markdown("---")
-    
+
     col_s1, col_s2 = st.columns([2, 1])
     with col_s1:
         pdf_summary_data = generate_summary_pdf(summary_month, summary_year, summary_df, total_company_hours)
         st.download_button(t["pdf_btn"], pdf_summary_data, f"Monatsübersicht_{summary_month}_{summary_year}.pdf", "application/pdf", key="p6_pdf")
     with col_s2:
-        st.metric("Gesamtsumme:", f"{total_company_hours:.2f} St.")
+        st.metric("Gesamtsumme:", f"{total_company_hours:.2f} St.")s
+
 # ---------------------------------------------------------
 # الصفحة السابعة: تذاكر المهام (Einsatz-Tickets)
 # ---------------------------------------------------------
@@ -1575,22 +1599,31 @@ elif page == t["p7"]:
   if not selected_main_place:
     st.warning("⚠️ Bitte wähle zuerst einen Einsatzort aus, um die Tickets anzuzeigen.")
   else:
-    st.subheader(f"Monats-Tickets ({selected_main_place} - {ticket_month} {ticket_year})")
+    clean_place = selected_main_place.strip()
+    st.subheader(f"Monats-Tickets ({clean_place} - {ticket_month} {ticket_year})")
 
-    def load_place_tickets(place, month, year):
-        try:
-            res = supabase.table("tickets_data").select("content").eq("place", place).eq("month", month).eq("year", int(year)).execute()
-            if res.data and len(res.data) > 0:
-                return pd.DataFrame(json.loads(res.data[0]["content"]))
-        except Exception:
-            pass
-        return None
+    cache_key = f"tickets_cache_{clean_place}_{ticket_month}_{ticket_year}"
 
-    tickets_df = load_place_tickets(selected_main_place, ticket_month, ticket_year)
+    if cache_key not in st.session_state:
+      loaded_df = None
+      try:
+        res = (
+            supabase.table("tickets_data")
+            .select("content")
+            .eq("place", clean_place)
+            .eq("month", ticket_month)
+            .eq("year", int(ticket_year))
+            .limit(1)
+            .execute()
+        )
+        if res.data and len(res.data) > 0 and res.data[0].get("content"):
+          raw_c = res.data[0]["content"]
+          parsed = json.loads(raw_c) if isinstance(raw_c, str) else raw_c
+          loaded_df = pd.DataFrame(parsed).fillna("")
+      except Exception:
+        loaded_df = None
 
-    import pandas as pd
-    # التحقق من وجود الأعمدة الجديدة (أرقام التيكتات) وإلا يتم إعادة بناء الجدول بـ 50 سطراً وهيكل منظم
-    if tickets_df is None or len(tickets_df) != 50 or "T1_Nr" not in tickets_df.columns:
+      if loaded_df is None or len(loaded_df) != 50 or "T1_Nr" not in loaded_df.columns:
         data_dict = {
             "T1_Nr": [""] * 50, "T1_Beginn": [""] * 50, "T1_Ende": [""] * 50, "T1_Bemerkung": [""] * 50,
             "T2_Nr": [""] * 50, "T2_Beginn": [""] * 50, "T2_Ende": [""] * 50, "T2_Bemerkung": [""] * 50,
@@ -1598,13 +1631,18 @@ elif page == t["p7"]:
             "T4_Nr": [""] * 50, "T4_Beginn": [""] * 50, "T4_Ende": [""] * 50, "T4_Bemerkung": [""] * 50,
             "Netto-Stunden": [0.0] * 50
         }
-        tickets_df = pd.DataFrame(data_dict)
+        loaded_df = pd.DataFrame(data_dict)
+
+      st.session_state[cache_key] = loaded_df
+
+    tickets_df = st.session_state[cache_key]
 
     edited_tickets_df = st.data_editor(
         tickets_df,
         num_rows="fixed",
         use_container_width=True,
-        key=f"tickets_table_{selected_main_place}_{ticket_month}_{ticket_year}"
+        disabled=["Netto-Stunden"],
+        key=f"tickets_table_{clean_place}_{ticket_month}_{ticket_year}"
     )
 
     edited_tickets_df = edited_tickets_df.astype(object)
@@ -1612,48 +1650,72 @@ elif page == t["p7"]:
     total_tickets_sum = 0.0
     for index, row in edited_tickets_df.iterrows():
       row_net = 0.0
-      # حساب الساعات للـ 4 تيكتات أفقياً في كل سطر
       for i in range(1, 5):
-          b_str = str(row.get(f"T{i}_Beginn", "")).strip()
-          e_str = str(row.get(f"T{i}_Ende", "")).strip()
+        b_str = str(row.get(f"T{i}_Beginn", "")).strip()
+        e_str = str(row.get(f"T{i}_Ende", "")).strip()
 
-          if b_str and e_str and b_str != "nan" and e_str != "nan":
-            for fmt in ("%H:%M", "%H.%M", "%H"):
-              try:
-                t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
-                t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
-                gh = (t2 - t1).total_seconds() / 3600
-                if gh > 0:
-                  row_net += gh
-                break
-              except:
-                continue
+        if b_str and e_str and b_str.lower() not in ("nan", "none") and e_str.lower() not in ("nan", "none"):
+          for fmt in ("%H:%M", "%H.%M", "%H"):
+            try:
+              t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
+              t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
+              if t2 < t1:
+                t2 += timedelta(days=1)
+              gh = (t2 - t1).total_seconds() / 3600
+              if gh > 0:
+                row_net += gh
+              break
+            except Exception:
+              continue
 
       edited_tickets_df.at[index, "Netto-Stunden"] = round(row_net, 2)
       total_tickets_sum += row_net
 
     st.markdown("---")
-    col_t1, col_t2 = st.columns([2, 1])
+    col_t1, col_t2, col_t3 = st.columns([2, 1, 1])
     with col_t1:
       pdf_tickets_data = generate_tickets_pdf(ticket_month, ticket_year, edited_tickets_df, total_tickets_sum)
-      st.download_button(t["pdf_btn"], pdf_tickets_data, f"Tickets_{selected_main_place}_{ticket_month}_{ticket_year}.pdf", "application/pdf", key="p7_pdf_btn")
-      
-      if st.button("💾 Speichern / حفظ", key="tickets_save_btn"):
-        def save_place_tickets(place, month, year, df):
-            try:
-                content_str = df.to_json(orient="records")
-                existing = supabase.table("tickets_data").select("place").eq("place", place).eq("month", month).eq("year", int(year)).execute()
-                if existing.data and len(existing.data) > 0:
-                    supabase.table("tickets_data").update({"content": content_str}).eq("place", place).eq("month", month).eq("year", int(year)).execute()
-                else:
-                    supabase.table("tickets_data").insert({"place": place, "month": month, "year": int(year), "content": content_str}).execute()
-                st.success("Erfolgreich gespeichert! / تم الحفظ بنجاح")
-            except Exception as e:
-                st.error(f"Fehler beim Speichern: {e}")
-
-        save_place_tickets(selected_main_place, ticket_month, ticket_year, edited_tickets_df)
+      st.download_button(
+          t["pdf_btn"],
+          pdf_tickets_data,
+          f"Tickets_{clean_place}_{ticket_month}_{ticket_year}.pdf",
+          "application/pdf",
+          key="p7_pdf_btn"
+      )
     with col_t2:
+      if st.button("💾 Speichern / حفظ", key="tickets_save_btn"):
+        try:
+          clean_save_df = edited_tickets_df.fillna("")
+          content_str = clean_save_df.to_json(orient="records", force_ascii=False)
+          existing = (
+              supabase.table("tickets_data")
+              .select("place")
+              .eq("place", clean_place)
+              .eq("month", ticket_month)
+              .eq("year", int(ticket_year))
+              .limit(1)
+              .execute()
+          )
+          if existing.data and len(existing.data) > 0:
+            supabase.table("tickets_data").update({"content": content_str}).eq("place", clean_place).eq("month", ticket_month).eq("year", int(ticket_year)).execute()
+          else:
+            supabase.table("tickets_data").insert({
+                "place": clean_place,
+                "month": ticket_month,
+                "year": int(ticket_year),
+                "content": content_str
+            }).execute()
+
+          st.session_state[cache_key] = clean_save_df
+          st.success("Erfolgreich gespeichert! / تم الحفظ بنجاح")
+        except Exception as e:
+          st.error(f"Fehler beim Speichern: {e}")
+    with col_t3:
       st.metric("Gesamtsumme:", f"{total_tickets_sum:.2f} St.")
+
+
+
+
 # ---------------------------------------------------------
 # الصفحة الثامنة: جدول القطارات (Zug-Fahrten) - مربوطة بالمدن
 # ---------------------------------------------------------
@@ -1801,47 +1863,60 @@ elif page == t["p8"]:
             st.metric("Gesamtsumme:", f"{total_trains_sum:.2f} St.")
     else:
         st.warning("لا يوجد عمال مرتبطون بهذه المدينة حالياً.")
+
+
+
 #---------------------------------------------
 #Lager
 #---------------------------------------------
-elif page == t["p9"]: 
-  import pandas as pd
-
+elif page == t["p9"]:
   st.title("📦 Clean & Care GmbH - Lager- & Materialverwaltung")
   st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
+
+  # تحميل بيانات المخزون الرئيسي مرة واحدة في session_state
+  if "main_inv_cache" not in st.session_state:
+    try:
+      res_inv = supabase.table("inventory").select("*").order("id").execute()
+      st.session_state["main_inv_cache"] = res_inv.data if res_inv.data else []
+    except Exception as e:
+      st.error(f"Fehler beim Laden des Lagers: {e}")
+      st.session_state["main_inv_cache"] = []
+
+  # تحميل بيانات توزيع الأماكن مرة واحدة في session_state
+  if "place_inv_cache" not in st.session_state:
+    try:
+      res_p_all = supabase.table("place_inventory").select("*").execute()
+      st.session_state["place_inv_cache"] = res_p_all.data if res_p_all.data else []
+    except Exception as e:
+      st.error(f"Fehler beim Laden der Objektdaten: {e}")
+      st.session_state["place_inv_cache"] = []
+
+  inventory_data = st.session_state["main_inv_cache"]
 
   # =========================================================
   # الجزء الأول: الجدول الرئيسي للمخزون (70 سطراً)
   # =========================================================
   st.subheader("1. Hauptlager (70 Zeilen)")
 
-  inventory_data = []
-  try:
-      res_inv = supabase.table("inventory").select("*").order("id").execute()
-      if res_inv.data:
-          inventory_data = res_inv.data
-  except Exception as e:
-      st.error(f"Fehler beim Laden des Lagers: {e}")
-
   rows_list = []
   for i in range(70):
-      if i < len(inventory_data):
-          item = inventory_data[i]
-          rows_list.append({
-              "Nr.": i + 1,
-              "Materialname": str(item.get("material") or "").strip(),
-              "Kategorie": str(item.get("category") or "").strip(),
-              "Gesamtbestand": int(item.get("gesamtbestand") or 0),
-              "Aktueller Bestand": int(item.get("aktueller_bestand") or 0)
-          })
-      else:
-          rows_list.append({
-              "Nr.": i + 1,
-              "Materialname": "",
-              "Kategorie": "",
-              "Gesamtbestand": 0,
-              "Aktueller Bestand": 0
-          })
+    if i < len(inventory_data):
+      item = inventory_data[i]
+      rows_list.append({
+          "Nr.": i + 1,
+          "Materialname": str(item.get("material") or "").strip(),
+          "Kategorie": str(item.get("category") or "").strip(),
+          "Gesamtbestand": int(item.get("gesamtbestand") or 0),
+          "Aktueller Bestand": int(item.get("aktueller_bestand") or 0),
+      })
+    else:
+      rows_list.append({
+          "Nr.": i + 1,
+          "Materialname": "",
+          "Kategorie": "",
+          "Gesamtbestand": 0,
+          "Aktueller Bestand": 0,
+      })
 
   inv_df = pd.DataFrame(rows_list)
 
@@ -1850,40 +1925,46 @@ elif page == t["p9"]:
       num_rows="fixed",
       use_container_width=True,
       disabled=["Nr.", "Aktueller Bestand"],
-      key="main_inventory_70_table"
+      key="main_inventory_70_table",
   )
 
   if st.button("💾 Hauptlager speichern", key="save_main_inv_btn"):
-      try:
-          # جلب كل الكميات الموزعة حالياً على الأماكن لحساب المتبقي بدقة
-          distributed_map = {}
-          res_all_dist = supabase.table("place_inventory").select("material, menge").execute()
-          if res_all_dist.data:
-              for d_item in res_all_dist.data:
-                  m_key = str(d_item.get("material") or "").strip()
-                  distributed_map[m_key] = distributed_map.get(m_key, 0) + int(d_item.get("menge") or 0)
+    try:
+      distributed_map = {}
+      for d_item in st.session_state.get("place_inv_cache", []):
+        m_key = str(d_item.get("material") or "").strip()
+        if m_key:
+          distributed_map[m_key] = distributed_map.get(m_key, 0) + int(d_item.get("menge") or 0)
 
-          supabase.table("inventory").delete().neq("id", 0).execute()
-          seen_materials = set()
+      seen_materials = set()
+      to_insert = []
 
-          for _, row in edited_inv_df.iterrows():
-              mat_name = str(row["Materialname"]).strip()
-              if mat_name and mat_name != "nan" and mat_name not in seen_materials:
-                  seen_materials.add(mat_name)
-                  ges_val = int(row["Gesamtbestand"]) if pd.notna(row["Gesamtbestand"]) else 0
-                  already_dist = distributed_map.get(mat_name, 0)
-                  akt_val = max(0, ges_val - already_dist)
+      for _, row in edited_inv_df.iterrows():
+        mat_name = str(row["Materialname"]).strip()
+        if mat_name and mat_name.lower() != "nan" and mat_name not in seen_materials:
+          seen_materials.add(mat_name)
+          ges_val = int(row["Gesamtbestand"]) if pd.notna(row["Gesamtbestand"]) else 0
+          already_dist = distributed_map.get(mat_name, 0)
+          akt_val = max(0, ges_val - already_dist)
 
-                  supabase.table("inventory").insert({
-                      "material": mat_name,
-                      "category": str(row["Kategorie"]).strip(),
-                      "gesamtbestand": ges_val,
-                      "aktueller_bestand": akt_val
-                  }).execute()
-          st.success("Hauptlager erfolgreich gespeichert und Bestände synchronisiert!")
-          st.rerun()
-      except Exception as e:
-          st.error(f"Fehler beim Speichern: {e}")
+          to_insert.append({
+              "material": mat_name,
+              "category": str(row["Kategorie"]).strip(),
+              "gesamtbestand": ges_val,
+              "aktueller_bestand": akt_val,
+          })
+
+      supabase.table("inventory").delete().neq("id", 0).execute()
+      if to_insert:
+        res_ins = supabase.table("inventory").insert(to_insert).execute()
+        st.session_state["main_inv_cache"] = res_ins.data if res_ins.data else to_insert
+      else:
+        st.session_state["main_inv_cache"] = []
+
+      st.success("Hauptlager erfolgreich gespeichert und Bestände synchronisiert!")
+      st.rerun()
+    except Exception as e:
+      st.error(f"Fehler beim Speichern: {e}")
 
   st.markdown("---")
 
@@ -1896,73 +1977,101 @@ elif page == t["p9"]:
   selected_objekt = st.selectbox("Objekt / Ort auswählen:", places_list, key="inv_place_select")
 
   if selected_objekt:
-      # جلب المواد المحفوظة فعلياً في قاعدة البيانات فقط
-      saved_materials_map = {}
-      for item in inventory_data:
-          m_name = str(item.get("material") or "").strip()
-          if m_name:
-              saved_materials_map[m_name] = int(item.get("aktueller_bestand") or 0)
+    clean_objekt = str(selected_objekt).strip()
+    saved_materials_map = {}
+    for item in st.session_state.get("main_inv_cache", []):
+      m_name = str(item.get("material") or "").strip()
+      if m_name:
+        saved_materials_map[m_name] = int(item.get("aktueller_bestand") or 0)
 
-      material_options = [""] + [f"{m} (Verfügbar: {qty})" for m, qty in saved_materials_map.items()]
+    material_options = [""] + [f"{m} (Verfügbar: {qty})" for m, qty in saved_materials_map.items()]
 
-      with st.container():
-          st.markdown(f"**Material an `{selected_objekt}` ausgeben:**")
-          c1, c2, c3 = st.columns([2, 1, 1])
-          with c1:
-              chosen_option = st.selectbox("Material auswählen:", material_options, key="dist_mat_select")
-          with c2:
-              dist_qty = st.number_input("Menge:", min_value=1, value=1, step=1, key="dist_qty_input")
-          with c3:
-              st.write("")
-              st.write("")
-              if st.button("➕ Hinzufügen & vom Lager abziehen", key="add_to_place_btn"):
-                  if chosen_option:
-                      chosen_mat = chosen_option.split(" (Verfügbar:")[0].strip()
-                      try:
-                          res_m = supabase.table("inventory").select("*").eq("material", chosen_mat).execute()
-                          if res_m.data:
-                              db_item = res_m.data[0]
-                              current_stock = int(db_item.get("aktueller_bestand") or 0)
-                              mat_cat = db_item.get("category", "")
+    with st.container():
+      st.markdown(f"**Material an `{clean_objekt}` ausgeben:**")
+      c1, c2, c3 = st.columns([2, 1, 1])
+      with c1:
+        chosen_option = st.selectbox("Material auswählen:", material_options, key="dist_mat_select")
+      with c2:
+        dist_qty = st.number_input("Menge:", min_value=1, value=1, step=1, key="dist_qty_input")
+      with c3:
+        st.write("")
+        st.write("")
+        if st.button("➕ Hinzufügen & vom Lager abziehen", key="add_to_place_btn"):
+          if chosen_option:
+            chosen_mat = chosen_option.split(" (Verfügbar:")[0].strip()
+            try:
+              res_m = supabase.table("inventory").select("*").eq("material", chosen_mat).limit(1).execute()
+              if res_m.data:
+                db_item = res_m.data[0]
+                current_stock = int(db_item.get("aktueller_bestand") or 0)
+                mat_cat = str(db_item.get("category") or "").strip()
 
-                              if current_stock >= dist_qty:
-                                  new_stock = current_stock - int(dist_qty)
-                                  supabase.table("inventory").update({"aktueller_bestand": new_stock}).eq("id", db_item["id"]).execute()
+                if current_stock >= dist_qty:
+                  new_stock = current_stock - int(dist_qty)
+                  supabase.table("inventory").update({"aktueller_bestand": new_stock}).eq("id", db_item["id"]).execute()
 
-                                  res_p = supabase.table("place_inventory").select("*").eq("place", selected_objekt).eq("material", chosen_mat).execute()
-                                  if res_p.data:
-                                      old_qty = int(res_p.data[0].get("menge") or 0)
-                                      supabase.table("place_inventory").update({"menge": old_qty + int(dist_qty)}).eq("id", res_p.data[0]["id"]).execute()
-                                  else:
-                                      supabase.table("place_inventory").insert({
-                                          "place": selected_objekt,
-                                          "material": chosen_mat,
-                                          "category": mat_cat,
-                                          "menge": int(dist_qty)
-                                      }).execute()
+                  # تحديث الكاش الرئيسي للمخزون
+                  for m_cache in st.session_state.get("main_inv_cache", []):
+                    if str(m_cache.get("material") or "").strip() == chosen_mat:
+                      m_cache["aktueller_bestand"] = new_stock
+                      break
 
-                                  st.success(f"{dist_qty}x {chosen_mat} wurde an {selected_objekt} zugewiesen und vom Lager abgezogen!")
-                                  st.rerun()
-                              else:
-                                  st.error(f"Nicht genug Bestand im Lager! Verfügbar: {current_stock}")
-                          else:
-                              st.warning("Bitte speichern Sie das Hauptlager zuerst, bevor Sie Material verteilen.")
-                      except Exception as e:
-                          st.error(f"Fehler bei der Verteilung: {e}")
+                  res_p = (
+                      supabase.table("place_inventory")
+                      .select("*")
+                      .eq("place", clean_objekt)
+                      .eq("material", chosen_mat)
+                      .limit(1)
+                      .execute()
+                  )
+                  if res_p.data:
+                    old_qty = int(res_p.data[0].get("menge") or 0)
+                    updated_qty = old_qty + int(dist_qty)
+                    supabase.table("place_inventory").update({"menge": updated_qty}).eq("id", res_p.data[0]["id"]).execute()
 
-      # عرض جدول المواد المستلمة لهذا المكان
-      st.markdown(f"**Bereits erhaltene Materialien in `{selected_objekt}`:**")
-      try:
-          res_place_inv = supabase.table("place_inventory").select("*").eq("place", selected_objekt).execute()
-          if res_place_inv.data:
-              p_df = pd.DataFrame(res_place_inv.data)
-              place_items_df = p_df[["material", "category", "menge"]].copy()
-              place_items_df.columns = ["Materialname", "Kategorie", "Erhaltene Menge"]
-              st.dataframe(place_items_df, use_container_width=True, hide_index=True)
-          else:
-              st.info("Für dieses Objekt wurden noch keine Materialien eingetragen.")
-      except Exception as e:
-          st.error(f"Fehler beim Laden der Objektdaten: {e}")
+                    for p_cache in st.session_state.get("place_inv_cache", []):
+                      if (
+                          str(p_cache.get("place") or "").strip() == clean_objekt
+                          and str(p_cache.get("material") or "").strip() == chosen_mat
+                      ):
+                        p_cache["menge"] = updated_qty
+                        break
+                  else:
+                    new_p_row = {
+                        "place": clean_objekt,
+                        "material": chosen_mat,
+                        "category": mat_cat,
+                        "menge": int(dist_qty),
+                    }
+                    res_p_ins = supabase.table("place_inventory").insert(new_p_row).execute()
+                    inserted_p = res_p_ins.data[0] if res_p_ins.data else new_p_row
+                    st.session_state["place_inv_cache"].append(inserted_p)
+
+                  st.success(f"{dist_qty}x {chosen_mat} wurde an {clean_objekt} zugewiesen und vom Lager abgezogen!")
+                  st.rerun()
+                else:
+                  st.error(f"Nicht genug Bestand im Lager! Verfügbar: {current_stock}")
+              else:
+                st.warning("Bitte speichern Sie das Hauptlager zuerst, bevor Sie Material verteilen.")
+            except Exception as e:
+              st.error(f"Fehler bei der Verteilung: {e}")
+
+    # عرض جدول المواد المستلمة لهذا المكان من الكاش المحدّث
+    st.markdown(f"**Bereits erhaltene Materialien in `{clean_objekt}`:**")
+    obj_rows = [
+        {
+            "Materialname": str(r.get("material") or "").strip(),
+            "Kategorie": str(r.get("category") or "").strip(),
+            "Erhaltene Menge": int(r.get("menge") or 0),
+        }
+        for r in st.session_state.get("place_inv_cache", [])
+        if str(r.get("place") or "").strip() == clean_objekt
+    ]
+    if obj_rows:
+      place_items_df = pd.DataFrame(obj_rows)
+      st.dataframe(place_items_df, use_container_width=True, hide_index=True)
+    else:
+      st.info("Für dieses Objekt wurden noch keine Materialien eingetragen.")
 
 
 #---------------------------------------------------
@@ -1970,7 +2079,6 @@ elif page == t["p9"]:
 #---------------------------------------------------
 
 elif page == t["p10"]:
-  import pandas as pd
   from datetime import date
 
   st.title("👕 Clean & Care GmbH - Arbeitskleidung")
@@ -1979,10 +2087,10 @@ elif page == t["p10"]:
   shoe_and_cloth_sizes = [
       "",
       "XS", "S", "M", "L", "XL", "XXL", "XXXL", "4XL",
-      "36", "38", "40", "41", "42", "43", "44", "45", "46", "48"
+      "40", "41", "42", "43", "44", "45"
   ]
 
-  # تحميل بيانات المخزون مرة واحدة في session_state لتسريع التنقل بين المدن والعمال
+  # تحميل بيانات المخزون مرة واحدة في session_state
   if "cloth_inv_cache" not in st.session_state:
     try:
       res_cloth = supabase.table("clothing_inventory").select("*").order("id").execute()
@@ -1994,88 +2102,94 @@ elif page == t["p10"]:
   clothing_data = st.session_state["cloth_inv_cache"]
 
   # =========================================================
-  # 1. جدول مخزون الملابس الرئيسي (مع المقاسات ومقاسات الأحذية 40-45 و 4XL)
+  # 1. جدول مخزون الملابس الرئيسي (XS-4XL ومقاسات الأحذية 40-45)
   # =========================================================
-  with st.expander("1. Kleiderlager (Bestand nach Größe)", expanded=True):
-    cloth_rows = []
-    for i in range(40):
-      if i < len(clothing_data):
-        item = clothing_data[i]
-        cloth_rows.append({
-            "Nr.": i + 1,
-            "Kleidungsstück": str(item.get("item_name") or "").strip(),
-            "Größe": str(item.get("size") or "").strip(),
-            "Gesamtbestand": int(item.get("gesamtbestand") or 0),
-            "Aktueller Bestand": int(item.get("aktueller_bestand") or 0),
-        })
+  st.subheader("1. Kleiderlager (Bestand nach Größe)")
+
+  max_display_rows = max(25, len(clothing_data) + 5)
+  cloth_rows = []
+  for i in range(max_display_rows):
+    if i < len(clothing_data):
+      item = clothing_data[i]
+      cloth_rows.append({
+          "Nr.": i + 1,
+          "Kleidungsstück": str(item.get("item_name") or "").strip(),
+          "Größe": str(item.get("size") or "").strip(),
+          "Gesamtbestand": int(item.get("gesamtbestand") or 0),
+          "Aktueller Bestand": int(item.get("aktueller_bestand") or 0),
+      })
+    else:
+      cloth_rows.append({
+          "Nr.": i + 1,
+          "Kleidungsstück": "",
+          "Größe": "",
+          "Gesamtbestand": 0,
+          "Aktueller Bestand": 0,
+      })
+
+  cloth_df = pd.DataFrame(cloth_rows)
+
+  edited_cloth_df = st.data_editor(
+      cloth_df,
+      num_rows="fixed",
+      use_container_width=True,
+      disabled=["Nr.", "Aktueller Bestand"],
+      key="clothing_inventory_table",
+      column_config={
+          "Größe": st.column_config.SelectboxColumn(
+              "Größe", options=shoe_and_cloth_sizes
+          )
+      }
+  )
+
+  if st.button("💾 Kleiderlager speichern", key="save_clothing_btn"):
+    try:
+      dist_cloth_map = {}
+      if "all_emp_cloth_cache" in st.session_state:
+        emp_cloth_rows = st.session_state["all_emp_cloth_cache"]
       else:
-        cloth_rows.append({
-            "Nr.": i + 1,
-            "Kleidungsstück": "",
-            "Größe": "",
-            "Gesamtbestand": 0,
-            "Aktueller Bestand": 0,
-        })
-
-    cloth_df = pd.DataFrame(cloth_rows)
-
-    edited_cloth_df = st.data_editor(
-        cloth_df,
-        num_rows="fixed",
-        use_container_width=True,
-        disabled=["Nr.", "Aktueller Bestand"],
-        key="clothing_inventory_table",
-        column_config={
-            "Größe": st.column_config.SelectboxColumn(
-                "Größe", options=shoe_and_cloth_sizes
-            )
-        }
-    )
-
-    if st.button("💾 Kleiderlager speichern", key="save_clothing_btn"):
-      try:
-        dist_cloth_map = {}
         res_all_emp_cloth = supabase.table("employee_clothing").select("item_name, size, menge").execute()
-        if res_all_emp_cloth.data:
-          for d in res_all_emp_cloth.data:
-            k = (str(d.get("item_name") or "").strip(), str(d.get("size") or "").strip())
-            dist_cloth_map[k] = dist_cloth_map.get(k, 0) + int(d.get("menge") or 0)
+        emp_cloth_rows = res_all_emp_cloth.data if res_all_emp_cloth.data else []
 
-        seen_items = set()
-        to_insert = []
+      for d in emp_cloth_rows:
+        k = (str(d.get("item_name") or "").strip(), str(d.get("size") or "").strip())
+        dist_cloth_map[k] = dist_cloth_map.get(k, 0) + int(d.get("menge") or 0)
 
-        for _, row in edited_cloth_df.iterrows():
-          c_name = str(row["Kleidungsstück"]).strip()
-          c_size = str(row["Größe"]).strip()
-          if c_name and c_name != "nan" and (c_name, c_size) not in seen_items:
-            seen_items.add((c_name, c_size))
-            ges_val = int(row["Gesamtbestand"]) if pd.notna(row["Gesamtbestand"]) else 0
-            already_given = dist_cloth_map.get((c_name, c_size), 0)
-            akt_val = max(0, ges_val - already_given)
+      seen_items = set()
+      to_insert = []
 
-            to_insert.append({
-                "item_name": c_name,
-                "size": c_size,
-                "gesamtbestand": ges_val,
-                "aktueller_bestand": akt_val
-            })
+      for _, row in edited_cloth_df.iterrows():
+        c_name = str(row["Kleidungsstück"]).strip()
+        c_size = str(row["Größe"]).strip()
+        if c_name and c_name.lower() != "nan" and (c_name, c_size) not in seen_items:
+          seen_items.add((c_name, c_size))
+          ges_val = int(row["Gesamtbestand"]) if pd.notna(row["Gesamtbestand"]) else 0
+          already_given = dist_cloth_map.get((c_name, c_size), 0)
+          akt_val = max(0, ges_val - already_given)
 
-        supabase.table("clothing_inventory").delete().neq("id", 0).execute()
-        if to_insert:
-          res_inserted = supabase.table("clothing_inventory").insert(to_insert).execute()
-          st.session_state["cloth_inv_cache"] = res_inserted.data if res_inserted.data else []
-        else:
-          st.session_state["cloth_inv_cache"] = []
+          to_insert.append({
+              "item_name": c_name,
+              "size": c_size,
+              "gesamtbestand": ges_val,
+              "aktueller_bestand": akt_val
+          })
 
-        st.success("Kleiderlager erfolgreich gespeichert!")
-        st.rerun()
-      except Exception as e:
-        st.error(f"Fehler beim Speichern: {e}")
+      supabase.table("clothing_inventory").delete().neq("id", 0).execute()
+      if to_insert:
+        res_inserted = supabase.table("clothing_inventory").insert(to_insert).execute()
+        st.session_state["cloth_inv_cache"] = res_inserted.data if res_inserted.data else to_insert
+      else:
+        st.session_state["cloth_inv_cache"] = []
+
+      st.success("Kleiderlager erfolgreich gespeichert!")
+      st.rerun()
+    except Exception as e:
+      st.error(f"Fehler beim Speichern: {e}")
 
   st.markdown("---")
 
   # =========================================================
-  # 2. تسليم الملابس والأحذية للعمال حسب المدينة والعامل (سريع)
+  # 2. تسليم الملابس والأحذية للعمال حسب المدينة والعامل
   # =========================================================
   st.subheader("2. Kleidung an Mitarbeiter ausgeben")
 
@@ -2102,7 +2216,7 @@ elif page == t["p10"]:
 
       cloth_options = [""]
       cloth_lookup = {}
-      for item in clothing_data:
+      for item in st.session_state.get("cloth_inv_cache", []):
         c_name = str(item.get("item_name") or "").strip()
         c_size = str(item.get("size") or "").strip()
         c_qty = int(item.get("aktueller_bestand") or 0)
@@ -2142,7 +2256,6 @@ elif page == t["p10"]:
                 }
                 supabase.table("employee_clothing").insert(new_rec).execute()
 
-                # تحديث الكاش محلياً للمخزون والملابس المسلمة بدون إعادة تحميل كاملة
                 for cached_item in st.session_state.get("cloth_inv_cache", []):
                   if cached_item.get("id") == db_item.get("id"):
                     cached_item["aktueller_bestand"] = new_stock
