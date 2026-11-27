@@ -73,35 +73,32 @@ check_login()
 # ---------------------------------------------------------
 def init_db_supabase():
   try:
-    # التحقق من العمال
     res = supabase.table("employees").select("name").execute()
     if not res.data or len(res.data) == 0:
       for emp in ["Sakleh Alsoudi", "Alaa Edin Ibrahim"]:
-        supabase.table("employees").upsert({"name": emp}).execute()
-        
-    # التحقق من الأماكن
+        supabase.table("employees").upsert({"name": emp}, on_conflict="name").execute()
+
     res_p = supabase.table("places").select("name").execute()
     if not res_p.data or len(res_p.data) == 0:
       for place in ["Limehome Salzburg", "Nespresso Store", "IKEA Wals", "Villach Hauptplatz"]:
-        supabase.table("places").upsert({"name": place}).execute()
+        supabase.table("places").upsert({"name": place}, on_conflict="name").execute()
 
-    # التحقق من المدن (Cities)
     res_c = supabase.table("cities").select("name").execute()
     if not res_c.data or len(res_c.data) == 0:
       for city in ["Salzburg", "Villach", "Klagenfurt", "Bregenz"]:
-        supabase.table("cities").upsert({"name": city}).execute()
+        supabase.table("cities").upsert({"name": city}, on_conflict="name").execute()
 
-    # التحقق من جدول ربط العمال بالمدن (employee_cities)
     res_ec = supabase.table("employee_cities").select("*").execute()
     if not res_ec.data or len(res_ec.data) == 0:
       default_mappings = [
           {"employee": "Sakleh Alsoudi", "city": "Salzburg"},
-          {"employee": "Alaa Edin Ibrahim", "city": "Salzburg"}
+          {"employee": "Alaa Edin Ibrahim", "city": "Salzburg"},
       ]
       for m in default_mappings:
-        supabase.table("employee_cities").upsert(m).execute()
+        supabase.table("employee_cities").upsert(m, on_conflict="employee").execute()
   except Exception as e:
     st.sidebar.warning(f"ملاحظة اتصال قاعدة البيانات: {e}")
+
 
 init_db_supabase()
 
@@ -110,20 +107,27 @@ def load_employees():
   try:
     res = supabase.table("employees").select("name").execute()
     if res.data:
-      return sorted([row["name"] for row in res.data])
-  except:
+      return sorted([str(row["name"]).strip() for row in res.data if row.get("name")])
+  except Exception:
     pass
   return ["Sakleh Alsoudi", "Alaa Edin Ibrahim"]
 
 
 def save_employees(emp_list):
   try:
+    clean_list = [str(e).strip() for e in emp_list if str(e).strip()]
     existing = supabase.table("employees").select("name").execute()
-    if existing.data:
-      for row in existing.data:
-        supabase.table("employees").delete().eq("name", row["name"]).execute()
-    for emp in emp_list:
-      supabase.table("employees").upsert({"name": emp}).execute()
+    existing_names = [str(row["name"]).strip() for row in (existing.data or []) if row.get("name")]
+
+    # حذف العمال المحذوفين فقط دون مسح الجدول بالكامل أو المساس بـ max_hours
+    for old_name in existing_names:
+      if old_name not in clean_list:
+        supabase.table("employees").delete().eq("name", old_name).execute()
+
+    # إضافة العمال الجدد فقط دون لمس max_hours للعمال الحاليين
+    new_rows = [{"name": emp} for emp in clean_list if emp not in existing_names]
+    if new_rows:
+      supabase.table("employees").upsert(new_rows, on_conflict="name").execute()
   except Exception as e:
     st.error(f"خطأ في حفظ العمال: {e}")
 
@@ -132,60 +136,73 @@ def load_places():
   try:
     res = supabase.table("places").select("name").execute()
     if res.data:
-      return sorted([row["name"] for row in res.data])
-  except:
+      return sorted([str(row["name"]).strip() for row in res.data if row.get("name")])
+  except Exception:
     pass
   return ["Limehome Salzburg", "Nespresso Store", "IKEA Wals", "Villach Hauptplatz"]
 
 
 def save_places(places_list):
   try:
+    clean_places = [str(p).strip() for p in places_list if str(p).strip()]
     existing = supabase.table("places").select("name").execute()
-    if existing.data:
-      for row in existing.data:
-        supabase.table("places").delete().eq("name", row["name"]).execute()
-    for place in places_list:
-      supabase.table("places").upsert({"name": place}).execute()
+    existing_places = [str(row["name"]).strip() for row in (existing.data or []) if row.get("name")]
+
+    for old_p in existing_places:
+      if old_p not in clean_places:
+        supabase.table("places").delete().eq("name", old_p).execute()
+
+    new_places = [{"name": p} for p in clean_places if p not in existing_places]
+    if new_places:
+      supabase.table("places").upsert(new_places, on_conflict="name").execute()
   except Exception as e:
     st.error(f"خطأ في حفظ الأماكن: {e}")
 
 
-# دوال إدارة المدن والربط
 def load_cities():
   try:
     res = supabase.table("cities").select("name").execute()
     if res.data:
-      return sorted([row["name"] for row in res.data])
-  except:
+      return sorted([str(row["name"]).strip() for row in res.data if row.get("name")])
+  except Exception:
     pass
   return ["Salzburg", "Villach", "Klagenfurt", "Bregenz"]
 
 
 def save_cities(cities_list):
   try:
+    clean_cities = [str(c).strip() for c in cities_list if str(c).strip()]
     existing = supabase.table("cities").select("name").execute()
-    if existing.data:
-      for row in existing.data:
-        supabase.table("cities").delete().eq("name", row["name"]).execute()
-    for city in cities_list:
-      supabase.table("cities").upsert({"name": city}).execute()
+    existing_cities = [str(row["name"]).strip() for row in (existing.data or []) if row.get("name")]
+
+    for old_c in existing_cities:
+      if old_c not in clean_cities:
+        supabase.table("cities").delete().eq("name", old_c).execute()
+
+    new_cities = [{"name": c} for c in clean_cities if c not in existing_cities]
+    if new_cities:
+      supabase.table("cities").upsert(new_cities, on_conflict="name").execute()
   except Exception as e:
     st.error(f"خطأ في حفظ المدن: {e}")
 
 
 def get_employee_city(emp_name):
+  clean_emp = str(emp_name).strip()
   try:
-    res = supabase.table("employee_cities").select("city").eq("employee", emp_name).execute()
+    res = supabase.table("employee_cities").select("city").eq("employee", clean_emp).limit(1).execute()
     if res.data and len(res.data) > 0:
       return res.data[0]["city"]
-  except:
+  except Exception:
     pass
   return "Salzburg"
 
 
 def set_employee_city(emp_name, city_name):
+  clean_emp = str(emp_name).strip()
   try:
-    supabase.table("employee_cities").upsert({"employee": emp_name, "city": city_name}).execute()
+    supabase.table("employee_cities").upsert(
+        {"employee": clean_emp, "city": city_name}, on_conflict="employee"
+    ).execute()
   except Exception as e:
     st.error(f"خطأ في ربط العامل بالمدينة: {e}")
 
@@ -194,61 +211,84 @@ def get_employees_by_city(city_name):
   all_emps = load_employees()
   if city_name == "Alle Städte" or not city_name:
     return all_emps
-  filtered = []
-  for emp in all_emps:
-    if get_employee_city(emp) == city_name:
-      filtered.append(emp)
+
+  city_map = {}
+  try:
+    res = supabase.table("employee_cities").select("employee, city").execute()
+    if res.data:
+      for row in res.data:
+        emp_k = str(row.get("employee") or "").strip()
+        city_v = str(row.get("city") or "").strip()
+        if emp_k:
+          city_map[emp_k] = city_v
+  except Exception:
+    pass
+
+  filtered = [emp for emp in all_emps if city_map.get(emp, "Salzburg") == city_name]
   return filtered if filtered else all_emps
 
 
 def load_employee_month_hours(emp_name, month_str, year_val):
   try:
-    res = supabase.table("monthly_hours").select("content").eq("emp", emp_name).eq("month", month_str).eq("year", int(year_val)).execute()
+    res = (
+        supabase.table("monthly_hours")
+        .select("content")
+        .eq("emp", emp_name)
+        .eq("month", month_str)
+        .eq("year", int(year_val))
+        .limit(1)
+        .execute()
+    )
     if res.data and len(res.data) > 0:
       data = json.loads(res.data[0]["content"])
       return pd.DataFrame(data)
-  except:
+  except Exception:
     pass
-  
-  days_data = []
-  for day in range(1, 32):
-    days_data.append(
-        {
-            "Datum": str(day),
-            "Ort": "",
-            "Beginn": "",
-            "Ende": "",
-            "Pause": "",
-            "Arbeitszeit (abzgl. Pause)": 0.0,
-        }
-    )
+
+  days_data = [
+      {
+          "Datum": str(day),
+          "Ort": "",
+          "Beginn": "",
+          "Ende": "",
+          "Pause": "",
+          "Arbeitszeit (abzgl. Pause)": 0.0,
+      }
+      for day in range(1, 32)
+  ]
   return pd.DataFrame(days_data)
 
 
 def save_employee_month_hours(emp_name, month_str, year_val, df):
   try:
     content = json.dumps(df.to_dict(orient="list"), ensure_ascii=False)
-    supabase.table("monthly_hours").upsert({
-        "emp": emp_name,
-        "month": month_str,
-        "year": int(year_val),
-        "content": content
-    }).execute()
+    supabase.table("monthly_hours").upsert(
+        {
+            "emp": emp_name,
+            "month": month_str,
+            "year": int(year_val),
+            "content": content,
+        }
+    ).execute()
   except Exception as e:
     st.error(f"خطأ في الحفظ الشهري: {e}")
 
 
 def load_daily_emp_hours(emp_name, month_str, year_val):
   try:
-    res = supabase.table("daily_hours").select("content").eq("emp", emp_name).eq("month", month_str).eq("year", int(year_val)).execute()
+    res = (
+        supabase.table("daily_hours")
+        .select("content")
+        .eq("emp", emp_name)
+        .eq("month", month_str)
+        .eq("year", int(year_val))
+        .limit(1)
+        .execute()
+    )
     if res.data and len(res.data) > 0:
       data = json.loads(res.data[0]["content"])
-      df = pd.DataFrame(data)
-      
-      # استبدال أي قيم None أو NaN بنصوص فارغة
-      df = df.fillna("")
-      
-      # معالجة العمود القديم (Pause) إن وجد ونقله إلى Pause 1
+      df = pd.DataFrame(data).fillna("")
+
       if "Pause" in df.columns:
         for idx, val in enumerate(df["Pause"]):
           if str(val).strip() not in ["", "None", "nan"]:
@@ -256,49 +296,36 @@ def load_daily_emp_hours(emp_name, month_str, year_val):
               df.loc[idx, "Pause 1"] = val
         df = df.drop(columns=["Pause"])
 
-      # التأكد من وجود كافة الأعمدة المطلوبة
       for i in range(1, 4):
-        if f"Pause {i}" not in df.columns:
-          df[f"Pause {i}"] = ""
-        if f"Hrs{i}" not in df.columns:
-          df[f"Hrs{i}"] = ""
-        if f"Ort {i}" not in df.columns:
-          df[f"Ort {i}"] = ""
-        if f"Beginn {i}" not in df.columns:
-          df[f"Beginn {i}"] = ""
-        if f"Ende {i}" not in df.columns:
-          df[f"Ende {i}"] = ""
-
-      # تنظيف أعمدة الأماكن من كلمة None
-      for i in range(1, 4):
+        for col_prefix in ["Pause ", "Hrs", "Ort ", "Beginn ", "Ende "]:
+          col_name = f"{col_prefix}{i}" if col_prefix != "Hrs" else f"Hrs{i}"
+          if col_name not in df.columns:
+            df[col_name] = ""
         df[f"Ort {i}"] = df[f"Ort {i}"].replace(["None", "nan", None], "")
 
       cols_order = [
-          "Datum", 
+          "Datum",
           "Ort 1", "Beginn 1", "Ende 1", "Pause 1", "Hrs1",
           "Ort 2", "Beginn 2", "Ende 2", "Pause 2", "Hrs2",
           "Ort 3", "Beginn 3", "Ende 3", "Pause 3", "Hrs3",
-          "Gesamtstunden"
+          "Gesamtstunden",
       ]
       existing_cols = [c for c in cols_order if c in df.columns]
       other_cols = [c for c in df.columns if c not in existing_cols]
-      df = df[existing_cols + other_cols]
-      
-      return df
-  except:
+      return df[existing_cols + other_cols]
+  except Exception:
     pass
-  
-  days_data = []
-  for day in range(1, 32):
-    days_data.append(
-        {
-            "Datum": str(day),
-            "Ort 1": "", "Beginn 1": "", "Ende 1": "", "Pause 1": "", "Hrs1": "",
-            "Ort 2": "", "Beginn 2": "", "Ende 2": "", "Pause 2": "", "Hrs2": "",
-            "Ort 3": "", "Beginn 3": "", "Ende 3": "", "Pause 3": "", "Hrs3": "",
-            "Gesamtstunden": 0.0,
-        }
-    )
+
+  days_data = [
+      {
+          "Datum": str(day),
+          "Ort 1": "", "Beginn 1": "", "Ende 1": "", "Pause 1": "", "Hrs1": "",
+          "Ort 2": "", "Beginn 2": "", "Ende 2": "", "Pause 2": "", "Hrs2": "",
+          "Ort 3": "", "Beginn 3": "", "Ende 3": "", "Pause 3": "", "Hrs3": "",
+          "Gesamtstunden": 0.0,
+      }
+      for day in range(1, 32)
+  ]
   return pd.DataFrame(days_data)
 
 
@@ -306,34 +333,42 @@ def save_daily_emp_hours(emp_name, month_str, year_val, df):
   try:
     clean_df = df.fillna("")
     content = json.dumps(clean_df.to_dict(orient="list"), ensure_ascii=False)
-    supabase.table("daily_hours").upsert({
-        "emp": emp_name,
-        "month": month_str,
-        "year": int(year_val),
-        "content": content
-    }).execute()
-    st.success("Erfolgreich gespeichert!")
+    supabase.table("daily_hours").upsert(
+        {
+            "emp": emp_name,
+            "month": month_str,
+            "year": int(year_val),
+            "content": content,
+        }
+    ).execute()
   except Exception as e:
     st.error(f"خطأ في حفظ الساعات اليومية: {e}")
 
 
 def load_tickets_data(month_str, year_val):
   try:
-    res = supabase.table("tickets_data").select("content").eq("month", month_str).eq("year", int(year_val)).execute()
+    res = (
+        supabase.table("tickets_data")
+        .select("content")
+        .eq("month", month_str)
+        .eq("year", int(year_val))
+        .limit(1)
+        .execute()
+    )
     if res.data and len(res.data) > 0:
       data = json.loads(res.data[0]["content"])
       return pd.DataFrame(data)
-  except:
+  except Exception:
     pass
-  
+
   tickets_rows = []
   month_map = {
       "Januar": 1, "Februar": 2, "März": 3, "April": 4, "Mai": 5, "Juni": 6,
-      "Juli": 7, "August": 8, "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
+      "Juli": 7, "August": 8, "September": 9, "Oktober": 10, "November": 11, "Dezember": 12,
   }
   m_num = month_map.get(month_str, 10)
   days_in_m = pd.Period(f"{year_val}-{m_num}").days_in_month
-  
+
   for day in range(1, days_in_m + 1):
     tickets_rows.append({
         "Datum": str(day),
@@ -342,7 +377,7 @@ def load_tickets_data(month_str, year_val):
         "Beginn": "",
         "Ende": "",
         "Bemerkung": "",
-        "Netto-Stunden": 0.0
+        "Netto-Stunden": 0.0,
     })
   return pd.DataFrame(tickets_rows)
 
@@ -350,18 +385,20 @@ def load_tickets_data(month_str, year_val):
 def save_tickets_data(month_str, year_val, df):
   try:
     content = json.dumps(df.to_dict(orient="list"), ensure_ascii=False)
-    supabase.table("tickets_data").upsert({
-        "month": month_str,
-        "year": int(year_val),
-        "content": content
-    }).execute()
+    supabase.table("tickets_data").upsert(
+        {
+            "month": month_str,
+            "year": int(year_val),
+            "content": content,
+        }
+    ).execute()
   except Exception as e:
     st.error(f"خطأ في حفظ التذاكر: {e}")
 
 
 months_list_de = [
     "Januar", "Februar", "März", "April", "Mai", "Juni",
-    "Juli", "August", "September", "Oktober", "November", "Dezember"
+    "Juli", "August", "September", "Oktober", "November", "Dezember",
 ]
 years_list = [2024, 2025, 2026, 2027, 2028, 2029, 2030]
 
