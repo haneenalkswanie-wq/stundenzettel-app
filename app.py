@@ -1889,146 +1889,157 @@ elif page == t["p8"]:
     st.title("🚆 Clean & Care GmbH - Zug-Fahrten")
     st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
-    employees_list = load_employees()
+    cities_list = load_cities()
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        train_emp = st.selectbox(t["emp_label"], employees_list, key="train_emp_select")
-    with col2:
+    col_c, col_m, col_y = st.columns(3)
+    with col_c:
+        train_city = st.selectbox(t["city_label"], cities_list, key="train_city_select")
+    with col_m:
         train_month = st.selectbox(t["month_label"], months_list_de, index=default_month_index, key="train_month_select")
-    with col3:
+    with col_y:
         train_year = st.selectbox(t["year_label"], years_list, index=default_year_index, key="train_year_select")
 
-    st.subheader(f"Zug-Fahrten für: {train_emp} ({train_month} {train_year})")
+    city_employees = get_employees_by_city(train_city)
 
-    trains_options = ["", "Zug 1", "Zug 2", "Zug 3", "Zug 4", "Zug 5"]
-
-    import calendar
-    from datetime import timedelta
-
-    months_map_de = {
-        "Januar": 1, "Februar": 2, "März": 3, "April": 4,
-        "Mai": 5, "Juni": 6, "Juli": 7, "August": 8,
-        "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
-    }
-    m_num = months_map_de.get(train_month, 10)
-    try:
-        days_count = calendar.monthrange(int(train_year), m_num)[1]
-    except Exception:
-        days_count = 31
-
-    existing_data = []
-    try:
-        res = supabase.table("trains_data")\
-            .select("*")\
-            .eq("emp", train_emp)\
-            .eq("month", train_month)\
-            .eq("year", int(train_year))\
-            .execute()
-        existing_data = res.data if res.data else []
-    except Exception as e:
-        st.warning(f"ملاحظة: {e}")
-
-    saved_df = None
-    if existing_data and "content" in existing_data[0]:
-        try:
-            content_json = json.loads(existing_data[0]["content"])
-            saved_df = pd.DataFrame(content_json)
-        except Exception:
-            pass
-
-    if saved_df is not None and not saved_df.empty:
-        default_trains_df = saved_df
-        for i in range(1, 6):
-            if f"Zug {i}" not in default_trains_df.columns:
-                default_trains_df[f"Zug {i}"] = ""
-            if f"Von {i}" not in default_trains_df.columns:
-                default_trains_df[f"Von {i}"] = ""
-            if f"Bis {i}" not in default_trains_df.columns:
-                default_trains_df[f"Bis {i}"] = ""
-            if f"Verspätung {i}" not in default_trains_df.columns:
-                default_trains_df[f"Verspätung {i}"] = 0
-    else:
-        trains_rows = []
-        for day in range(1, days_count + 1):
-            row_data = {"Datum": str(day)}
-            for i in range(1, 6):
-                row_data[f"Zug {i}"] = ""
-                row_data[f"Von {i}"] = ""
-                row_data[f"Bis {i}"] = ""
-            row_data["Gesamtstunden"] = 0.0
-            trains_rows.append(row_data)
-        default_trains_df = pd.DataFrame(trains_rows)
-
-    edited_trains_df = st.data_editor(
-        default_trains_df,
-        num_rows="fixed",
-        use_container_width=True,
-        key=f"trains_table_{train_emp}_{train_month}_{train_year}",
-        column_config={
-            "Zug 1": st.column_config.SelectboxColumn("Zug 1", options=trains_options),
-            "Zug 2": st.column_config.SelectboxColumn("Zug 2", options=trains_options),
-            "Zug 3": st.column_config.SelectboxColumn("Zug 3", options=trains_options),
-            "Zug 4": st.column_config.SelectboxColumn("Zug 4", options=trains_options),
-            "Zug 5": st.column_config.SelectboxColumn("Zug 5", options=trains_options),
-        }
-    )
-
-    edited_trains_df = edited_trains_df.astype(object)
-
-    total_trains_sum = 0.0
-    for index, row in edited_trains_df.iterrows():
-        day_total_hrs = 0.0
-        for i in range(1, 6):
-            v_str = str(row.get(f"Von {i}", "")).strip()
-            b_str = str(row.get(f"Bis {i}", "")).strip()
-
-            if v_str and b_str and v_str.lower() not in ("nan", "none") and b_str.lower() not in ("nan", "none"):
-                for fmt in ("%H:%M", "%H.%M", "%H"):
-                    try:
-                        t1 = datetime.strptime(v_str.replace(".", ":"), fmt)
-                        t2 = datetime.strptime(b_str.replace(".", ":"), fmt)
-
-                        if t2 < t1:
-                            t2 += timedelta(days=1)
-
-                        diff = (t2 - t1).total_seconds() / 3600.0
-                        if diff > 0:
-                            day_total_hrs += diff
-                        break
-                    except Exception:
-                        continue
-
-        total_trains_sum += day_total_hrs
-        edited_trains_df.at[index, "Gesamtstunden"] = round(day_total_hrs, 2)
-
-    col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 1])
-
-    with col_b1:
-        if st.button("💾 Speichern / حفظ ساعات القطار", type="primary", key="save_trains_btn"):
-            try:
-                content_str = json.dumps(edited_trains_df.to_dict(orient="list"), ensure_ascii=False)
-                supabase.table("trains_data").upsert({
-                    "emp": train_emp,
-                    "month": train_month,
-                    "year": int(train_year),
-                    "content": content_str
-                }).execute()
-                st.success("✅ تم حفظ ساعات القطار في جدول trains_data بنجاح!")
-            except Exception as e:
-                st.error(f"حدث خطأ أثناء الحفظ: {e}")
-
-    with col_b2:
-        csv_data = edited_trains_df.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="📥 Zug-Stunden exportieren",
-            data=csv_data,
-            file_name=f"Zugstunden_{train_emp}_{train_month}_{train_year}.csv",
-            mime="text/csv",
-            key="export_trains_btn"
+    col_emp, _ = st.columns([1, 2])
+    with col_emp:
+        train_emp = (
+            st.selectbox(t["emp_label"], city_employees, key="train_emp_select")
+            if city_employees
+            else st.warning("Keine Mitarbeiter in dieser Stadt")
         )
-    with col_b3:
-        st.metric("Gesamtsumme:", f"{total_trains_sum:.2f} St.")
+
+    if city_employees and train_emp:
+        st.subheader(f"Zug-Fahrten für: {train_emp} ({train_month} {train_year})")
+
+        trains_options = ["", "Zug 1", "Zug 2", "Zug 3", "Zug 4", "Zug 5"]
+
+        import calendar
+        from datetime import timedelta
+
+        months_map_de = {
+            "Januar": 1, "Februar": 2, "März": 3, "April": 4,
+            "Mai": 5, "Juni": 6, "Juli": 7, "August": 8,
+            "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
+        }
+        m_num = months_map_de.get(train_month, 10)
+        try:
+            days_count = calendar.monthrange(int(train_year), m_num)[1]
+        except Exception:
+            days_count = 31
+
+        existing_data = []
+        try:
+            res = supabase.table("trains_data")\
+                .select("*")\
+                .eq("emp", train_emp)\
+                .eq("month", train_month)\
+                .eq("year", int(train_year))\
+                .execute()
+            existing_data = res.data if res.data else []
+        except Exception as e:
+            st.warning(f"ملاحظة: {e}")
+
+        saved_df = None
+        if existing_data and "content" in existing_data[0]:
+            try:
+                content_json = json.loads(existing_data[0]["content"])
+                saved_df = pd.DataFrame(content_json)
+            except Exception:
+                pass
+
+        if saved_df is not None and not saved_df.empty:
+            default_trains_df = saved_df
+            for i in range(1, 6):
+                if f"Zug {i}" not in default_trains_df.columns:
+                    default_trains_df[f"Zug {i}"] = ""
+                if f"Von {i}" not in default_trains_df.columns:
+                    default_trains_df[f"Von {i}"] = ""
+                if f"Bis {i}" not in default_trains_df.columns:
+                    default_trains_df[f"Bis {i}"] = ""
+                if f"Verspätung {i}" not in default_trains_df.columns:
+                    default_trains_df[f"Verspätung {i}"] = 0
+        else:
+            trains_rows = []
+            for day in range(1, days_count + 1):
+                row_data = {"Datum": str(day)}
+                for i in range(1, 6):
+                    row_data[f"Zug {i}"] = ""
+                    row_data[f"Von {i}"] = ""
+                    row_data[f"Bis {i}"] = ""
+                row_data["Gesamtstunden"] = 0.0
+                trains_rows.append(row_data)
+            default_trains_df = pd.DataFrame(trains_rows)
+
+        edited_trains_df = st.data_editor(
+            default_trains_df,
+            num_rows="fixed",
+            use_container_width=True,
+            key=f"trains_table_{train_emp}_{train_month}_{train_year}",
+            column_config={
+                "Zug 1": st.column_config.SelectboxColumn("Zug 1", options=trains_options),
+                "Zug 2": st.column_config.SelectboxColumn("Zug 2", options=trains_options),
+                "Zug 3": st.column_config.SelectboxColumn("Zug 3", options=trains_options),
+                "Zug 4": st.column_config.SelectboxColumn("Zug 4", options=trains_options),
+                "Zug 5": st.column_config.SelectboxColumn("Zug 5", options=trains_options),
+            }
+        )
+
+        edited_trains_df = edited_trains_df.astype(object)
+
+        total_trains_sum = 0.0
+        for index, row in edited_trains_df.iterrows():
+            day_total_hrs = 0.0
+            for i in range(1, 6):
+                v_str = str(row.get(f"Von {i}", "")).strip()
+                b_str = str(row.get(f"Bis {i}", "")).strip()
+
+                if v_str and b_str and v_str.lower() not in ("nan", "none") and b_str.lower() not in ("nan", "none"):
+                    for fmt in ("%H:%M", "%H.%M", "%H"):
+                        try:
+                            t1 = datetime.strptime(v_str.replace(".", ":"), fmt)
+                            t2 = datetime.strptime(b_str.replace(".", ":"), fmt)
+
+                            if t2 < t1:
+                                t2 += timedelta(days=1)
+
+                            diff = (t2 - t1).total_seconds() / 3600.0
+                            if diff > 0:
+                                day_total_hrs += diff
+                            break
+                        except Exception:
+                            continue
+
+            total_trains_sum += day_total_hrs
+            edited_trains_df.at[index, "Gesamtstunden"] = round(day_total_hrs, 2)
+
+        col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 1])
+
+        with col_b1:
+            if st.button("💾 Speichern / حفظ ساعات القطار", type="primary", key="save_trains_btn"):
+                try:
+                    content_str = json.dumps(edited_trains_df.to_dict(orient="list"), ensure_ascii=False)
+                    supabase.table("trains_data").upsert({
+                        "emp": train_emp,
+                        "month": train_month,
+                        "year": int(train_year),
+                        "content": content_str
+                    }).execute()
+                    st.success("✅ تم حفظ ساعات القطار في جدول trains_data بنجاح!")
+                except Exception as e:
+                    st.error(f"حدث خطأ أثناء الحفظ: {e}")
+
+        with col_b2:
+            csv_data = edited_trains_df.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="📥 Zug-Stunden exportieren",
+                data=csv_data,
+                file_name=f"Zugstunden_{train_emp}_{train_month}_{train_year}.csv",
+                mime="text/csv",
+                key="export_trains_btn"
+            )
+        with col_b3:
+            st.metric("Gesamtsumme:", f"{total_trains_sum:.2f} St.")
 
     # ==========================================================
     # 🏙️ مجموع ساعات القطار حسب المدينة المختارة فقط
