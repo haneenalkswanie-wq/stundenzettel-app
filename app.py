@@ -1098,6 +1098,8 @@ elif page == t["p2"]:
 # الصفحة الثالثة: ملخص ساعات المواقع (Objekt-Stundenübersicht)
 # ---------------------------------------------------------
 elif page == t["p3"]:
+  from datetime import date
+
   st.title("🏢 Clean & Care GmbH - Objekt-Stundenübersicht")
   st.markdown("**Am Messezentrum 6, 5020 Salzburg**")
 
@@ -1115,21 +1117,69 @@ elif page == t["p3"]:
       "Januar": 1, "Februar": 2, "März": 3, "April": 4, "Mai": 5, "Juni": 6,
       "Juli": 7, "August": 8, "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
   }
+  weekday_short_de = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+
+  def get_easter_sunday(year_num: int) -> date:
+    # خوارزمية غريغوري لحساب أحد الفصح لأي سنة
+    a = year_num % 19
+    b = year_num // 100
+    c = year_num % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month = (h + l - 7 * m + 114) // 31
+    day = ((h + l - 7 * m + 114) % 31) + 1
+    return date(year_num, month, day)
+
+  def get_austria_holidays(year_num: int) -> set:
+    easter = get_easter_sunday(year_num)
+    return {
+        date(year_num, 1, 1),                      # Neujahr
+        date(year_num, 1, 6),                      # Heilige Drei Könige
+        easter + timedelta(days=1),                # Ostermontag
+        date(year_num, 5, 1),                      # Staatsfeiertag
+        easter + timedelta(days=39),               # Christi Himmelfahrt
+        easter + timedelta(days=50),               # Pfingstmontag
+        easter + timedelta(days=60),               # Fronleichnam
+        date(year_num, 8, 15),                     # Mariä Himmelfahrt
+        date(year_num, 10, 26),                    # Nationalfeiertag
+        date(year_num, 11, 1),                     # Allerheiligen
+        date(year_num, 12, 8),                     # Mariä Empfängnis
+        date(year_num, 12, 25),                    # Christtag
+        date(year_num, 12, 26),                    # Stefanitag
+    }
+
   m_num = month_map.get(loc_month, 10)
-  days_in_month = pd.Period(f"{loc_year}-{m_num}").days_in_month
+  year_int = int(loc_year)
+  days_in_month = pd.Period(f"{year_int}-{m_num}").days_in_month
+  at_holidays = get_austria_holidays(year_int)
 
   if places_list and selected_loc_place:
     clean_selected_place = str(selected_loc_place).strip().lower()
-    st.subheader(f"Objekt: {selected_loc_place} ({loc_month} {loc_year})")
+    st.subheader(f"Objekt: {selected_loc_place} ({loc_month} {year_int})")
 
     try:
-      res_rows = supabase.table("daily_hours").select("content").eq("month", loc_month).eq("year", int(loc_year)).execute()
+      res_rows = supabase.table("daily_hours").select("content").eq("month", loc_month).eq("year", year_int).execute()
       rows = res_rows.data if res_rows.data else []
     except Exception:
       rows = []
 
     loc_days_data = []
+    sunday_and_holiday_sum = 0.0
+    regular_days_sum = 0.0
+
     for d in range(1, days_in_month + 1):
+      current_date = date(year_int, m_num, d)
+      wd_idx = current_date.weekday()
+      wd_label = weekday_short_de[wd_idx]
+      is_sunday_or_holiday = (wd_idx == 6) or (current_date in at_holidays)
+
       day_sum = 0.0
       for row in rows:
         try:
@@ -1140,7 +1190,6 @@ elif page == t["p3"]:
           df_emp = pd.DataFrame(emp_data)
           for _, r in df_emp.iterrows():
             if str(r.get("Datum", "")).strip() == str(d):
-              # فحص Ort 1 إلى Ort 4 ليشمل أي موقع مضاف في الخانة الرابعة أيضاً
               for i in range(1, 5):
                 loc_name = str(r.get(f"Ort {i}", "")).strip()
                 if loc_name and loc_name.lower() == clean_selected_place:
@@ -1174,20 +1223,38 @@ elif page == t["p3"]:
                   day_sum += net_loc_hrs
         except Exception:
           pass
-      loc_days_data.append({"Tag": str(d), "Stunden": round(day_sum, 2)})
+
+      rounded_day = round(day_sum, 2)
+      if is_sunday_or_holiday:
+        sunday_and_holiday_sum += day_sum
+      else:
+        regular_days_sum += day_sum
+
+      loc_days_data.append({
+          "Tag": str(d),
+          "Wochentag": wd_label,
+          "Stunden": rounded_day
+      })
 
     loc_df = pd.DataFrame(loc_days_data)
-    st.dataframe(loc_df, use_container_width=True)
+    st.dataframe(loc_df, use_container_width=True, hide_index=True)
 
-    total_loc_sum = loc_df["Stunden"].astype(float).sum()
+    sunday_and_holiday_sum = round(sunday_and_holiday_sum, 2)
+    regular_days_sum = round(regular_days_sum, 2)
+    total_loc_sum = round(sunday_and_holiday_sum + regular_days_sum, 2)
 
     st.markdown("---")
-    col_l1, col_l2 = st.columns([2, 1])
-    with col_l1:
-      loc_pdf_data = generate_single_location_pdf(selected_loc_place, loc_month, loc_year, loc_df, total_loc_sum)
-      st.download_button(t["pdf_btn"], loc_pdf_data, f"Objekt_{selected_loc_place}_{loc_month}_{loc_year}.pdf", "application/pdf", key="p3_pdf")
-    with col_l2:
+    m1, m2, m3 = st.columns(3)
+    with m1:
+      st.metric("Sonntag & Feiertage (AT):", f"{sunday_and_holiday_sum:.2f} St.")
+    with m2:
+      st.metric("Übrige Tage (Mo–Sa ohne Feiertag):", f"{regular_days_sum:.2f} St.")
+    with m3:
       st.metric(t["sum_label"], f"{total_loc_sum:.2f} St.")
+
+    st.markdown("---")
+    loc_pdf_data = generate_single_location_pdf(selected_loc_place, loc_month, year_int, loc_df, total_loc_sum)
+    st.download_button(t["pdf_btn"], loc_pdf_data, f"Objekt_{selected_loc_place}_{loc_month}_{year_int}.pdf", "application/pdf", key="p3_pdf")
 
   st.markdown("---")
   add_col, del_col = st.columns(2)
@@ -1215,7 +1282,6 @@ elif page == t["p3"]:
           st.rerun()
         else:
           st.warning("Es muss mindestens ein Ort bleiben.")
-
 
 # ---------------------------------------------------------
 # الصفحة الرابعة: الأماكن وساعات العمال (Orte & Mitarbeiter-Stunden)
