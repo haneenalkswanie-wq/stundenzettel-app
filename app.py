@@ -1577,7 +1577,7 @@ elif page == t["p6"]:
         pdf_summary_data = generate_summary_pdf(summary_month, summary_year, summary_df, total_company_hours)
         st.download_button(t["pdf_btn"], pdf_summary_data, f"Monatsübersicht_{summary_month}_{summary_year}.pdf", "application/pdf", key="p6_pdf")
     with col_s2:
-        st.metric("Gesamtsumme:", f"{total_company_hours:.2f} St.")s
+        st.metric("Gesamtsumme:", f"{total_company_hours:.2f} St.")
 
 # ---------------------------------------------------------
 # الصفحة السابعة: تذاكر المهام (Einsatz-Tickets)
