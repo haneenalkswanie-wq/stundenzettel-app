@@ -1091,56 +1091,61 @@ elif page == t["p3"]:
   m_num = month_map.get(loc_month, 10)
   days_in_month = pd.Period(f"{loc_year}-{m_num}").days_in_month
 
-  if places_list:
+  if places_list and selected_loc_place:
+    clean_selected_place = str(selected_loc_place).strip().lower()
     st.subheader(f"Objekt: {selected_loc_place} ({loc_month} {loc_year})")
 
     try:
       res_rows = supabase.table("daily_hours").select("content").eq("month", loc_month).eq("year", int(loc_year)).execute()
       rows = res_rows.data if res_rows.data else []
-    except:
+    except Exception:
       rows = []
-    
+
     loc_days_data = []
     for d in range(1, days_in_month + 1):
       day_sum = 0.0
       for row in rows:
         try:
-          emp_data = json.loads(row["content"])
+          raw_c = row.get("content")
+          if not raw_c:
+            continue
+          emp_data = json.loads(raw_c) if isinstance(raw_c, str) else raw_c
           df_emp = pd.DataFrame(emp_data)
           for _, r in df_emp.iterrows():
-            if str(r.get("Datum")) == str(d):
-              for i in range(1, 4):
+            if str(r.get("Datum", "")).strip() == str(d):
+              # فحص Ort 1 إلى Ort 4 ليشمل أي موقع مضاف في الخانة الرابعة أيضاً
+              for i in range(1, 5):
                 loc_name = str(r.get(f"Ort {i}", "")).strip()
-                if loc_name.lower() == selected_loc_place.strip().lower():
+                if loc_name and loc_name.lower() == clean_selected_place:
                   b_str = str(r.get(f"Beginn {i}", "")).strip()
                   e_str = str(r.get(f"Ende {i}", "")).strip()
                   loc_hrs = 0.0
-                  
-                  if b_str and e_str and b_str != "nan" and e_str != "nan":
+
+                  if b_str and e_str and b_str.lower() != "nan" and e_str.lower() != "nan":
                     for fmt in ("%H:%M", "%H.%M", "%H"):
                       try:
                         t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
                         t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
+                        if t2 < t1:
+                          t2 += timedelta(days=1)
                         gh = (t2 - t1).total_seconds() / 3600
                         if gh > 0:
                           loc_hrs = gh
                           break
-                      except:
+                      except Exception:
                         continue
-                  
-                  # قراءة استراحة هذا الموقع المحددة (Pause 1, 2, 3)
+
                   p_input = str(r.get(f"Pause {i}", "")).strip()
                   break_val = 0.0
-                  if p_input and p_input not in ["none", "nan", "", "None"]:
+                  if p_input and p_input.lower() not in ["none", "nan", ""]:
                     try:
                       break_val = float(p_input.replace(",", "."))
-                    except:
+                    except Exception:
                       break_val = 0.0
-                  
-                  # حساب صافي ساعات هذا الموقع بعد خصم استراحته الخاصة
+
                   net_loc_hrs = max(0.0, loc_hrs - break_val)
                   day_sum += net_loc_hrs
-        except:
+        except Exception:
           pass
       loc_days_data.append({"Tag": str(d), "Stunden": round(day_sum, 2)})
 
@@ -1163,9 +1168,11 @@ elif page == t["p3"]:
     st.subheader(t["add_place"])
     new_place_name = st.text_input("Name des neuen Ortes:", key="p3_new_place")
     if st.button(t["add_btn"], key="p3_add_btn"):
-      if new_place_name and new_place_name not in places_list:
-        places_list.append(new_place_name)
+      clean_new_place = new_place_name.strip()
+      if clean_new_place and clean_new_place not in places_list:
+        places_list.append(clean_new_place)
         save_places(places_list)
+        st.cache_data.clear()
         st.success(t["success_msg"])
         st.rerun()
   with del_col:
@@ -1176,6 +1183,7 @@ elif page == t["p3"]:
         if len(places_list) > 1:
           places_list.remove(place_to_delete)
           save_places(places_list)
+          st.cache_data.clear()
           st.success(t["success_msg"])
           st.rerun()
         else:
