@@ -501,19 +501,34 @@ page = st.sidebar.radio(
 # دوال طباعة PDF باللغة الألمانية حصراً
 # ---------------------------------------------------------
 
+def _fmt_hrs_or_blank(val):
+  if val is None:
+    return ""
+  s = str(val).strip()
+  if s in ("", "None", "nan", "NaN"):
+    return ""
+  try:
+    num = float(s.replace(",", "."))
+    if num == 0.0:
+      return ""
+    return f"{num:.2f}"
+  except Exception:
+    return s
+
+
 def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
   elements = []
   styles = getSampleStyleSheet()
   title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
-  
+
   elements.append(Paragraph("<b>CLEAN & CARE GmbH</b>", title_style))
   elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
   elements.append(Spacer(1, 15))
   elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 15))
-  
+
   table_data = [["Datum", "Ort", "Beginn", "Ende", "Pause", "Arbeitszeit (abzgl. Pause)"]]
   for _, row in df.iterrows():
     table_data.append([
@@ -522,10 +537,10 @@ def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
         str(row["Beginn"] if pd.notna(row["Beginn"]) else ""),
         str(row["Ende"] if pd.notna(row["Ende"]) else ""),
         str(row["Pause"] if pd.notna(row["Pause"]) else ""),
-        str(row["Arbeitszeit (abzgl. Pause)"])
+        _fmt_hrs_or_blank(row.get("Arbeitszeit (abzgl. Pause)", ""))
     ])
   table_data.append(["Summe:", "", "", "", "", f"{total_hours:.2f} St."])
-  
+
   t_pdf = Table(table_data, colWidths=[50, 100, 70, 70, 70, 180])
   t_pdf.setStyle(TableStyle([
       ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
@@ -538,7 +553,6 @@ def generate_employee_pdf(emp_name, month_str, year_val, df, total_hours):
       ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
   ]))
   elements.append(t_pdf)
-  # إضافة مسافة وفراغ التوقيعات في نهاية الـ PDF
   elements.append(Spacer(1, 20))
   signature_data = [
       ["________________________________________", "________________________________________"],
@@ -564,26 +578,25 @@ def generate_daily_pdf(emp_name, month_str, year_val, df, total_hours):
   elements = []
   styles = getSampleStyleSheet()
   title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=13, leading=16, textColor=colors.HexColor("#111111"))
-  
+
   elements.append(Paragraph("<b>CLEAN & CARE GmbH - Tägliche Arbeitszeiten</b>", title_style))
   elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
   elements.append(Spacer(1, 10))
   elements.append(Paragraph(f"<b>Mitarbeiter:</b> {emp_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 10))
-  
-  # أعمدة الجدول المحدثة لتشمل المكان الرابع والاستراحة لكل مكان
+
   table_data = [["Tag", "Ort 1", "Std 1", "Pause 1", "Ort 2", "Std 2", "Pause 2", "Ort 3", "Std 3", "Pause 3", "Ort 4", "Std 4", "Pause 4", "Gesamt"]]
   for _, row in df.iterrows():
     table_data.append([
         str(row["Datum"]),
-        str(row["Ort 1"] if pd.notna(row.get("Ort 1")) else ""), str(row.get("Hrs1", "")), str(row.get("Pause 1", "")),
-        str(row["Ort 2"] if pd.notna(row.get("Ort 2")) else ""), str(row.get("Hrs2", "")), str(row.get("Pause 2", "")),
-        str(row["Ort 3"] if pd.notna(row.get("Ort 3")) else ""), str(row.get("Hrs3", "")), str(row.get("Pause 3", "")),
-        str(row["Ort 4"] if pd.notna(row.get("Ort 4")) else ""), str(row.get("Hrs4", "")), str(row.get("Pause 4", "")),
-        str(row["Gesamtstunden"])
+        str(row["Ort 1"] if pd.notna(row.get("Ort 1")) else ""), _fmt_hrs_or_blank(row.get("Hrs1", "")), str(row.get("Pause 1", "")),
+        str(row["Ort 2"] if pd.notna(row.get("Ort 2")) else ""), _fmt_hrs_or_blank(row.get("Hrs2", "")), str(row.get("Pause 2", "")),
+        str(row["Ort 3"] if pd.notna(row.get("Ort 3")) else ""), _fmt_hrs_or_blank(row.get("Hrs3", "")), str(row.get("Pause 3", "")),
+        str(row["Ort 4"] if pd.notna(row.get("Ort 4")) else ""), _fmt_hrs_or_blank(row.get("Hrs4", "")), str(row.get("Pause 4", "")),
+        _fmt_hrs_or_blank(row.get("Gesamtstunden", ""))
     ])
   table_data.append(["Summe:", "", "", "", "", "", "", "", "", "", "", "", "", f"{total_hours:.2f} St."])
-  
+
   t_pdf = Table(table_data, colWidths=[22, 62, 28, 36, 62, 28, 36, 62, 28, 36, 62, 28, 36, 48])
   t_pdf.setStyle(TableStyle([
       ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
@@ -690,7 +703,7 @@ def generate_single_location_pdf(place_name, month_str, year_val, df, total_hour
     else:
       other_days_hrs += hrs_val
 
-    table_data.append([tag_str, wd_str, f"{hrs_val:.2f}"])
+    table_data.append([tag_str, wd_str, _fmt_hrs_or_blank(hrs_val)])
 
   sunday_holiday_hrs = round(sunday_holiday_hrs, 2)
   other_days_hrs = round(other_days_hrs, 2)
@@ -725,18 +738,18 @@ def generate_place_pdf(place_name, month_str, year_val, df, total_hours):
   elements = []
   styles = getSampleStyleSheet()
   title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
-  
+
   elements.append(Paragraph("<b>CLEAN & CARE GmbH - Ort-Stundenbericht</b>", title_style))
   elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
   elements.append(Spacer(1, 15))
   elements.append(Paragraph(f"<b>Ort:</b> {place_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 15))
-  
+
   table_data = [["Mitarbeiter", "Stunden"]]
   for _, row in df.iterrows():
-    table_data.append([str(row["Mitarbeiter"]), str(row["Stunden"])])
+    table_data.append([str(row["Mitarbeiter"]), _fmt_hrs_or_blank(row.get("Stunden", ""))])
   table_data.append(["Gesamtsumme:", f"{total_hours:.2f} St."])
-  
+
   t_pdf = Table(table_data, colWidths=[250, 200])
   t_pdf.setStyle(TableStyle([
       ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
@@ -760,18 +773,18 @@ def generate_summary_pdf(month_str, year_val, df, total_hours):
   elements = []
   styles = getSampleStyleSheet()
   title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
-  
+
   elements.append(Paragraph("<b>CLEAN & CARE GmbH - Monatsübersicht</b>", title_style))
   elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
   elements.append(Spacer(1, 15))
   elements.append(Paragraph(f"<b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 15))
-  
+
   table_data = [["Mitarbeiter", "Gesamtstunden"]]
   for _, row in df.iterrows():
-    table_data.append([str(row["Mitarbeiter"]), str(row["Gesamtstunden"])])
+    table_data.append([str(row["Mitarbeiter"]), _fmt_hrs_or_blank(row.get("Gesamtstunden", ""))])
   table_data.append(["Gesamtsumme:", f"{total_hours:.2f} St."])
-  
+
   t_pdf = Table(table_data, colWidths=[250, 200])
   t_pdf.setStyle(TableStyle([
       ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
@@ -795,47 +808,50 @@ def generate_tickets_pdf(month_str, year_val, df, total_hours):
   elements = []
   styles = getSampleStyleSheet()
   title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
-  
+
   elements.append(Paragraph("<b>CLEAN & CARE GmbH - Einsatz-Tickets Bericht</b>", title_style))
   elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
   elements.append(Spacer(1, 15))
   elements.append(Paragraph(f"<b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 15))
-  
+
   table_data = [["Nr.", "Ticket", "Beginn", "Ende", "Bemerkung", "Stunden"]]
-  
+
   row_counter = 1
   for _, row in df.iterrows():
     for i in range(1, 5):
       b_str = str(row.get(f"T{i}_Beginn", "")).strip()
       e_str = str(row.get(f"T{i}_Ende", "")).strip()
       bem_str = str(row.get(f"T{i}_Bemerkung", "")).strip()
-      
+
       if b_str and e_str and b_str != "nan" and e_str != "nan":
         net_h = 0.0
         for fmt in ("%H:%M", "%H.%M", "%H"):
           try:
             t1 = datetime.strptime(b_str.replace(".", ":"), fmt)
             t2 = datetime.strptime(e_str.replace(".", ":"), fmt)
+            if t2 < t1:
+              t2 += timedelta(days=1)
             gh = (t2 - t1).total_seconds() / 3600
             if gh > 0:
               net_h = gh
             break
-          except:
+          except Exception:
             continue
-        
+
+        hrs_cell = f"{_fmt_hrs_or_blank(net_h)} St." if net_h > 0 else ""
         table_data.append([
             str(row_counter),
             f"Ticket {i}",
             b_str,
             e_str,
             bem_str,
-            f"{net_h:.2f} St."
+            hrs_cell
         ])
         row_counter += 1
 
   table_data.append(["Summe:", "", "", "", "", f"{total_hours:.2f} St."])
-  
+
   t_pdf = Table(table_data, colWidths=[35, 60, 65, 65, 175, 100])
   t_pdf.setStyle(TableStyle([
       ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
@@ -851,6 +867,7 @@ def generate_tickets_pdf(month_str, year_val, df, total_hours):
   doc.build(elements)
   buffer.seek(0)
   return buffer.getvalue()
+
 
 # ---------------------------------------------------------
 # الصفحة الأولى: استمارة ساعات العمال (Mitarbeiter Stundenzettel)
