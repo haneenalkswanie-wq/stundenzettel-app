@@ -601,32 +601,115 @@ def generate_daily_pdf(emp_name, month_str, year_val, df, total_hours):
   buffer.seek(0)
   return buffer.getvalue()
 
+
 def generate_single_location_pdf(place_name, month_str, year_val, df, total_hours):
+  from datetime import date
+
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
   elements = []
   styles = getSampleStyleSheet()
   title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor("#111111"))
-  
+
   elements.append(Paragraph("<b>CLEAN & CARE GmbH - Objekt-Stundenbericht</b>", title_style))
   elements.append(Paragraph("Am Messezentrum 6, 5020 Salzburg", styles['Normal']))
   elements.append(Spacer(1, 15))
   elements.append(Paragraph(f"<b>Objekt / Ort:</b> {place_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Monat:</b> {month_str} {year_val}", styles['Normal']))
   elements.append(Spacer(1, 15))
-  
-  table_data = [["Tag (Datum)", "Stunden"]]
+
+  month_map = {
+      "Januar": 1, "Februar": 2, "März": 3, "April": 4, "Mai": 5, "Juni": 6,
+      "Juli": 7, "August": 8, "September": 9, "Oktober": 10, "November": 11, "Dezember": 12
+  }
+  weekday_short_de = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+
+  def _easter_sunday(y_num: int) -> date:
+    a = y_num % 19
+    b = y_num // 100
+    c = y_num % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month = (h + l - 7 * m + 114) // 31
+    day = ((h + l - 7 * m + 114) % 31) + 1
+    return date(y_num, month, day)
+
+  def _at_holidays(y_num: int) -> set:
+    easter = _easter_sunday(y_num)
+    return {
+        date(y_num, 1, 1),
+        date(y_num, 1, 6),
+        easter + timedelta(days=1),
+        date(y_num, 5, 1),
+        easter + timedelta(days=39),
+        easter + timedelta(days=50),
+        easter + timedelta(days=60),
+        date(y_num, 8, 15),
+        date(y_num, 10, 26),
+        date(y_num, 11, 1),
+        date(y_num, 12, 8),
+        date(y_num, 12, 25),
+        date(y_num, 12, 26),
+    }
+
+  m_num = month_map.get(month_str, 10)
+  y_int = int(year_val)
+  holidays_set = _at_holidays(y_int)
+
+  sunday_holiday_hrs = 0.0
+  other_days_hrs = 0.0
+
+  table_data = [["Tag", "Wochentag", "Stunden"]]
   for _, row in df.iterrows():
-    table_data.append([str(row["Tag"]), str(row["Stunden"])])
-  table_data.append(["Gesamtsumme:", f"{total_hours:.2f} St."])
-  
-  t_pdf = Table(table_data, colWidths=[250, 200])
+    tag_str = str(row.get("Tag", "")).strip()
+    hrs_val = float(pd.to_numeric(row.get("Stunden", 0.0), errors="coerce") or 0.0)
+
+    wd_str = str(row.get("Wochentag", "")).strip()
+    is_sun_or_hol = False
+
+    try:
+      day_int = int(float(tag_str))
+      dt_obj = date(y_int, m_num, day_int)
+      if not wd_str:
+        wd_str = weekday_short_de[dt_obj.weekday()]
+      is_sun_or_hol = (dt_obj.weekday() == 6) or (dt_obj in holidays_set)
+    except Exception:
+      if not wd_str:
+        wd_str = "-"
+      if wd_str == "So":
+        is_sun_or_hol = True
+
+    if is_sun_or_hol:
+      sunday_holiday_hrs += hrs_val
+    else:
+      other_days_hrs += hrs_val
+
+    table_data.append([tag_str, wd_str, f"{hrs_val:.2f}"])
+
+  sunday_holiday_hrs = round(sunday_holiday_hrs, 2)
+  other_days_hrs = round(other_days_hrs, 2)
+
+  table_data.append(["Sonntag & Feiertage (AT):", "", f"{sunday_holiday_hrs:.2f} St."])
+  table_data.append(["Übrige Tage:", "", f"{other_days_hrs:.2f} St."])
+  table_data.append(["Gesamtsumme:", "", f"{total_hours:.2f} St."])
+
+  t_pdf = Table(table_data, colWidths=[120, 130, 200])
   t_pdf.setStyle(TableStyle([
       ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e0e0e0")),
       ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
       ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
       ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-      ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor("#666666")),
-      ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f0f0f0")),
+      ('GRID', (0, 0), (-1, -4), 0.5, colors.HexColor("#666666")),
+      ('BACKGROUND', (0, -3), (-1, -2), colors.HexColor("#f7f7f7")),
+      ('FONTNAME', (0, -3), (-1, -2), 'Helvetica-Bold'),
+      ('GRID', (0, -3), (-1, -2), 0.5, colors.HexColor("#666666")),
+      ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#e8e8e8")),
       ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
       ('GRID', (0, -1), (-1, -1), 1, colors.HexColor("#000000")),
   ]))
